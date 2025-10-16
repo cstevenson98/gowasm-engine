@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>WebGPU Support Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #e0e0e0;
+        }
+
+        .status {
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            font-size: 18px;
+        }
+
+        .success {
+            background: #2d5016;
+            border: 2px solid #4caf50;
+        }
+
+        .error {
+            background: #5c1616;
+            border: 2px solid #f44336;
+        }
+
+        .info {
+            background: #1a3a5c;
+            border: 2px solid #2196f3;
+        }
+
+        pre {
+            background: #2d2d2d;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+
+        h1 {
+            color: #4caf50;
+        }
+
+        .detail-item {
+            margin: 10px 0;
+            padding: 10px;
+            background: #2d2d2d;
+            border-radius: 4px;
+        }
+
+        .label {
+            font-weight: bold;
+            color: #2196f3;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎮 WebGPU Support Test</h1>
+    <p>This page tests whether your browser supports WebGPU for the WASM tests.</p>
+
+    <div id="status"></div>
+    <div id="details"></div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const detailsDiv = document.getElementById('details');
+
+        async function checkWebGPUSupport() {
+            // Check if WebGPU API exists
+            if (!navigator.gpu) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ <strong>WebGPU is NOT supported</strong><br>' +
+                    'Your browser does not have the WebGPU API.';
+
+                detailsDiv.innerHTML = `
+                    <div class="info">
+                        <h3>How to enable WebGPU:</h3>
+                        <ul>
+                            <li><strong>Chrome/Chromium:</strong> Visit <code>chrome://flags</code> and enable:
+                                <ul>
+                                    <li>"Unsafe WebGPU" flag</li>
+                                    <li>"WebGPU Developer Features" flag</li>
+                                </ul>
+                            </li>
+                            <li><strong>Linux/WSL2:</strong> You may need to run Chrome with additional flags:
+                                <pre>google-chrome --enable-unsafe-webgpu --enable-features=Vulkan --use-vulkan=native</pre>
+                            </li>
+                            <li><strong>Windows:</strong> Make sure you have up-to-date GPU drivers</li>
+                        </ul>
+                    </div>
+                `;
+                return;
+            }
+
+            statusDiv.className = 'status info';
+            statusDiv.innerHTML = '⏳ <strong>WebGPU API found!</strong><br>Requesting adapter...';
+
+            try {
+                // Request adapter
+                const adapter = await navigator.gpu.requestAdapter();
+
+                if (!adapter) {
+                    statusDiv.className = 'status error';
+                    statusDiv.innerHTML = '❌ <strong>WebGPU adapter request failed</strong><br>' +
+                        'The API exists but no adapter is available.';
+
+                    detailsDiv.innerHTML = `
+                        <div class="info">
+                            <h3>Possible solutions:</h3>
+                            <ul>
+                                <li>Update your GPU drivers</li>
+                                <li>Check if hardware acceleration is enabled in browser settings</li>
+                                <li>Try running Chrome with: <code>--enable-unsafe-webgpu</code></li>
+                                <li>On WSL2, you may need WSLg with GPU passthrough enabled</li>
+                            </ul>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Request device
+                const device = await adapter.requestDevice();
+
+                // Get adapter info
+                const info = await adapter.requestAdapterInfo();
+
+                statusDiv.className = 'status success';
+                statusDiv.innerHTML = '✅ <strong>WebGPU is fully supported!</strong><br>' +
+                    'Your browser can run WebGPU tests.';
+
+                detailsDiv.innerHTML = `
+                    <h3>🎉 Adapter Details:</h3>
+                    <div class="detail-item">
+                        <span class="label">Vendor:</span> ${info.vendor || 'Unknown'}
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Architecture:</span> ${info.architecture || 'Unknown'}
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Device:</span> ${info.device || 'Unknown'}
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Description:</span> ${info.description || 'Unknown'}
+                    </div>
+                    <div class="detail-item">
+                        <span class="label">Features:</span> ${Array.from(adapter.features).join(', ') || 'None'}
+                    </div>
+                    <div class="info" style="margin-top: 20px;">
+                        <h4>✅ You can now run WebGPU tests:</h4>
+                        <pre>make test-webgpu-browser</pre>
+                    </div>
+                `;
+
+                device.destroy();
+
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = '❌ <strong>Error testing WebGPU</strong><br>' +
+                    error.message;
+
+                detailsDiv.innerHTML = `
+                    <pre>${error.stack}</pre>
+                    <div class="info">
+                        <h3>Troubleshooting:</h3>
+                        <ul>
+                            <li>Check browser console for more details</li>
+                            <li>Ensure you're using a recent version of Chrome/Chromium (113+)</li>
+                            <li>Try enabling "Unsafe WebGPU" in chrome://flags</li>
+                        </ul>
+                    </div>
+                `;
+            }
+        }
+
+        // Run the check
+        checkWebGPUSupport();
+    </script>
+</body>
+
+</html>

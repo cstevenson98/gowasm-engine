@@ -17,7 +17,7 @@ YELLOW=\033[1;33m
 BLUE=\033[0;34m
 NC=\033[0m # No Color
 
-.PHONY: all build clean dev serve test deps help
+.PHONY: all build clean dev serve test deps help test-webgpu-browser
 
 # Default target
 all: deps build
@@ -27,13 +27,24 @@ help:
 	@echo "$(BLUE)Game - Go WASM Build System$(NC)"
 	@echo ""
 	@echo "$(YELLOW)Available targets:$(NC)"
-	@echo "  $(GREEN)build$(NC)     - Compile Go to WebAssembly"
-	@echo "  $(GREEN)dev$(NC)       - Build and start development server"
-	@echo "  $(GREEN)serve$(NC)    - Start HTTP server for testing"
-	@echo "  $(GREEN)test$(NC)     - Run Go tests"
-	@echo "  $(GREEN)clean$(NC)    - Clean build artifacts"
-	@echo "  $(GREEN)deps$(NC)     - Fetch WASM runtime and setup dependencies"
-	@echo "  $(GREEN)help$(NC)     - Show this help message"
+	@echo "  $(GREEN)build$(NC)         - Compile Go to WebAssembly"
+	@echo "  $(GREEN)dev$(NC)           - Build and start development server"
+	@echo "  $(GREEN)serve$(NC)         - Start HTTP server for testing"
+	@echo "  $(GREEN)test$(NC)          - Run standard Go tests"
+	@echo "  $(GREEN)test-wasm$(NC)     - Run WASM tests in browser"
+	@echo "  $(GREEN)test-wasm-all$(NC) - Run all packages as WASM tests"
+	@echo "  $(GREEN)test-webgpu-browser$(NC) - Run WebGPU tests in visible Chrome (with WebGPU support)"
+	@echo "  $(GREEN)clean$(NC)         - Clean build artifacts"
+	@echo "  $(GREEN)deps$(NC)          - Fetch WASM runtime and setup dependencies"
+	@echo "  $(GREEN)quick$(NC)         - Build and serve"
+	@echo "  $(GREEN)prod$(NC)          - Production build (optimized)"
+	@echo "  $(GREEN)info$(NC)          - Show build information"
+	@echo "  $(GREEN)help$(NC)          - Show this help message"
+	@echo ""
+	@echo "$(YELLOW)WASM Testing (requires setup):$(NC)"
+	@echo "  1. Install: go install github.com/agnivade/wasmbrowsertest@latest"
+	@echo "  2. Rename: mv \$$(go env GOPATH)/bin/wasmbrowsertest \$$(go env GOPATH)/bin/go_js_wasm_exec"
+	@echo "  3. Run: make test-wasm"
 	@echo ""
 
 # Setup dependencies and fetch WASM runtime
@@ -97,6 +108,22 @@ test:
 	@echo "$(BLUE)Running Go tests...$(NC)"
 	@go test -v ./...
 	@echo "$(GREEN)✓ Tests completed$(NC)"
+
+test-wasm:
+	@echo "$(BLUE)Running WASM tests in browser...$(NC)"
+	@echo "$(YELLOW)Note: Requires Chrome/Chromium and wasmbrowsertest$(NC)"
+	@GOOS=js GOARCH=wasm go test -v ./internal/gameobject 2>&1 | grep -v "IPAddressSpace"
+	@echo "$(GREEN)✓ WASM tests completed$(NC)"
+
+test-wasm-all:
+	@echo "$(BLUE)Running all WASM tests (may fail for non-js packages)...$(NC)"
+	@GOOS=js GOARCH=wasm go test -v ./internal/... 2>&1 | grep -v "IPAddressSpace" || true
+	@echo "$(GREEN)✓ WASM tests completed$(NC)"
+
+test-webgpu-browser:
+	@echo "$(BLUE)Running WebGPU tests in real browser...$(NC)"
+	@echo "$(YELLOW)Note: Chrome window will open - keep it open until tests complete$(NC)"
+	@./scripts/test-webgpu-browser.sh
 
 # Clean build artifacts
 clean:
