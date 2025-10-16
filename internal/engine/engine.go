@@ -3,19 +3,20 @@
 package engine
 
 import (
-	"math/rand"
 	"sync"
 	"syscall/js"
-	"time"
 
 	"github.com/conor/webgpu-triangle/internal/canvas"
 	"github.com/conor/webgpu-triangle/internal/gameobject"
+	"github.com/conor/webgpu-triangle/internal/input"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
 // Engine represents the game engine that manages the canvas and game loop
 type Engine struct {
 	canvasManager        canvas.CanvasManager
+	inputCapturer        types.InputCapturer
+	player               *gameobject.Player
 	lastTime             float64
 	textureLoaded        bool
 	running              bool
@@ -29,6 +30,7 @@ type Engine struct {
 func NewEngine() *Engine {
 	e := &Engine{
 		canvasManager:        canvas.NewWebGPUCanvasManager(),
+		inputCapturer:        input.NewKeyboardInput(),
 		running:              false,
 		gameStatePipelines:   make(map[types.GameState][]types.PipelineType),
 		gameStateGameObjects: make(map[types.GameState][]types.GameObject),
@@ -42,9 +44,6 @@ func NewEngine() *Engine {
 
 // initializeGameStates sets up the pipeline configurations and game objects for each game state
 func (e *Engine) initializeGameStates() {
-	// Initialize random seed
-	rand.Seed(time.Now().UnixNano())
-
 	// Screen dimensions (should match canvas size)
 	const screenWidth = 800.0
 	const screenHeight = 600.0
@@ -54,38 +53,28 @@ func (e *Engine) initializeGameStates() {
 		types.TexturedPipeline,
 	}
 
-	// Create 5 Llama GameObjects
-	gameObjects := make([]types.GameObject, 5)
+	// Create Player GameObject in the center of the screen
+	playerSize := 128.0
+	e.player = gameobject.NewPlayer(
+		types.Vector2{
+			X: (screenWidth - playerSize) / 2,  // Center X
+			Y: (screenHeight - playerSize) / 2, // Center Y
+		},
+		types.Vector2{X: playerSize, Y: playerSize},
+		200.0, // Movement speed: 200 pixels per second
+	)
 
-	for i := 0; i < 5; i++ {
-		// Random position
-		randomX := rand.Float64() * screenWidth
-		randomY := rand.Float64() * (screenHeight - 128) // Keep sprites on screen (accounting for sprite size)
+	println("DEBUG: Created Player at center of screen")
 
-		// Random speed (50-150 pixels per second)
-		randomSpeed := 50.0 + rand.Float64()*100.0
+	// No other game objects for now
+	e.gameStateGameObjects[types.SPRITE] = []types.GameObject{}
 
-		// Random sprite size (64-256 pixels)
-		randomSize := 64.0 + rand.Float64()*192.0
-
-		llama := gameobject.NewLlama(
-			types.Vector2{X: randomX, Y: randomY},
-			types.Vector2{X: randomSize, Y: randomSize},
-			randomSpeed,
-		)
-
-		gameObjects[i] = llama
-
-		println("DEBUG: Created Llama GameObject", i+1, "at position (", randomX, ",", randomY, ") with speed", randomSpeed)
-	}
-
-	e.gameStateGameObjects[types.SPRITE] = gameObjects
-
+	// TRIANGLE state (kept for state switching)
 	e.gameStatePipelines[types.TRIANGLE] = []types.PipelineType{
 		types.TrianglePipeline,
 	}
 
-	e.gameStateGameObjects[types.TRIANGLE] = []types.GameObject{} // No game objects for triangle state
+	e.gameStateGameObjects[types.TRIANGLE] = []types.GameObject{}
 }
 
 // Initialize sets up the engine with the specified canvas ID
@@ -104,7 +93,12 @@ func (e *Engine) Initialize(canvasID string) error {
 		return err
 	}
 
-	e.setupKeyboardHandlers()
+	// Initialize input capturer
+	err = e.inputCapturer.Initialize()
+	if err != nil {
+		println("DEBUG: Failed to initialize input:", err.Error())
+		return err
+	}
 
 	println("DEBUG: Engine initialized successfully")
 	return nil
@@ -158,6 +152,27 @@ func (e *Engine) Update(deltaTime float64) {
 	gameObjects := e.gameStateGameObjects[currentState]
 	e.stateLock.Unlock()
 
+	// Only update player in SPRITE state
+	if currentState == types.SPRITE && e.player != nil {
+		// Get input state and apply to player
+		inputState := e.inputCapturer.GetInputState()
+		e.player.HandleInput(inputState)
+
+		// Update player mover (position)
+		if mover := e.player.GetMover(); mover != nil {
+			mover.Update(deltaTime)
+		}
+
+		// Update player sprite (animation)
+		if sprite := e.player.GetSprite(); sprite != nil {
+			sprite.Update(deltaTime)
+		}
+
+		// Update player game logic
+		e.player.Update(deltaTime)
+	}
+
+	// Update other game objects
 	for _, gameObject := range gameObjects {
 		if mover := gameObject.GetMover(); mover != nil {
 			mover.Update(deltaTime)
@@ -183,14 +198,40 @@ func (e *Engine) Render() {
 	gameObjects := e.gameStateGameObjects[currentState]
 	e.stateLock.Unlock()
 
-	if len(gameObjects) > 0 {
+	// Check if we have anything to render
+	hasPlayer := currentState == types.SPRITE && e.player != nil
+	hasObjects := len(gameObjects) > 0
+
+	if hasPlayer || hasObjects {
 		err := e.canvasManager.BeginBatch()
 		if err != nil {
 			println("ERROR: Failed to begin batch:", err.Error())
 		}
 	}
 
-	// Render each game object's sprite
+	// Render player first (in SPRITE state)
+	if hasPlayer {
+		var renderData types.SpriteRenderData
+		if mover := e.player.GetMover(); mover != nil {
+			renderData = e.player.GetSprite().GetSpriteRenderData(mover.GetPosition())
+		} else {
+			renderData = e.player.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
+		}
+
+		if renderData.Visible {
+			err := e.canvasManager.DrawTexturedRect(
+				renderData.TexturePath,
+				renderData.Position,
+				renderData.Size,
+				renderData.UV,
+			)
+			if err != nil {
+				// Texture might not be loaded yet
+			}
+		}
+	}
+
+	// Render other game objects
 	for _, gameObject := range gameObjects {
 		var renderData types.SpriteRenderData
 		if mover := gameObject.GetMover(); mover != nil {
@@ -214,7 +255,7 @@ func (e *Engine) Render() {
 		}
 	}
 
-	if len(gameObjects) > 0 {
+	if hasPlayer || hasObjects {
 		err := e.canvasManager.EndBatch()
 		if err != nil {
 			println("ERROR: Failed to end batch:", err.Error())
@@ -231,9 +272,23 @@ func (e *Engine) loadSpriteTextures() {
 	gameObjects := e.gameStateGameObjects[currentState]
 	e.stateLock.Unlock()
 
+	// Load player texture
+	if currentState == types.SPRITE && e.player != nil {
+		pos := types.Vector2{X: 0, Y: 0}
+		if mover := e.player.GetMover(); mover != nil {
+			pos = mover.GetPosition()
+		}
+		renderData := e.player.GetSprite().GetSpriteRenderData(pos)
+		e.canvasManager.LoadTexture(renderData.TexturePath)
+	}
+
+	// Load other game object textures
 	for _, gameObject := range gameObjects {
-		renderData := gameObject.GetSprite().GetSpriteRenderData(gameObject.GetMover().GetPosition())
-		// Try to load the texture (will be skipped if already loaded)
+		pos := types.Vector2{X: 0, Y: 0}
+		if mover := gameObject.GetMover(); mover != nil {
+			pos = mover.GetPosition()
+		}
+		renderData := gameObject.GetSprite().GetSpriteRenderData(pos)
 		e.canvasManager.LoadTexture(renderData.TexturePath)
 	}
 }
@@ -247,6 +302,12 @@ func (e *Engine) Stop() {
 // Cleanup releases engine resources
 func (e *Engine) Cleanup() error {
 	e.Stop()
+
+	// Cleanup input capturer
+	if e.inputCapturer != nil {
+		e.inputCapturer.Cleanup()
+	}
+
 	return e.canvasManager.Cleanup()
 }
 
@@ -256,7 +317,6 @@ func (e *Engine) GetCanvasManager() canvas.CanvasManager {
 }
 
 // SetGameState changes the current game state and updates the active pipelines
-// This method is thread-safe and locks state transitions
 func (e *Engine) SetGameState(state types.GameState) error {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
@@ -266,7 +326,6 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		return &EngineError{Message: "Game state not configured: " + state.String()}
 	}
 
-	// Update canvas manager with the pipelines for this state
 	err := e.canvasManager.SetPipelines(pipelines)
 	if err != nil {
 		return err
@@ -282,43 +341,6 @@ func (e *Engine) GetGameState() types.GameState {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 	return e.currentGameState
-}
-
-// setupKeyboardHandlers sets up keyboard event listeners for state switching
-func (e *Engine) setupKeyboardHandlers() {
-	println("DEBUG: Setting up keyboard handlers")
-
-	// Create a callback function that persists across calls
-	keydownHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		if len(args) == 0 {
-			return nil
-		}
-
-		event := args[0]
-		key := event.Get("key").String()
-
-		switch key {
-		case "1":
-			println("DEBUG: Key '1' pressed - switching to SPRITE state")
-			err := e.SetGameState(types.SPRITE)
-			if err != nil {
-				println("ERROR: Failed to switch to SPRITE state:", err.Error())
-			}
-		case "2":
-			println("DEBUG: Key '2' pressed - switching to TRIANGLE state")
-			err := e.SetGameState(types.TRIANGLE)
-			if err != nil {
-				println("ERROR: Failed to switch to TRIANGLE state:", err.Error())
-			}
-		}
-
-		return nil
-	})
-
-	// Add event listener to the document
-	js.Global().Get("document").Call("addEventListener", "keydown", keydownHandler)
-
-	println("DEBUG: Keyboard handlers set up - Press '1' for SPRITE, '2' for TRIANGLE")
 }
 
 // EngineError represents an error in the engine
