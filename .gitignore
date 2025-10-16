@@ -1,0 +1,62 @@
+# Binaries from Makefile
+build/
+dist/
+*.wasm
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Go workspace file
+go.work
+
+# Go test cache
+*.test
+go.sum
+
+# Coverage reports
+*.cover
+coverage.out
+coverage.html
+
+# Dependency directories
+vendor/
+
+# WASM runtime (copied from GOROOT during build)
+assets/wasm_exec.js
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# OS files
+Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporary files
+*.tmp
+*.log
+tmp/
+temp/
+
+# Debug files
+debug
+__debug_bin
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
