@@ -1,0 +1,79 @@
+//go:build js
+
+package input
+
+import (
+	"sync"
+
+	"github.com/conor/webgpu-triangle/internal/types"
+)
+
+// UnifiedInput combines keyboard and gamepad input into a single input capturer
+// It automatically detects and uses gamepad input when available, while also
+// supporting keyboard input at all times
+type UnifiedInput struct {
+	keyboard *KeyboardInput
+	gamepad  *GamepadInput
+	mu       sync.RWMutex
+}
+
+// NewUnifiedInput creates a new unified input capturer
+func NewUnifiedInput() *UnifiedInput {
+	return &UnifiedInput{
+		keyboard: NewKeyboardInput(),
+		gamepad:  NewGamepadInput(),
+	}
+}
+
+// GetInputState returns the combined input state from keyboard and gamepad
+// If either input method indicates movement, it will be reflected in the state
+func (u *UnifiedInput) GetInputState() types.InputState {
+	u.mu.RLock()
+	defer u.mu.RUnlock()
+
+	// Update gamepad state (must be polled each frame)
+	u.gamepad.Update()
+
+	// Get states from both input sources
+	keyboardState := u.keyboard.GetInputState()
+	gamepadState := u.gamepad.GetInputState()
+
+	// Combine them (OR operation - if either is pressed, it's pressed)
+	return types.InputState{
+		MoveUp:    keyboardState.MoveUp || gamepadState.MoveUp,
+		MoveDown:  keyboardState.MoveDown || gamepadState.MoveDown,
+		MoveLeft:  keyboardState.MoveLeft || gamepadState.MoveLeft,
+		MoveRight: keyboardState.MoveRight || gamepadState.MoveRight,
+	}
+}
+
+// Initialize sets up both keyboard and gamepad input
+func (u *UnifiedInput) Initialize() error {
+	// Initialize keyboard
+	err := u.keyboard.Initialize()
+	if err != nil {
+		return err
+	}
+
+	// Initialize gamepad
+	err = u.gamepad.Initialize()
+	if err != nil {
+		// Don't fail if gamepad initialization fails - keyboard still works
+		println("WARNING: Gamepad initialization failed:", err.Error())
+	}
+
+	println("DEBUG: Unified input initialized (Keyboard + Gamepad)")
+	return nil
+}
+
+// Cleanup releases both keyboard and gamepad resources
+func (u *UnifiedInput) Cleanup() {
+	u.keyboard.Cleanup()
+	u.gamepad.Cleanup()
+	println("DEBUG: Unified input cleaned up")
+}
+
+// HasGamepad returns true if a gamepad is currently connected
+func (u *UnifiedInput) HasGamepad() bool {
+	return u.gamepad.HasGamepad()
+}

@@ -30,7 +30,7 @@ type Engine struct {
 func NewEngine() *Engine {
 	e := &Engine{
 		canvasManager:        canvas.NewWebGPUCanvasManager(),
-		inputCapturer:        input.NewKeyboardInput(),
+		inputCapturer:        input.NewUnifiedInput(),
 		running:              false,
 		gameStatePipelines:   make(map[types.GameState][]types.PipelineType),
 		gameStateGameObjects: make(map[types.GameState][]types.GameObject),
