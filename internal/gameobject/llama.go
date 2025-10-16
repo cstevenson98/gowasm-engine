@@ -66,13 +66,6 @@ func (l *Llama) GetMover() types.Mover {
 	return l.mover
 }
 
-// GetSpriteRenderData returns the complete render data for this Llama
-// Combines sprite data with position from the mover
-func (l *Llama) GetSpriteRenderData() types.SpriteRenderData {
-	position := l.mover.GetPosition()
-	return l.sprite.GetSpriteRenderData(position)
-}
-
 // GetState returns the Llama's current state
 func (l *Llama) GetState() *types.ObjectState {
 	return &l.state
@@ -87,16 +80,4 @@ func (l *Llama) SetState(state types.ObjectState) {
 
 // Update updates the Llama's state
 func (l *Llama) Update(deltaTime float64) {
-	// Update sprite animation
-	l.sprite.Update(deltaTime)
-
-	// Update movement
-	if l.mover != nil {
-		l.mover.Update(deltaTime)
-	}
-
-	// Update state to reflect current position
-	if l.mover != nil {
-		l.state.Position = l.mover.GetPosition()
-	}
 }

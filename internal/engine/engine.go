@@ -81,7 +81,6 @@ func (e *Engine) initializeGameStates() {
 
 	e.gameStateGameObjects[types.SPRITE] = gameObjects
 
-	// TRIANGLE state uses triangle pipeline (no game objects)
 	e.gameStatePipelines[types.TRIANGLE] = []types.PipelineType{
 		types.TrianglePipeline,
 	}
@@ -99,14 +98,12 @@ func (e *Engine) Initialize(canvasID string) error {
 		return err
 	}
 
-	// Set initial game state to SPRITE
 	err = e.SetGameState(types.SPRITE)
 	if err != nil {
 		println("DEBUG: Failed to set initial game state:", err.Error())
 		return err
 	}
 
-	// Set up keyboard event handlers
 	e.setupKeyboardHandlers()
 
 	println("DEBUG: Engine initialized successfully")
@@ -156,30 +153,36 @@ func (e *Engine) startRenderLoop() {
 
 // Update handles game logic updates
 func (e *Engine) Update(deltaTime float64) {
-	// Update all game objects for the current game state
 	e.stateLock.Lock()
 	currentState := e.currentGameState
 	gameObjects := e.gameStateGameObjects[currentState]
 	e.stateLock.Unlock()
 
-	// Update each game object (handles sprite animation and mover position)
 	for _, gameObject := range gameObjects {
+		if mover := gameObject.GetMover(); mover != nil {
+			mover.Update(deltaTime)
+		}
+
+		if sprite := gameObject.GetSprite(); sprite != nil {
+			sprite.Update(deltaTime)
+		}
+
 		gameObject.Update(deltaTime)
 	}
 
+	// TODO: This should be done in a separate thread,
+	// at game state change, with a black screen in between.
 	// Load textures for sprites if needed
 	e.loadSpriteTextures()
 }
 
 // Render draws the current frame
 func (e *Engine) Render() {
-	// Get game objects for the current state
 	e.stateLock.Lock()
 	currentState := e.currentGameState
 	gameObjects := e.gameStateGameObjects[currentState]
 	e.stateLock.Unlock()
 
-	// Begin batch mode to accumulate all sprite vertices
 	if len(gameObjects) > 0 {
 		err := e.canvasManager.BeginBatch()
 		if err != nil {
@@ -189,14 +192,17 @@ func (e *Engine) Render() {
 
 	// Render each game object's sprite
 	for _, gameObject := range gameObjects {
-		// Get combined render data from the game object
-		renderData := gameObject.GetSpriteRenderData()
+		var renderData types.SpriteRenderData
+		if mover := gameObject.GetMover(); mover != nil {
+			renderData = gameObject.GetSprite().GetSpriteRenderData(mover.GetPosition())
+		} else {
+			renderData = gameObject.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
+		}
 
 		if !renderData.Visible {
 			continue
 		}
 
-		// Draw the sprite using the canvas manager
 		err := e.canvasManager.DrawTexturedRect(
 			renderData.TexturePath,
 			renderData.Position,
@@ -204,12 +210,10 @@ func (e *Engine) Render() {
 			renderData.UV,
 		)
 		if err != nil {
-			// Texture might not be loaded yet, skip silently
 			continue
 		}
 	}
 
-	// End batch mode to upload all vertices at once
 	if len(gameObjects) > 0 {
 		err := e.canvasManager.EndBatch()
 		if err != nil {
@@ -217,7 +221,6 @@ func (e *Engine) Render() {
 		}
 	}
 
-	// Execute the actual render
 	e.canvasManager.Render()
 }
 
@@ -229,7 +232,7 @@ func (e *Engine) loadSpriteTextures() {
 	e.stateLock.Unlock()
 
 	for _, gameObject := range gameObjects {
-		renderData := gameObject.GetSpriteRenderData()
+		renderData := gameObject.GetSprite().GetSpriteRenderData(gameObject.GetMover().GetPosition())
 		// Try to load the texture (will be skipped if already loaded)
 		e.canvasManager.LoadTexture(renderData.TexturePath)
 	}
