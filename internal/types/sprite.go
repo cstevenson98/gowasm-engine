@@ -7,6 +7,7 @@ type SpriteRenderData struct {
 	Size        Vector2
 	UV          UVRect
 	Visible     bool
+	Frame       int
 }
 
 // Sprite is the interface that all sprite types must implement
