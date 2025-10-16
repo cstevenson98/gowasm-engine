@@ -5,6 +5,7 @@ package gameobject
 import (
 	"sync"
 
+	"github.com/conor/webgpu-triangle/internal/mover"
 	"github.com/conor/webgpu-triangle/internal/sprite"
 	"github.com/conor/webgpu-triangle/internal/types"
 	"github.com/google/uuid"
@@ -13,17 +14,18 @@ import (
 // Llama is a GameObject that represents a llama character
 type Llama struct {
 	sprite types.Sprite
+	mover  types.Mover
 	state  types.ObjectState
 
 	mu sync.Mutex
 }
 
 // NewLlama creates a new Llama GameObject
-func NewLlama(position sprite.Vector2, size sprite.Vector2, speed float64) *Llama {
+func NewLlama(position types.Vector2, size types.Vector2, speed float64) *Llama {
+	// Create the sprite (just handles texture and animation)
 	llamaSprite := sprite.NewSpriteSheet(
 		"llama.png",
-		position,
-		size,
+		sprite.Vector2{X: size.X, Y: size.Y},
 		2, // 2 columns (n)
 		3, // 3 rows (m) = 6 frames total
 	)
@@ -31,17 +33,23 @@ func NewLlama(position sprite.Vector2, size sprite.Vector2, speed float64) *Llam
 	// Set animation speed
 	llamaSprite.SetFrameTime(0.1 + (speed/100.0)*0.1) // Slight variation based on speed
 
-	// Set velocity to move right
-	llamaSprite.SetVelocity(sprite.Vector2{X: speed, Y: 0})
+	// Create the mover (handles position and velocity)
+	llamaMover := mover.NewBasicMover(
+		position,
+		types.Vector2{X: speed, Y: 0}, // Velocity to move right
+		size.X,                        // Sprite width for wrapping
+		size.Y,                        // Sprite height for wrapping
+	)
 
-	// Set screen bounds for wrapping (these match the defaults but make it explicit)
-	llamaSprite.SetScreenBounds(800, 600)
+	// Set screen bounds for wrapping
+	llamaMover.SetScreenBounds(800, 600)
 
 	return &Llama{
 		sprite: llamaSprite,
+		mover:  llamaMover,
 		state: types.ObjectState{
 			ID:       uuid.New().String(),
-			Position: types.Vector2{X: 0, Y: 0},
+			Position: position,
 			Visible:  true,
 			Frame:    0,
 		},
@@ -51,6 +59,18 @@ func NewLlama(position sprite.Vector2, size sprite.Vector2, speed float64) *Llam
 // GetSprite returns the sprite associated with this Llama
 func (l *Llama) GetSprite() types.Sprite {
 	return l.sprite
+}
+
+// GetMover returns the mover component for this Llama
+func (l *Llama) GetMover() types.Mover {
+	return l.mover
+}
+
+// GetSpriteRenderData returns the complete render data for this Llama
+// Combines sprite data with position from the mover
+func (l *Llama) GetSpriteRenderData() types.SpriteRenderData {
+	position := l.mover.GetPosition()
+	return l.sprite.GetSpriteRenderData(position)
 }
 
 // GetState returns the Llama's current state
@@ -67,7 +87,16 @@ func (l *Llama) SetState(state types.ObjectState) {
 
 // Update updates the Llama's state
 func (l *Llama) Update(deltaTime float64) {
-	// For now, the sprite handles all updates (animation, movement)
-	// In the future, we could add Llama-specific behavior here
+	// Update sprite animation
 	l.sprite.Update(deltaTime)
+
+	// Update movement
+	if l.mover != nil {
+		l.mover.Update(deltaTime)
+	}
+
+	// Update state to reflect current position
+	if l.mover != nil {
+		l.state.Position = l.mover.GetPosition()
+	}
 }

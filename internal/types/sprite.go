@@ -11,18 +11,16 @@ type SpriteRenderData struct {
 }
 
 // Sprite is the interface that all sprite types must implement
+// Sprites handle texture, animation, and size - NOT position or movement
 type Sprite interface {
-	// GetSpriteRenderData returns the data needed to render this sprite
-	GetSpriteRenderData() SpriteRenderData
+	// GetSpriteRenderData returns the data needed to render this sprite at a given position
+	GetSpriteRenderData(position Vector2) SpriteRenderData
+
+	// GetSize returns the sprite's display size
+	GetSize() Vector2
 
 	// Update updates the sprite's state (animation, etc.)
 	Update(deltaTime float64)
-
-	// SetPosition sets the sprite's position
-	SetPosition(pos Vector2)
-
-	// GetPosition returns the sprite's current position
-	GetPosition() Vector2
 
 	// SetVisible sets whether the sprite should be rendered
 	SetVisible(visible bool)

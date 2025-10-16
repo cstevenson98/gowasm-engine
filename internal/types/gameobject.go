@@ -20,6 +20,13 @@ type GameObject interface {
 	// GetSprite returns the sprite associated with this game object
 	GetSprite() Sprite
 
+	// GetMover returns the mover component, or nil if this object doesn't move
+	GetMover() Mover
+
+	// GetSpriteRenderData returns the complete render data for this object
+	// This combines data from the sprite and position from the mover (if any)
+	GetSpriteRenderData() SpriteRenderData
+
 	// Update updates the game object's state and its sprite
 	Update(deltaTime float64)
 

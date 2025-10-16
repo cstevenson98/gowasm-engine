@@ -10,7 +10,6 @@ import (
 
 	"github.com/conor/webgpu-triangle/internal/canvas"
 	"github.com/conor/webgpu-triangle/internal/gameobject"
-	"github.com/conor/webgpu-triangle/internal/sprite"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
@@ -70,8 +69,8 @@ func (e *Engine) initializeGameStates() {
 		randomSize := 64.0 + rand.Float64()*192.0
 
 		llama := gameobject.NewLlama(
-			sprite.Vector2{X: randomX, Y: randomY},
-			sprite.Vector2{X: randomSize, Y: randomSize},
+			types.Vector2{X: randomX, Y: randomY},
+			types.Vector2{X: randomSize, Y: randomSize},
 			randomSpeed,
 		)
 
@@ -163,10 +162,9 @@ func (e *Engine) Update(deltaTime float64) {
 	gameObjects := e.gameStateGameObjects[currentState]
 	e.stateLock.Unlock()
 
-	// Update each game object
+	// Update each game object (handles sprite animation and mover position)
 	for _, gameObject := range gameObjects {
 		gameObject.Update(deltaTime)
-		gameObject.GetSprite().Update(deltaTime)
 	}
 
 	// Load textures for sprites if needed
@@ -191,8 +189,8 @@ func (e *Engine) Render() {
 
 	// Render each game object's sprite
 	for _, gameObject := range gameObjects {
-		sprite := gameObject.GetSprite()
-		renderData := sprite.GetSpriteRenderData()
+		// Get combined render data from the game object
+		renderData := gameObject.GetSpriteRenderData()
 
 		if !renderData.Visible {
 			continue
@@ -231,8 +229,7 @@ func (e *Engine) loadSpriteTextures() {
 	e.stateLock.Unlock()
 
 	for _, gameObject := range gameObjects {
-		sprite := gameObject.GetSprite()
-		renderData := sprite.GetSpriteRenderData()
+		renderData := gameObject.GetSpriteRenderData()
 		// Try to load the texture (will be skipped if already loaded)
 		e.canvasManager.LoadTexture(renderData.TexturePath)
 	}
