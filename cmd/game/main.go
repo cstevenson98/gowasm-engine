@@ -1,16 +1,19 @@
+//go:build js
+
 package main
 
 import (
 	"syscall/js"
 
 	"github.com/conor/webgpu-triangle/internal/engine"
+	"github.com/conor/webgpu-triangle/internal/logger"
 )
 
 // Global engine instance
 var gameEngine *engine.Engine
 
 func main() {
-	println("DEBUG: Go WASM program started")
+	logger.Logger.Info("Go WASM program started")
 
 	// Create the game engine
 	gameEngine = engine.NewEngine()
@@ -18,13 +21,13 @@ func main() {
 	// Check if DOM is already loaded
 	document := js.Global().Get("document")
 	if document.Get("readyState").String() == "complete" {
-		println("DEBUG: DOM already loaded, initializing immediately")
+		logger.Logger.Info("DOM already loaded, initializing immediately")
 		initializeEngine()
 	} else {
-		println("DEBUG: Waiting for DOM to load")
+		logger.Logger.Info("Waiting for DOM to load")
 		// Wait for DOM to be ready
 		js.Global().Call("addEventListener", "DOMContentLoaded", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			println("DEBUG: DOMContentLoaded event fired")
+			logger.Logger.Info("DOMContentLoaded event fired")
 			initializeEngine()
 			return nil
 		}))
@@ -35,11 +38,11 @@ func main() {
 }
 
 func initializeEngine() {
-	println("DEBUG: Starting engine initialization")
+	logger.Logger.Info("Starting engine initialization")
 
 	err := gameEngine.Initialize("webgpu-canvas")
 	if err != nil {
-		println("DEBUG: Engine initialization failed:", err.Error())
+		logger.Logger.Errorf("Engine initialization failed: %s", err.Error())
 		return
 	}
 

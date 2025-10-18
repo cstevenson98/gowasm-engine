@@ -6,6 +6,7 @@ import (
 	"sync"
 	"syscall/js"
 
+	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
@@ -61,7 +62,7 @@ func (g *GamepadInput) Initialize() error {
 		g.hasGamepad = true
 		g.mu.Unlock()
 
-		println("DEBUG: Gamepad connected - Index:", index, "ID:", id)
+		logger.Logger.Debugf("Gamepad connected - Index: %d ID: %s", index, id)
 		return nil
 	})
 
@@ -84,7 +85,7 @@ func (g *GamepadInput) Initialize() error {
 		}
 		g.mu.Unlock()
 
-		println("DEBUG: Gamepad disconnected - Index:", index)
+		logger.Logger.Debugf("Gamepad disconnected - Index: %d", index)
 		return nil
 	})
 
@@ -97,7 +98,7 @@ func (g *GamepadInput) Initialize() error {
 	g.checkExistingGamepads()
 
 	g.initialized = true
-	println("DEBUG: Gamepad input initialized")
+	logger.Logger.Debugf("Gamepad input initialized")
 
 	return nil
 }
@@ -121,7 +122,7 @@ func (g *GamepadInput) checkExistingGamepads() {
 			g.mu.Unlock()
 
 			id := gamepad.Get("id").String()
-			println("DEBUG: Found existing gamepad - Index:", i, "ID:", id)
+			logger.Logger.Debugf("Found existing gamepad - Index: %d ID: %s", i, id)
 			return
 		}
 	}
@@ -236,5 +237,5 @@ func (g *GamepadInput) Cleanup() {
 	g.disconnectedFunc.Release()
 
 	g.initialized = false
-	println("DEBUG: Gamepad input cleaned up")
+	logger.Logger.Debugf("Gamepad input cleaned up")
 }

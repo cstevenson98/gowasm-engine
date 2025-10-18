@@ -9,6 +9,7 @@ import (
 	"github.com/conor/webgpu-triangle/internal/canvas"
 	"github.com/conor/webgpu-triangle/internal/gameobject"
 	"github.com/conor/webgpu-triangle/internal/input"
+	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
@@ -64,7 +65,7 @@ func (e *Engine) initializeGameStates() {
 		200.0, // Movement speed: 200 pixels per second
 	)
 
-	println("DEBUG: Created Player at center of screen")
+	logger.Logger.Debugf("Created Player at center of screen")
 
 	// No other game objects for now
 	e.gameStateGameObjects[types.SPRITE] = []types.GameObject{}
@@ -79,40 +80,40 @@ func (e *Engine) initializeGameStates() {
 
 // Initialize sets up the engine with the specified canvas ID
 func (e *Engine) Initialize(canvasID string) error {
-	println("DEBUG: Engine initializing with canvas:", canvasID)
+	logger.Logger.Debugf("Engine initializing with canvas: %s", canvasID)
 
 	err := e.canvasManager.Initialize(canvasID)
 	if err != nil {
-		println("DEBUG: Engine initialization failed:", err.Error())
+		logger.Logger.Errorf("Engine initialization failed: %s", err.Error())
 		return err
 	}
 
 	err = e.SetGameState(types.SPRITE)
 	if err != nil {
-		println("DEBUG: Failed to set initial game state:", err.Error())
+		logger.Logger.Errorf("Failed to set initial game state: %s", err.Error())
 		return err
 	}
 
 	// Initialize input capturer
 	err = e.inputCapturer.Initialize()
 	if err != nil {
-		println("DEBUG: Failed to initialize input:", err.Error())
+		logger.Logger.Errorf("Failed to initialize input: %s", err.Error())
 		return err
 	}
 
-	println("DEBUG: Engine initialized successfully")
+	logger.Logger.Debugf("Engine initialized successfully")
 	return nil
 }
 
 // Start begins th e game loop
 func (e *Engine) Start() {
 	if e.running {
-		println("DEBUG: Engine already running")
+		logger.Logger.Debugf("Engine already running")
 		return
 	}
 
 	e.running = true
-	println("DEBUG: Engine starting render loop")
+	logger.Logger.Debugf("Engine starting render loop")
 
 	e.startRenderLoop()
 }
@@ -205,7 +206,7 @@ func (e *Engine) Render() {
 	if hasPlayer || hasObjects {
 		err := e.canvasManager.BeginBatch()
 		if err != nil {
-			println("ERROR: Failed to begin batch:", err.Error())
+			logger.Logger.Errorf("Failed to begin batch: %s", err.Error())
 		}
 	}
 
@@ -258,7 +259,7 @@ func (e *Engine) Render() {
 	if hasPlayer || hasObjects {
 		err := e.canvasManager.EndBatch()
 		if err != nil {
-			println("ERROR: Failed to end batch:", err.Error())
+			logger.Logger.Errorf("Failed to end batch: %s", err.Error())
 		}
 	}
 
@@ -296,7 +297,7 @@ func (e *Engine) loadSpriteTextures() {
 // Stop stops the game loop
 func (e *Engine) Stop() {
 	e.running = false
-	println("DEBUG: Engine stopped")
+	logger.Logger.Debugf("Engine stopped")
 }
 
 // Cleanup releases engine resources
@@ -332,7 +333,7 @@ func (e *Engine) SetGameState(state types.GameState) error {
 	}
 
 	e.currentGameState = state
-	println("DEBUG: Game state changed to:", state.String())
+	logger.Logger.Debugf("Game state changed to: %s", state.String())
 	return nil
 }
 

@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
+	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
@@ -62,18 +63,18 @@ func NewWebGPUCanvasManager() *WebGPUCanvasManager {
 
 // Initialize sets up the WebGPU canvas
 func (w *WebGPUCanvasManager) Initialize(canvasID string) error {
-	println("DEBUG: WebGPUCanvasManager.Initialize called for canvas:", canvasID)
+	logger.Logger.Tracef("WebGPUCanvasManager.Initialize called for canvas: %s", canvasID)
 
 	// Get the canvas element
 	canvas := js.Global().Get("document").Call("getElementById", canvasID)
 	if canvas.IsUndefined() || canvas.IsNull() {
 		err := "Canvas element not found"
-		println("ERROR:", err)
+		logger.Logger.Errorf("ERROR: %s", err)
 		return &CanvasError{Message: err}
 	}
 
 	w.canvas = canvas
-	println("DEBUG: Canvas element found")
+	logger.Logger.Tracef("Canvas element found")
 
 	// Get canvas dimensions (set by JavaScript)
 	width := uint32(canvas.Get("width").Int())
@@ -87,48 +88,48 @@ func (w *WebGPUCanvasManager) Initialize(canvasID string) error {
 		canvas.Set("height", height)
 	}
 
-	println("DEBUG: Canvas size:", width, "x", height)
+	logger.Logger.Tracef("Canvas size: %dx%d", width, height)
 
 	// Create WebGPU instance
 	w.instance = wgpu.CreateInstance(nil)
 	if w.instance == nil {
 		err := "WebGPU not supported"
-		println("ERROR:", err)
+		logger.Logger.Errorf("ERROR: %s", err)
 		return &CanvasError{Message: err}
 	}
-	println("DEBUG: WebGPU instance created")
+	logger.Logger.Tracef("WebGPU instance created")
 
 	// Create surface from canvas
 	w.surface = w.instance.CreateSurface(&wgpu.SurfaceDescriptor{
 		Canvas: canvas,
 		Label:  "Main Canvas Surface",
 	})
-	println("DEBUG: Surface created from canvas")
+	logger.Logger.Tracef("Surface created from canvas")
 
 	// Request adapter
-	println("DEBUG: Requesting adapter...")
+	logger.Logger.Tracef("Requesting adapter...")
 	adapter, err := w.instance.RequestAdapter(&wgpu.RequestAdapterOptions{
 		CompatibleSurface: w.surface,
 	})
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to request adapter: %v", err)
-		println("ERROR:", errMsg)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
 		return &CanvasError{Message: errMsg}
 	}
 	w.adapter = adapter
-	println("DEBUG: Adapter obtained")
+	logger.Logger.Tracef("Adapter obtained")
 
 	// Request device
-	println("DEBUG: Requesting device...")
+	logger.Logger.Tracef("Requesting device...")
 	device, err := adapter.RequestDevice(nil)
 	if err != nil {
 		errMsg := fmt.Sprintf("Failed to request device: %v", err)
-		println("ERROR:", errMsg)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
 		return &CanvasError{Message: errMsg}
 	}
 	w.device = device
 	w.queue = device.GetQueue()
-	println("DEBUG: Device and queue obtained")
+	logger.Logger.Tracef("Device and queue obtained")
 
 	// Configure surface with actual canvas dimensions
 	caps := w.surface.GetCapabilities(w.adapter)
@@ -141,42 +142,42 @@ func (w *WebGPUCanvasManager) Initialize(canvasID string) error {
 		AlphaMode:   caps.AlphaModes[0],
 	}
 	w.surface.Configure(w.adapter, w.device, w.config)
-	println("DEBUG: Surface configured")
+	logger.Logger.Tracef("Surface configured")
 
 	// Create pipelines
 	if err := w.createTrianglePipeline(); err != nil {
 		errMsg := fmt.Sprintf("Failed to create triangle pipeline: %v", err)
-		println("ERROR:", errMsg)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
 		return &CanvasError{Message: errMsg}
 	}
 
 	if err := w.createSpritePipeline(); err != nil {
 		errMsg := fmt.Sprintf("Failed to create sprite pipeline: %v", err)
-		println("ERROR:", errMsg)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
 		return &CanvasError{Message: errMsg}
 	}
 
 	if err := w.createTexturedPipeline(); err != nil {
 		errMsg := fmt.Sprintf("Failed to create textured pipeline: %v", err)
-		println("ERROR:", errMsg)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
 		return &CanvasError{Message: errMsg}
 	}
 
 	// Create sampler
 	if err := w.createSampler(); err != nil {
 		errMsg := fmt.Sprintf("Failed to create sampler: %v", err)
-		println("ERROR:", errMsg)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
 		return &CanvasError{Message: errMsg}
 	}
 
 	// Create vertex buffer
 	if err := w.createSpriteVertexBuffer(); err != nil {
 		errMsg := fmt.Sprintf("Failed to create vertex buffer: %v", err)
-		println("ERROR:", errMsg)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
 		return &CanvasError{Message: errMsg}
 	}
 
-	println("DEBUG: WebGPU setup complete")
+	logger.Logger.Tracef("WebGPU setup complete")
 
 	w.initialized = true
 	return nil
@@ -217,7 +218,7 @@ func (w *WebGPUCanvasManager) SetPipelines(pipelines []types.PipelineType) error
 	w.activePipelines = make([]types.PipelineType, len(pipelines))
 	copy(w.activePipelines, pipelines)
 
-	println("DEBUG: Active pipelines set:", pipelines)
+	logger.Logger.Tracef("Active pipelines set: %v", pipelines)
 	return nil
 }
 
@@ -282,7 +283,7 @@ fn fs_main() -> @location(0) vec4f {
 	}
 
 	w.trianglePipeline = pipeline
-	println("DEBUG: Triangle pipeline created")
+	logger.Logger.Tracef("Triangle pipeline created")
 	return nil
 }
 
@@ -381,7 +382,7 @@ fn fs_main(@location(0) color: vec4f) -> @location(0) vec4f {
 	}
 
 	w.spritePipeline = pipeline
-	println("DEBUG: Sprite pipeline created")
+	logger.Logger.Tracef("Sprite pipeline created")
 	return nil
 }
 
@@ -520,7 +521,7 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
 	}
 
 	w.texturedPipeline = pipeline
-	println("DEBUG: Textured pipeline created")
+	logger.Logger.Tracef("Textured pipeline created")
 	return nil
 }
 
@@ -543,7 +544,7 @@ func (w *WebGPUCanvasManager) createSampler() error {
 	}
 
 	w.sampler = sampler
-	println("DEBUG: Sampler created")
+	logger.Logger.Tracef("Sampler created")
 	return nil
 }
 
@@ -561,7 +562,7 @@ func (w *WebGPUCanvasManager) createSpriteVertexBuffer() error {
 	}
 
 	w.vertexBuffer = vertexBuffer
-	println("DEBUG: Vertex buffer created, size:", bufferSize)
+	logger.Logger.Tracef("Vertex buffer created, size: %d", bufferSize)
 	return nil
 }
 
@@ -679,12 +680,12 @@ func (w *WebGPUCanvasManager) DrawColoredRect(position types.Vector2, size types
 
 	if w.batchMode {
 		w.stagedVertices = append(w.stagedVertices, vertices...)
-		println("DEBUG: Batched rectangle at", position.X, position.Y)
+		logger.Logger.Tracef("Batched rectangle at %f, %f", position.X, position.Y)
 	} else {
 		// Immediate mode - upload and stage
 		w.queue.WriteBuffer(w.vertexBuffer, 0, float32SliceToBytes(vertices))
 		w.stagedVertexCount = len(vertices) / 6 // 6 floats per vertex
-		println("DEBUG: Immediate mode - Staged", w.stagedVertexCount, "vertices")
+		logger.Logger.Tracef("Immediate mode - Staged %d vertices", w.stagedVertexCount)
 	}
 
 	return nil
@@ -719,17 +720,17 @@ func (w *WebGPUCanvasManager) LoadTexture(path string) error {
 	}
 
 	if _, exists := w.loadedTextures[path]; exists {
-		println("DEBUG: Texture already loaded:", path)
+		logger.Logger.Tracef("Texture already loaded: %s", path)
 		return nil
 	}
 
-	println("DEBUG: Loading texture from:", path)
+	logger.Logger.Tracef("Loading texture from: %s", path)
 
 	image := js.Global().Get("Image").New()
 	imageLoaded := make(chan bool)
 
 	image.Set("onload", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		println("DEBUG: Image loaded successfully:", path)
+		logger.Logger.Tracef("Image loaded successfully: %s", path)
 		gpuTexture := w.uploadTextureToGPU(image)
 		w.loadedTextures[path] = gpuTexture
 		imageLoaded <- true
@@ -737,7 +738,7 @@ func (w *WebGPUCanvasManager) LoadTexture(path string) error {
 	}))
 
 	image.Set("onerror", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		println("ERROR: Failed to load image:", path)
+		logger.Logger.Errorf("Failed to load image: %s", path)
 		imageLoaded <- false
 		return nil
 	}))
@@ -756,7 +757,7 @@ func (w *WebGPUCanvasManager) uploadTextureToGPU(image js.Value) *wgpu.Texture {
 	width := uint32(image.Get("width").Int())
 	height := uint32(image.Get("height").Int())
 
-	println("DEBUG: Uploading texture to GPU - Size:", width, "x", height)
+	logger.Logger.Tracef("Uploading texture to GPU - Size: %dx%d", width, height)
 
 	texture, err := w.device.CreateTexture(&wgpu.TextureDescriptor{
 		Label: "Loaded Texture",
@@ -772,7 +773,7 @@ func (w *WebGPUCanvasManager) uploadTextureToGPU(image js.Value) *wgpu.Texture {
 		Usage:         wgpu.TextureUsageTextureBinding | wgpu.TextureUsageCopyDst | wgpu.TextureUsageRenderAttachment,
 	})
 	if err != nil {
-		println("ERROR: Failed to create texture:", err)
+		logger.Logger.Errorf("Failed to create texture: %s", err)
 		return nil
 	}
 
@@ -808,7 +809,7 @@ func (w *WebGPUCanvasManager) uploadTextureToGPU(image js.Value) *wgpu.Texture {
 		},
 	)
 
-	println("DEBUG: Texture uploaded to GPU successfully")
+	logger.Logger.Tracef("Texture uploaded to GPU successfully")
 	return texture
 }
 
@@ -820,7 +821,7 @@ func (w *WebGPUCanvasManager) DrawTexturedRect(texturePath string, position type
 
 	gpuTexture, exists := w.loadedTextures[texturePath]
 	if !exists {
-		println("DEBUG: Texture not loaded:", texturePath)
+		logger.Logger.Tracef("Texture not loaded: %s", texturePath)
 		return &CanvasError{Message: "Texture not loaded: " + texturePath}
 	}
 
@@ -833,12 +834,12 @@ func (w *WebGPUCanvasManager) DrawTexturedRect(texturePath string, position type
 	if w.batchMode {
 		// Batch mode - accumulate vertices
 		w.stagedVertices = append(w.stagedVertices, vertices...)
-		println("DEBUG: Batched textured rect at", position.X, position.Y)
+		logger.Logger.Tracef("Batched textured rect at %f, %f", position.X, position.Y)
 	} else {
 		// Immediate mode - upload and stage
 		w.queue.WriteBuffer(w.vertexBuffer, 0, float32SliceToBytes(vertices))
 		w.stagedVertexCount = len(vertices) / 4 // 4 floats per vertex
-		println("DEBUG: Immediate mode - Drew textured rect -", w.stagedVertexCount, "vertices")
+		logger.Logger.Tracef("Immediate mode - Drew textured rect - %d vertices", w.stagedVertexCount)
 	}
 
 	return nil
@@ -875,7 +876,7 @@ func (w *WebGPUCanvasManager) generateTexturedQuadVertices(pos types.Vector2, si
 func (w *WebGPUCanvasManager) createTextureBindGroup(texture *wgpu.Texture) *wgpu.BindGroup {
 	textureView, err := texture.CreateView(nil)
 	if err != nil {
-		println("ERROR: Failed to create texture view:", err)
+		logger.Logger.Errorf("Failed to create texture view: %s", err)
 		return nil
 	}
 
@@ -894,7 +895,7 @@ func (w *WebGPUCanvasManager) createTextureBindGroup(texture *wgpu.Texture) *wgp
 		},
 	})
 	if err != nil {
-		println("ERROR: Failed to create bind group:", err)
+		logger.Logger.Errorf("Failed to create bind group: %s", err)
 		return nil
 	}
 
@@ -911,7 +912,7 @@ func (w *WebGPUCanvasManager) BeginBatch() error {
 	w.stagedVertices = make([]float32, 0)
 	w.stagedVertexCount = 0
 
-	println("DEBUG: BeginBatch - Batch mode enabled")
+	logger.Logger.Tracef("BeginBatch - Batch mode enabled")
 	return nil
 }
 
@@ -922,7 +923,7 @@ func (w *WebGPUCanvasManager) EndBatch() error {
 	}
 
 	if !w.batchMode {
-		println("DEBUG: EndBatch called but not in batch mode")
+		logger.Logger.Trace("EndBatch called but not in batch mode")
 		return nil
 	}
 
@@ -932,7 +933,7 @@ func (w *WebGPUCanvasManager) EndBatch() error {
 	}
 
 	w.batchMode = false
-	println("DEBUG: EndBatch - Batch mode disabled,", w.stagedVertexCount, "vertices uploaded")
+	logger.Logger.Tracef("EndBatch - Batch mode disabled, %d vertices uploaded", w.stagedVertexCount)
 
 	return nil
 }
@@ -944,7 +945,7 @@ func (w *WebGPUCanvasManager) FlushBatch() error {
 	}
 
 	if len(w.stagedVertices) == 0 {
-		println("DEBUG: FlushBatch - No vertices to flush")
+		logger.Logger.Tracef("FlushBatch - No vertices to flush")
 		w.stagedVertexCount = 0
 		return nil
 	}
@@ -961,7 +962,7 @@ func (w *WebGPUCanvasManager) FlushBatch() error {
 		w.stagedVertexCount = len(w.stagedVertices) / 6
 	}
 
-	println("DEBUG: FlushBatch - Uploaded", len(w.stagedVertices), "floats (", w.stagedVertexCount, "vertices )")
+	logger.Logger.Tracef("FlushBatch - Uploaded %d floats (%d vertices)", len(w.stagedVertices), w.stagedVertexCount)
 
 	return nil
 }
@@ -1012,7 +1013,7 @@ func (w *WebGPUCanvasManager) GetStatus() (bool, string) {
 func (w *WebGPUCanvasManager) SetStatus(initialized bool, message string) {
 	w.initialized = initialized
 	w.error = message
-	println("STATUS:", message)
+	logger.Logger.Tracef("STATUS: %s", message)
 }
 
 // Stub implementations for interface compliance
@@ -1022,12 +1023,12 @@ func (w *WebGPUCanvasManager) DrawTexture(texture types.Texture, position types.
 }
 
 func (w *WebGPUCanvasManager) DrawTextureRotated(texture types.Texture, position types.Vector2, size types.Vector2, uv types.UVRect, rotation float64) error {
-	println("DEBUG: DrawTextureRotated STUB")
+	logger.Logger.Tracef("DrawTextureRotated STUB")
 	return nil
 }
 
 func (w *WebGPUCanvasManager) DrawTextureScaled(texture types.Texture, position types.Vector2, size types.Vector2, uv types.UVRect, scale types.Vector2) error {
-	println("DEBUG: DrawTextureScaled STUB")
+	logger.Logger.Tracef("DrawTextureScaled STUB")
 	return nil
 }
 
