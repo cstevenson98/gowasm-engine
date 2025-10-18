@@ -1,0 +1,330 @@
+---
+alwaysApply: true
+---
+# Go WASM WebGPU Game Engine Rules
+
+## Architecture Overview
+
+This is a 2D game engine built with Go and WebGPU, compiled to WebAssembly for browser execution. The engine follows a component-based architecture with clear separation of concerns.
+
+### Core Components
+
+1. **Engine** (`internal/engine/`) - Game loop orchestration, state management, scene coordination
+2. **Canvas** (`internal/canvas/`) - WebGPU rendering pipeline, texture management, batch rendering
+3. **GameObject** (`internal/gameobject/`) - Game entities (Player, Llama) with Update() and GetSprite()
+4. **Scene** (`internal/scene/`) - Scene management for organizing game objects and game states
+5. **Sprite** (`internal/sprite/`) - Sprite rendering, animation, UV calculations
+6. **Mover** (`internal/mover/`) - Movement, physics, screen wrapping
+7. **Input** (`internal/input/`) - Unified input system (keyboard & gamepad)
+8. **Types** (`internal/types/`) - Shared interfaces and type definitions
+
+## Go WASM Build Tags
+
+### Build Tag Pattern
+
+**CRITICAL**: This project uses Go build tags to separate WASM-specific code from test/mock code.
+
+```go
+//go:build js
+
+package main
+```
+
+- **Files with `//go:build js`**: WASM implementation files that run in the browser
+  - Example: `cmd/game/main.go`, `internal/canvas/canvas_webgpu.go`, `internal/engine/engine.go`
+  - These files have access to `syscall/js` and WebGPU APIs
+  - Only compiled when `GOOS=js GOARCH=wasm`
+
+- **Files WITHOUT build tags**: Standard Go code, tests, and mocks
+  - Example: `internal/canvas/mock_canvas.go`, `*_test.go` files
+  - Can run on native Go (for fast unit testing)
+  - Mock implementations for testing without browser
+
+### Build Commands
+
+```bash
+# Build WASM binary
+GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game
+
+# Run standard tests (no build tag needed)
+go test ./...
+
+# Run WASM tests in browser
+GOOS=js GOARCH=wasm go test ./internal/gameobject -v
+
+# Use Makefile shortcuts
+make build      # Builds WASM
+make test       # Standard tests
+make test-wasm  # WASM browser tests
+```
+
+- If any of the following change, update this file:
+
+
+## WebGPU Wrapper Architecture
+
+### Minimizing Hardcoded JS Calls
+
+The project uses the **cogentcore/webgpu** library as a Go wrapper around WebGPU APIs. This design minimizes direct `syscall/js` calls by:
+
+1. **Using cogentcore/webgpu for GPU operations**
+   ```go
+   import "github.com/cogentcore/webgpu/wgpu"
+   
+   // Instead of direct JS calls:
+   // js.Global().Get("navigator").Get("gpu").Call("requestAdapter")
+   
+   // Use the wrapper:
+   w.instance = wgpu.CreateInstance(nil)
+   w.adapter = w.instance.RequestAdapter(&wgpu.RequestAdapterOptions{...})
+   w.device = w.adapter.RequestDevice(nil)
+   ```
+
+2. **Direct JS calls are limited to**:
+   - DOM manipulation (canvas element retrieval)
+   - Event listeners (DOMContentLoaded, requestAnimationFrame)
+   - Browser API access (window dimensions, input events)
+   
+   ```go
+   // Acceptable JS calls
+   canvas := js.Global().Get("document").Call("getElementById", canvasID)
+   width := canvas.Get("width").Int()
+   js.Global().Call("requestAnimationFrame", callback)
+   ```
+
+3. **All WebGPU operations go through the wrapper**:
+   - Pipeline creation
+   - Buffer management
+   - Texture operations
+   - Render pass execution
+   - Command encoding
+
+### Canvas Manager Pattern
+
+The `CanvasManager` interface abstracts rendering:
+
+```go
+type CanvasManager interface {
+    Initialize(canvasID string) error
+    Render() error
+    DrawTexture(texture types.Texture, position types.Vector2, size types.Vector2, uv types.UVRect) error
+    BeginBatch() error
+    EndBatch() error
+    // ... more methods
+}
+```
+
+**Implementations**:
+- `WebGPUCanvasManager` - Real WebGPU implementation (build tag: js)
+- `MockCanvasManager` - Test implementation (no build tag)
+
+## Code Patterns
+
+### 1. WASM Entry Point Pattern
+
+```go
+//go:build js
+
+package main
+
+import (
+    "syscall/js"
+    "github.com/conor/webgpu-triangle/internal/engine"
+)
+
+var gameEngine *engine.Engine
+
+func main() {
+    gameEngine = engine.NewEngine()
+    
+    // Wait for DOM
+    js.Global().Call("addEventListener", "DOMContentLoaded", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+        initializeEngine()
+        return nil
+    }))
+    
+    // Keep program running
+    <-make(chan bool)
+}
+```
+
+### 2. Component Interface Pattern
+
+All game components implement interfaces defined in `internal/types/`:
+
+```go
+// GameObject interface
+type GameObject interface {
+    Update(deltaTime float64)
+    GetSprite() Sprite
+    SetVisibility(visible bool)
+    IsVisible() bool
+    GetID() string
+}
+
+// Sprite interface
+type Sprite interface {
+    Render(canvas CanvasManager) error
+    GetPosition() Vector2
+    Update(deltaTime float64)
+}
+
+// Mover interface
+type Mover interface {
+    Update(deltaTime float64)
+    GetPosition() Vector2
+    SetPosition(pos Vector2)
+}
+```
+
+### 3. Testing Pattern
+
+**Unit Tests** (no build tags):
+```go
+package canvas
+
+func TestMockCanvasManager_Initialize(t *testing.T) {
+    mock := NewMockCanvasManager()
+    err := mock.Initialize("test-canvas")
+    // Test mock behavior
+}
+```
+
+**WASM Browser Tests** (with js build tag):
+```go
+//go:build js
+
+package canvas
+
+func TestWebGPUCanvasManager_Initialize(t *testing.T) {
+    canvas := NewWebGPUCanvasManager()
+    err := canvas.Initialize("test-canvas")
+    // Tests run in real browser
+}
+```
+
+### 4. Resource Management Pattern
+
+Always cleanup WebGPU resources:
+
+```go
+func (w *WebGPUCanvasManager) Cleanup() error {
+    if w.vertexBuffer != nil {
+        w.vertexBuffer.Destroy()
+    }
+    if w.device != nil {
+        w.device.Destroy()
+    }
+    return nil
+}
+```
+
+## File Naming Conventions
+
+- `*_webgpu.go` - WebGPU implementation (requires `//go:build js`)
+- `mock_*.go` - Mock implementations for testing (no build tag)
+- `*_test.go` - Test files
+- `interface.go` - Interface definitions
+
+## Important Rules
+
+1. **ALWAYS use build tags for WASM-specific code**
+   - Add `//go:build js` at the top of files using `syscall/js` or WebGPU
+   
+2. **Prefer the cogentcore/webgpu wrapper over direct JS calls**
+   - Use wgpu types and methods for all GPU operations
+   - Only use `syscall/js` for DOM and browser APIs
+   
+3. **Implement interfaces from internal/types/**
+   - All components should implement their respective interfaces
+   - This enables mocking and testing
+   
+4. **Use the Mock pattern for testing**
+   - Create mock implementations without build tags
+   - Test business logic without browser dependencies
+   
+5. **Follow the component-based architecture**
+   - GameObjects have Sprites and Movers
+   - Engine orchestrates Scenes
+   - Scenes manage GameObjects
+   - Canvas handles all rendering
+   
+6. **Batch rendering for performance**
+   - Use BeginBatch/EndBatch for multiple sprites
+   - Minimize GPU state changes
+   
+7. **Error handling**
+   - Return errors, don't panic
+   - Use custom error types (e.g., CanvasError)
+   - Log errors with the logger package
+
+## Dependencies
+
+```go
+require (
+    github.com/cogentcore/webgpu v0.23.0  // WebGPU wrapper
+    github.com/google/uuid v1.6.0         // UUID generation
+)
+```
+
+## Development Workflow
+
+1. **Make changes** to Go files
+2. **Run standard tests**: `make test` (fast, no browser)
+3. **Build WASM**: `make build`
+4. **Run WASM tests**: `make test-wasm` (if touching WASM code)
+5. **Test in browser**: `make serve` → http://localhost:8080
+
+## WebGPU Coordinate System
+
+- **NDC (Normalized Device Coordinates)**: X: [-1, 1], Y: [-1, 1]
+- **Screen coordinates**: X: [0, width], Y: [0, height]
+- **UV coordinates**: X: [0, 1], Y: [0, 1]
+
+Helper functions in canvas convert between coordinate systems:
+
+```go
+// Screen to NDC
+ndcX := (screenX / screenWidth) * 2.0 - 1.0
+ndcY := 1.0 - (screenY / screenHeight) * 2.0
+```
+
+## Common Tasks
+
+### Adding a New GameObject
+1. Create struct in `internal/gameobject/`
+2. Implement `types.GameObject` interface
+3. Add Sprite and Mover components
+4. Register in scene
+
+### Adding a New Pipeline
+1. Create shader code in canvas manager
+2. Define pipeline in `SetupPipeline*` method
+3. Add to `types.PipelineType` enum
+4. Update pipeline switching logic
+
+### Adding Input Support
+1. Extend `types.InputState`
+2. Update `internal/input/unified_input.go`
+3. Handle in GameObject's Update() method
+
+## Debugging
+
+- **Browser Console**: Check JavaScript console for WASM logs
+- **Logger**: Use `logger.Logger.Debug/Info/Warn/Error` for Go logs
+- **WASM_HEADLESS=off**: Run tests in visible browser window
+- **Chrome DevTools**: Use for WebGPU debugging
+
+## Performance Considerations
+
+- Batch sprite rendering to reduce draw calls
+- Minimize pipeline switches per frame
+- Use texture atlases for multiple sprites
+- Implement object pooling for frequently created objects
+- Profile using browser DevTools Performance tab
+
+## Resources
+
+- WebGPU Spec: https://www.w3.org/TR/webgpu/
+- Go WASM: https://github.com/golang/go/wiki/WebAssembly
+- cogentcore/webgpu: https://github.com/cogentcore/webgpu

@@ -1,0 +1,336 @@
+---
+alwaysApply: true
+---
+# Change History Logger Rules
+
+## Purpose
+
+This rule ensures that all changes made during AI-assisted development sessions are logged with timestamps, providing a clear audit trail and context for future development.
+
+## Core Rules
+
+### 1. Always Read History First
+
+**Before making any changes**, always read the history file to understand:
+- What changes were made previously
+- Why certain decisions were made
+- What was attempted and what worked/didn't work
+- Current state of the project
+
+```bash
+# Read the history file first
+cat CURSOR_HISTORY.md
+```
+
+### 2. Always Log Changes
+
+**After completing any task**, immediately log the changes to the history file. Every prompt/task should result in a history entry.
+
+### 3. Use Bash for Timestamps
+
+**Always use bash commands** to get the current timestamp. Never hardcode or manually type timestamps.
+
+```bash
+# Get timestamp in ISO 8601 format
+date -u +"%Y-%m-%dT%H:%M:%SZ"
+
+# Or for local time with timezone
+date +"%Y-%m-%d %H:%M:%S %Z"
+```
+
+## History File Format
+
+The history file should be located at the project root: `CURSOR_HISTORY.md`
+
+### Entry Template
+
+```markdown
+## [YYYY-MM-DD HH:MM:SS TZ] - Brief Task Description
+
+**Prompt/Request**: <User's request or task description>
+
+**Changes Made**:
+- <List of specific changes>
+- <File modifications>
+- <New files created>
+- <Deletions or refactoring>
+
+**Reasoning**:
+<Why these changes were made>
+
+**Impact**:
+- <What components are affected>
+- <Potential breaking changes>
+- <Dependencies updated>
+
+**Testing**:
+- <Tests run>
+- <Test results>
+- <New tests added>
+
+**Notes**:
+<Any additional context, warnings, or future considerations>
+
+---
+```
+
+## Workflow
+
+### Step 1: Read History
+```bash
+# Always start by reading the history
+cat CURSOR_HISTORY.md
+```
+
+### Step 2: Make Changes
+- Implement the requested feature/fix
+- Test the changes
+- Ensure code quality
+
+### Step 3: Log Changes
+```bash
+# Get timestamp
+timestamp=$(date +"%Y-%m-%d %H:%M:%S %Z")
+
+# Append to history (use bash heredoc or echo)
+# Example will be shown in the history file itself
+```
+
+## Example Entries
+
+### Example 1: Feature Addition
+
+```markdown
+## [2024-10-18 14:32:15 UTC] - Added Gamepad Input Support
+
+**Prompt/Request**: Implement gamepad/controller input support for player movement
+
+**Changes Made**:
+- Created `internal/input/gamepad_input.go` with gamepad polling logic
+- Updated `internal/input/unified_input.go` to merge keyboard and gamepad inputs
+- Added gamepad state tracking in `internal/types/input.go`
+- Updated `internal/gameobject/player.go` to use unified input system
+
+**Reasoning**:
+Needed to support both keyboard and gamepad inputs simultaneously for better UX. Used browser Gamepad API via syscall/js to poll connected controllers.
+
+**Impact**:
+- Input system now supports both keyboard and gamepad
+- No breaking changes to existing keyboard input
+- Player movement works with both input methods
+
+**Testing**:
+- `make test` - All tests pass
+- `make test-wasm` - WASM tests pass
+- Manual testing with Xbox controller confirmed working
+
+**Notes**:
+Gamepad API is experimental in some browsers. May need fallback handling for unsupported browsers. Consider adding gamepad connection/disconnection events.
+
+---
+```
+
+### Example 2: Bug Fix
+
+```markdown
+## [2024-10-18 15:45:22 UTC] - Fixed Canvas Initialization Race Condition
+
+**Prompt/Request**: Canvas sometimes fails to initialize when DOM loads quickly
+
+**Changes Made**:
+- Updated `cmd/game/main.go` to check `document.readyState`
+- Added immediate initialization if DOM is already "complete"
+- Kept DOMContentLoaded listener as fallback
+
+**Reasoning**:
+Race condition occurred when DOM loaded before Go WASM was ready. By checking readyState, we handle both fast and slow loading scenarios.
+
+**Impact**:
+- More reliable initialization
+- No API changes
+- Backward compatible
+
+**Testing**:
+- Tested with slow 3G throttling
+- Tested with fast local serving
+- Both scenarios now work correctly
+
+**Notes**:
+This is a common WASM pattern for DOM interaction.
+
+---
+```
+
+### Example 3: Refactoring
+
+```markdown
+## [2024-10-18 16:20:33 UTC] - Refactored Pipeline Management
+
+**Prompt/Request**: Extract pipeline switching logic into dedicated methods
+
+**Changes Made**:
+- Created `SetPipelines()` method in CanvasManager interface
+- Moved pipeline switching logic from Engine to Canvas
+- Updated `internal/canvas/canvas_webgpu.go` with new methods
+- Simplified `internal/engine/engine.go` game loop
+
+**Reasoning**:
+Canvas manager should own all rendering concerns including pipeline management. This reduces coupling between Engine and Canvas implementation details.
+
+**Impact**:
+- Better separation of concerns
+- Engine code is cleaner
+- Easier to add new pipeline types
+- Breaking change: Canvas interface updated
+
+**Testing**:
+- `make test` - All tests pass
+- Updated mock implementations
+- Visual testing confirms pipelines still work
+
+**Notes**:
+Future work: Consider pipeline caching for performance optimization.
+
+---
+```
+
+## Important Guidelines
+
+### DO:
+✅ Always read history before starting work  
+✅ Use bash `date` command for timestamps  
+✅ Be specific about what changed  
+✅ Include reasoning and impact  
+✅ Log testing performed  
+✅ Add notes for future developers  
+✅ Keep entries concise but complete  
+✅ Use consistent formatting  
+
+### DON'T:
+❌ Skip reading history  
+❌ Hardcode timestamps  
+❌ Make changes without logging  
+❌ Be vague about changes  
+❌ Forget to log testing  
+❌ Skip the reasoning section  
+❌ Delete old entries (history is permanent)  
+
+## History File Location
+
+**Always use**: `CURSOR_HISTORY.md` in the project root (`/home/conor/dev/goFE/webgpu-triangle/CURSOR_HISTORY.md`)
+
+If the file doesn't exist, create it with this header:
+
+```markdown
+# Cursor AI Development History
+
+This file contains a chronological log of all changes made during AI-assisted development sessions.
+
+**Purpose**: Provide context, reasoning, and audit trail for all modifications.
+
+**Format**: Each entry includes timestamp, changes, reasoning, impact, and testing notes.
+
+---
+
+```
+
+## Automation Tips
+
+### Quick Log Template Script
+
+Create a helper to generate timestamps:
+
+```bash
+#!/bin/bash
+# .cursor/scripts/log-template.sh
+
+timestamp=$(date +"%Y-%m-%d %H:%M:%S %Z")
+
+cat << EOF
+
+## [$timestamp] - <Task Description>
+
+**Prompt/Request**: 
+
+**Changes Made**:
+- 
+
+**Reasoning**:
+
+**Impact**:
+- 
+
+**Testing**:
+- 
+
+**Notes**:
+
+---
+
+EOF
+```
+
+### Append to History
+
+```bash
+# Get timestamp
+timestamp=$(date +"%Y-%m-%d %H:%M:%S %Z")
+
+# Append entry
+cat >> CURSOR_HISTORY.md << 'EOF'
+
+## [$timestamp] - Your task description here
+
+**Prompt/Request**: User's request
+
+**Changes Made**:
+- Change 1
+- Change 2
+
+**Reasoning**: Why these changes were necessary
+
+**Impact**: What was affected
+
+**Testing**: What tests were run
+
+**Notes**: Additional context
+
+---
+
+EOF
+```
+
+## Benefits
+
+1. **Audit Trail**: Know exactly what changed and when
+2. **Context**: Understand why decisions were made
+3. **Debugging**: Track when issues were introduced
+4. **Knowledge Transfer**: Help other developers understand the codebase
+5. **Session Continuity**: Resume work seamlessly across sessions
+6. **Learning**: See patterns in what works and what doesn't
+
+## Integration with Development Workflow
+
+```bash
+# 1. Start new task
+cat CURSOR_HISTORY.md  # Read history
+
+# 2. Make changes
+# ... coding happens here ...
+
+# 3. Test changes
+make test
+make test-wasm
+
+# 4. Log the changes
+timestamp=$(date +"%Y-%m-%d %H:%M:%S %Z")
+# ... append to CURSOR_HISTORY.md ...
+
+# 5. Commit (optional)
+git add CURSOR_HISTORY.md
+git commit -m "Updated development history"
+```
+
+## Remember
+
+**The history file is your development diary. Keep it updated, detailed, and honest. Future you (and other developers) will thank you!**
