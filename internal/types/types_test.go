@@ -149,7 +149,7 @@ func TestGameStateString(t *testing.T) {
 		state    GameState
 		expected string
 	}{
-		{SPRITE, "SPRITE"},
+		{GAMEPLAY, "SPRITE"},
 		{TRIANGLE, "TRIANGLE"},
 	}
 

@@ -7,75 +7,65 @@ import (
 	"syscall/js"
 
 	"github.com/conor/webgpu-triangle/internal/canvas"
-	"github.com/conor/webgpu-triangle/internal/gameobject"
 	"github.com/conor/webgpu-triangle/internal/input"
 	"github.com/conor/webgpu-triangle/internal/logger"
+	"github.com/conor/webgpu-triangle/internal/scene"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
 // Engine represents the game engine that manages the canvas and game loop
 type Engine struct {
-	canvasManager        canvas.CanvasManager
-	inputCapturer        types.InputCapturer
-	player               *gameobject.Player
-	lastTime             float64
-	textureLoaded        bool
-	running              bool
-	currentGameState     types.GameState
-	gameStatePipelines   map[types.GameState][]types.PipelineType
-	gameStateGameObjects map[types.GameState][]types.GameObject // GameObjects for each game state
-	stateLock            sync.Mutex                             // Lock to prevent concurrent state changes
+	canvasManager      canvas.CanvasManager
+	inputCapturer      types.InputCapturer
+	lastTime           float64
+	textureLoaded      bool
+	running            bool
+	currentGameState   types.GameState
+	gameStatePipelines map[types.GameState][]types.PipelineType
+	currentScene       scene.Scene // Active scene managing game objects
+	stateLock          sync.Mutex  // Lock to prevent concurrent state changes
+	screenWidth        float64
+	screenHeight       float64
 }
 
 // NewEngine creates a new game engine instance
 func NewEngine() *Engine {
+	// Default screen dimensions (should match canvas size)
+	const screenWidth = 800.0
+	const screenHeight = 600.0
+
 	e := &Engine{
-		canvasManager:        canvas.NewWebGPUCanvasManager(),
-		inputCapturer:        input.NewUnifiedInput(),
-		running:              false,
-		gameStatePipelines:   make(map[types.GameState][]types.PipelineType),
-		gameStateGameObjects: make(map[types.GameState][]types.GameObject),
+		canvasManager:      canvas.NewWebGPUCanvasManager(),
+		inputCapturer:      input.NewUnifiedInput(),
+		running:            false,
+		gameStatePipelines: make(map[types.GameState][]types.PipelineType),
+		screenWidth:        screenWidth,
+		screenHeight:       screenHeight,
 	}
 
-	// Initialize game state pipeline mappings and game objects
+	// Initialize game state pipeline mappings
 	e.initializeGameStates()
 
 	return e
 }
 
-// initializeGameStates sets up the pipeline configurations and game objects for each game state
+// initializeGameStates sets up the pipeline configurations for each game state
 func (e *Engine) initializeGameStates() {
-	// Screen dimensions (should match canvas size)
-	const screenWidth = 800.0
-	const screenHeight = 600.0
-
 	// SPRITE state uses textured pipeline for sprite rendering
-	e.gameStatePipelines[types.SPRITE] = []types.PipelineType{
+	e.gameStatePipelines[types.GAMEPLAY] = []types.PipelineType{
 		types.TexturedPipeline,
 	}
+}
 
-	// Create Player GameObject in the center of the screen
-	playerSize := 128.0
-	e.player = gameobject.NewPlayer(
-		types.Vector2{
-			X: (screenWidth - playerSize) / 2,  // Center X
-			Y: (screenHeight - playerSize) / 2, // Center Y
-		},
-		types.Vector2{X: playerSize, Y: playerSize},
-		200.0, // Movement speed: 200 pixels per second
-	)
-
-	logger.Logger.Debugf("Created Player at center of screen")
-
-	// No other game objects for now
-	e.gameStateGameObjects[types.SPRITE] = []types.GameObject{}
-
-	// TRIANGLE state (kept for state switching)
-	e.gameStatePipelines[types.TRIANGLE] = []types.PipelineType{
-		types.TrianglePipeline,
+// createSceneForState creates the appropriate scene for a given game state
+func (e *Engine) createSceneForState(state types.GameState) scene.Scene {
+	switch state {
+	case types.GAMEPLAY:
+		return scene.NewGameplayScene(e.screenWidth, e.screenHeight, e.inputCapturer)
+	default:
+		logger.Logger.Warnf("No scene defined for game state: %s", state.String())
+		return nil
 	}
-
-	e.gameStateGameObjects[types.TRIANGLE] = []types.GameObject{}
 }
 
 // Initialize sets up the engine with the specified canvas ID
@@ -88,7 +78,7 @@ func (e *Engine) Initialize(canvasID string) error {
 		return err
 	}
 
-	err = e.SetGameState(types.SPRITE)
+	err = e.SetGameState(types.GAMEPLAY)
 	if err != nil {
 		logger.Logger.Errorf("Failed to set initial game state: %s", err.Error())
 		return err
@@ -149,41 +139,12 @@ func (e *Engine) startRenderLoop() {
 // Update handles game logic updates
 func (e *Engine) Update(deltaTime float64) {
 	e.stateLock.Lock()
-	currentState := e.currentGameState
-	gameObjects := e.gameStateGameObjects[currentState]
+	currentScene := e.currentScene
 	e.stateLock.Unlock()
 
-	// Only update player in SPRITE state
-	if currentState == types.SPRITE && e.player != nil {
-		// Get input state and apply to player
-		inputState := e.inputCapturer.GetInputState()
-		e.player.HandleInput(inputState)
-
-		// Update player mover (position)
-		if mover := e.player.GetMover(); mover != nil {
-			mover.Update(deltaTime)
-		}
-
-		// Update player sprite (animation)
-		if sprite := e.player.GetSprite(); sprite != nil {
-			sprite.Update(deltaTime)
-		}
-
-		// Update player game logic
-		e.player.Update(deltaTime)
-	}
-
-	// Update other game objects
-	for _, gameObject := range gameObjects {
-		if mover := gameObject.GetMover(); mover != nil {
-			mover.Update(deltaTime)
-		}
-
-		if sprite := gameObject.GetSprite(); sprite != nil {
-			sprite.Update(deltaTime)
-		}
-
-		gameObject.Update(deltaTime)
+	// Delegate update to the current scene
+	if currentScene != nil {
+		currentScene.Update(deltaTime)
 	}
 
 	// TODO: This should be done in a separate thread,
@@ -195,31 +156,35 @@ func (e *Engine) Update(deltaTime float64) {
 // Render draws the current frame
 func (e *Engine) Render() {
 	e.stateLock.Lock()
-	currentState := e.currentGameState
-	gameObjects := e.gameStateGameObjects[currentState]
+	currentScene := e.currentScene
 	e.stateLock.Unlock()
 
-	// Check if we have anything to render
-	hasPlayer := currentState == types.SPRITE && e.player != nil
-	hasObjects := len(gameObjects) > 0
+	// Get renderables from scene in correct layer order
+	var renderables []types.GameObject
+	if currentScene != nil {
+		renderables = currentScene.GetRenderables()
+	}
 
-	if hasPlayer || hasObjects {
+	// Check if we have anything to render
+	if len(renderables) > 0 {
 		err := e.canvasManager.BeginBatch()
 		if err != nil {
 			logger.Logger.Errorf("Failed to begin batch: %s", err.Error())
 		}
-	}
 
-	// Render player first (in SPRITE state)
-	if hasPlayer {
-		var renderData types.SpriteRenderData
-		if mover := e.player.GetMover(); mover != nil {
-			renderData = e.player.GetSprite().GetSpriteRenderData(mover.GetPosition())
-		} else {
-			renderData = e.player.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
-		}
+		// Render all game objects in layer order
+		for _, gameObject := range renderables {
+			var renderData types.SpriteRenderData
+			if mover := gameObject.GetMover(); mover != nil {
+				renderData = gameObject.GetSprite().GetSpriteRenderData(mover.GetPosition())
+			} else {
+				renderData = gameObject.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
+			}
 
-		if renderData.Visible {
+			if !renderData.Visible {
+				continue
+			}
+
 			err := e.canvasManager.DrawTexturedRect(
 				renderData.TexturePath,
 				renderData.Position,
@@ -228,36 +193,11 @@ func (e *Engine) Render() {
 			)
 			if err != nil {
 				// Texture might not be loaded yet
+				continue
 			}
 		}
-	}
 
-	// Render other game objects
-	for _, gameObject := range gameObjects {
-		var renderData types.SpriteRenderData
-		if mover := gameObject.GetMover(); mover != nil {
-			renderData = gameObject.GetSprite().GetSpriteRenderData(mover.GetPosition())
-		} else {
-			renderData = gameObject.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
-		}
-
-		if !renderData.Visible {
-			continue
-		}
-
-		err := e.canvasManager.DrawTexturedRect(
-			renderData.TexturePath,
-			renderData.Position,
-			renderData.Size,
-			renderData.UV,
-		)
-		if err != nil {
-			continue
-		}
-	}
-
-	if hasPlayer || hasObjects {
-		err := e.canvasManager.EndBatch()
+		err = e.canvasManager.EndBatch()
 		if err != nil {
 			logger.Logger.Errorf("Failed to end batch: %s", err.Error())
 		}
@@ -266,25 +206,21 @@ func (e *Engine) Render() {
 	e.canvasManager.Render()
 }
 
-// loadSpriteTextures loads textures for all game objects in the current game state
+// loadSpriteTextures loads textures for all game objects in the current scene
 func (e *Engine) loadSpriteTextures() {
 	e.stateLock.Lock()
-	currentState := e.currentGameState
-	gameObjects := e.gameStateGameObjects[currentState]
+	currentScene := e.currentScene
 	e.stateLock.Unlock()
 
-	// Load player texture
-	if currentState == types.SPRITE && e.player != nil {
-		pos := types.Vector2{X: 0, Y: 0}
-		if mover := e.player.GetMover(); mover != nil {
-			pos = mover.GetPosition()
-		}
-		renderData := e.player.GetSprite().GetSpriteRenderData(pos)
-		e.canvasManager.LoadTexture(renderData.TexturePath)
+	if currentScene == nil {
+		return
 	}
 
-	// Load other game object textures
-	for _, gameObject := range gameObjects {
+	// Get all renderables from the scene
+	renderables := currentScene.GetRenderables()
+
+	// Load textures for all game objects
+	for _, gameObject := range renderables {
 		pos := types.Vector2{X: 0, Y: 0}
 		if mover := gameObject.GetMover(); mover != nil {
 			pos = mover.GetPosition()
@@ -330,6 +266,23 @@ func (e *Engine) SetGameState(state types.GameState) error {
 	err := e.canvasManager.SetPipelines(pipelines)
 	if err != nil {
 		return err
+	}
+
+	// Cleanup old scene
+	if e.currentScene != nil {
+		e.currentScene.Cleanup()
+		e.currentScene = nil
+	}
+
+	// Create and initialize new scene for this state
+	newScene := e.createSceneForState(state)
+	if newScene != nil {
+		err = newScene.Initialize()
+		if err != nil {
+			return &EngineError{Message: "Failed to initialize scene: " + err.Error()}
+		}
+		e.currentScene = newScene
+		logger.Logger.Debugf("Initialized scene: %s for game state: %s", newScene.GetName(), state.String())
 	}
 
 	e.currentGameState = state
