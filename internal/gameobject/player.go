@@ -5,6 +5,7 @@ package gameobject
 import (
 	"sync"
 
+	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/mover"
 	"github.com/conor/webgpu-triangle/internal/sprite"
 	"github.com/conor/webgpu-triangle/internal/types"
@@ -26,14 +27,14 @@ type Player struct {
 func NewPlayer(position types.Vector2, size types.Vector2, moveSpeed float64) *Player {
 	// Create the sprite (just handles texture and animation)
 	playerSprite := sprite.NewSpriteSheet(
-		"llama.png",
+		config.Global.Player.TexturePath,
 		sprite.Vector2{X: size.X, Y: size.Y},
-		2, // 2 columns (n)
-		3, // 3 rows (m) = 6 frames total
+		config.Global.Player.SpriteColumns,
+		config.Global.Player.SpriteRows,
 	)
 
-	// Set animation speed
-	playerSprite.SetFrameTime(0.15) // Medium animation speed
+	// Set animation speed from config
+	playerSprite.SetFrameTime(config.Global.Animation.PlayerFrameTime)
 
 	// Create the mover (handles position and velocity)
 	playerMover := mover.NewBasicMover(
@@ -43,8 +44,8 @@ func NewPlayer(position types.Vector2, size types.Vector2, moveSpeed float64) *P
 		size.Y,                    // Sprite height for wrapping
 	)
 
-	// Set screen bounds for wrapping
-	playerMover.SetScreenBounds(800, 600)
+	// Set screen bounds for wrapping from config
+	playerMover.SetScreenBounds(config.Global.Screen.Width, config.Global.Screen.Height)
 
 	return &Player{
 		sprite:    playerSprite,

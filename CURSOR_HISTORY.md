@@ -364,3 +364,72 @@ for drawInfo in drawInfos:
 
 ---
 
+## [2025-10-19 12:37:07 BST] - Centralized Configuration System
+
+**Prompt/Request**: Remove hardcoded constants throughout the codebase (player spawn position, screen bounds, speeds, animation rates) and create a centralized settings file.
+
+**Changes Made**:
+- Created new `internal/config/settings.go` file:
+  - `Settings` struct with nested configuration groups
+  - `ScreenSettings` - Width, Height (800x600)
+  - `PlayerSettings` - SpawnX, SpawnY, Size, Speed, TexturePath, SpriteColumns, SpriteRows
+  - `AnimationSettings` - PlayerFrameTime, DefaultFrameTime
+  - `Global` variable for accessing settings throughout codebase
+  - `GetPlayerSpawnPosition()` helper function to calculate centered spawn
+- Updated `internal/engine/engine.go`:
+  - Uses `config.Global.Screen` for screen dimensions
+  - Removed hardcoded 800x600 constants
+- Updated `internal/scene/gameplay_scene.go`:
+  - Uses `config.GetPlayerSpawnPosition()` for player spawn
+  - Uses `config.Global.Player` settings for size and speed
+- Updated `internal/gameobject/player.go`:
+  - Uses `config.Global.Player.TexturePath` instead of hardcoded "llama.png"
+  - Uses `config.Global.Player.SpriteColumns/Rows` for sprite sheet layout
+  - Uses `config.Global.Animation.PlayerFrameTime` for animation speed
+  - Uses `config.Global.Screen` for screen bounds
+- Updated `internal/gameobject/llama.go`:
+  - Uses `config.Global.Animation.DefaultFrameTime` for base animation
+  - Uses `config.Global.Screen` for screen bounds
+
+**Reasoning**:
+Hardcoded constants scattered throughout the codebase make it difficult to:
+- Adjust game parameters quickly
+- Maintain consistency across files
+- Support different screen sizes or configurations
+- Test with different values
+
+A centralized config system provides:
+- Single source of truth for all game parameters
+- Easy tuning and balancing
+- Clear documentation of what can be configured
+- Type-safe access to settings
+- Future support for loading from JSON/TOML files
+
+**Impact**:
+- All magic numbers now have meaningful names
+- Changing screen size only requires updating one location
+- Player parameters centralized and documented
+- Animation speeds configurable in one place
+- Screen bounds automatically match configured screen size
+- No behavioral changes - same values, better organization
+- Easier to add new configuration options in the future
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- No linter errors
+- Game behavior identical to before (using same values)
+
+**Notes**:
+- Config could be extended with:
+  - Background settings (texture paths, scroll speeds)
+  - Input sensitivity settings
+  - Audio settings (volumes, mute toggles)
+  - Debug settings (show FPS, hitboxes, etc.)
+  - Level-specific configurations
+- Future enhancement: Load from JSON/YAML config file
+- Future enhancement: Hot-reload config during development
+- Future enhancement: Separate dev/production configs
+- Settings are currently compile-time; could add runtime modification
+
+---
+

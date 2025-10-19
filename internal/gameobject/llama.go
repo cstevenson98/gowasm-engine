@@ -5,6 +5,7 @@ package gameobject
 import (
 	"sync"
 
+	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/mover"
 	"github.com/conor/webgpu-triangle/internal/sprite"
 	"github.com/conor/webgpu-triangle/internal/types"
@@ -30,8 +31,8 @@ func NewLlama(position types.Vector2, size types.Vector2, speed float64) *Llama 
 		3, // 3 rows (m) = 6 frames total
 	)
 
-	// Set animation speed
-	llamaSprite.SetFrameTime(0.1 + (speed/100.0)*0.1) // Slight variation based on speed
+	// Set animation speed (slight variation based on speed)
+	llamaSprite.SetFrameTime(config.Global.Animation.DefaultFrameTime + (speed/100.0)*0.1)
 
 	// Create the mover (handles position and velocity)
 	llamaMover := mover.NewBasicMover(
@@ -41,8 +42,8 @@ func NewLlama(position types.Vector2, size types.Vector2, speed float64) *Llama 
 		size.Y,                        // Sprite height for wrapping
 	)
 
-	// Set screen bounds for wrapping
-	llamaMover.SetScreenBounds(800, 600)
+	// Set screen bounds for wrapping from config
+	llamaMover.SetScreenBounds(config.Global.Screen.Width, config.Global.Screen.Height)
 
 	return &Llama{
 		sprite: llamaSprite,

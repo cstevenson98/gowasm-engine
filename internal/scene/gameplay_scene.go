@@ -3,6 +3,7 @@
 package scene
 
 import (
+	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/gameobject"
 	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/types"
@@ -52,14 +53,11 @@ func (s *GameplayScene) Initialize() error {
 	logger.Logger.Debugf("Created Background in %s scene", s.name)
 
 	// Create player in the center of the screen (ENTITIES layer)
-	playerSize := 128.0
+	spawnX, spawnY := config.GetPlayerSpawnPosition()
 	s.player = gameobject.NewPlayer(
-		types.Vector2{
-			X: (s.screenWidth - playerSize) / 2,  // Center X
-			Y: (s.screenHeight - playerSize) / 2, // Center Y
-		},
-		types.Vector2{X: playerSize, Y: playerSize},
-		200.0, // Movement speed: 200 pixels per second
+		types.Vector2{X: spawnX, Y: spawnY},
+		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
+		config.Global.Player.Speed,
 	)
 
 	logger.Logger.Debugf("Created Player at center of screen in %s scene", s.name)

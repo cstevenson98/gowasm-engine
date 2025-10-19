@@ -7,6 +7,7 @@ import (
 	"syscall/js"
 
 	"github.com/conor/webgpu-triangle/internal/canvas"
+	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/input"
 	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/scene"
@@ -30,17 +31,13 @@ type Engine struct {
 
 // NewEngine creates a new game engine instance
 func NewEngine() *Engine {
-	// Default screen dimensions (should match canvas size)
-	const screenWidth = 800.0
-	const screenHeight = 600.0
-
 	e := &Engine{
 		canvasManager:      canvas.NewWebGPUCanvasManager(),
 		inputCapturer:      input.NewUnifiedInput(),
 		running:            false,
 		gameStatePipelines: make(map[types.GameState][]types.PipelineType),
-		screenWidth:        screenWidth,
-		screenHeight:       screenHeight,
+		screenWidth:        config.Global.Screen.Width,
+		screenHeight:       config.Global.Screen.Height,
 	}
 
 	// Initialize game state pipeline mappings
