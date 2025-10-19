@@ -1,0 +1,173 @@
+# PlantUML Auto-Update Rule
+
+## Purpose
+
+This rule ensures that PlantUML architecture diagrams are automatically updated whenever changes are made to the engine logic, maintaining accurate documentation of the system architecture.
+
+## Core Rules
+
+### 1. Always Update Diagrams After Engine Changes
+
+**When ANY of the following files are modified, update the corresponding PlantUML diagrams:**
+
+- `internal/engine/engine.go` - Update class diagram and sequence diagram
+- `internal/canvas/canvas_webgpu.go` - Update rendering sequence diagram
+- `internal/scene/*.go` - Update class diagram (scene relationships)
+- `internal/gameobject/*.go` - Update class diagram (GameObject implementations)
+- `internal/types/*.go` - Update class diagram (interface definitions)
+- `internal/input/*.go` - Update class diagram (input system)
+- `internal/sprite/*.go` - Update class diagram (sprite system)
+- `internal/mover/*.go` - Update class diagram (movement system)
+- `internal/text/*.go` - Update class diagram (text rendering)
+- `internal/debug/*.go` - Update class diagram (debug system)
+
+### 2. Diagram Update Triggers
+
+**Update `docs/architecture-class-diagram.puml` when:**
+- New interfaces are added to `internal/types/`
+- New GameObject implementations are added
+- New component systems are added (sprite, mover, input, text, debug)
+- Engine architecture changes (new managers, different patterns)
+- Scene management changes
+
+**Update `docs/rendering-sequence-diagram.puml` when:**
+- Canvas rendering pipeline changes
+- Engine render loop modifications
+- Scene rendering order changes
+- New rendering features (text, debug console, effects)
+- Batch rendering logic changes
+
+### 3. Update Process
+
+**After making engine changes:**
+
+1. **Identify affected diagrams** based on the file modified
+2. **Read current diagram** to understand current architecture**
+3. **Update diagram** to reflect the changes**:
+   - Add new classes/interfaces
+   - Update relationships
+   - Modify sequence flows
+   - Update method signatures
+   - Add new components
+4. **Test diagram** by previewing with PlantUML
+5. **Log the update** in CURSOR_HISTORY.md
+
+### 4. Diagram Content Requirements
+
+**Class Diagram (`docs/architecture-class-diagram.puml`) must include:**
+- All interfaces from `internal/types/`
+- All GameObject implementations
+- All component systems (Sprite, Mover, Input, Text, Debug)
+- Engine and Scene classes
+- Canvas managers (WebGPU and Mock)
+- Relationships between components
+- Method signatures for key interfaces
+
+**Sequence Diagram (`docs/rendering-sequence-diagram.puml`) must include:**
+- Engine initialization flow
+- Game loop (Update → Render)
+- Scene management
+- GameObject rendering pipeline
+- Canvas rendering (BeginBatch → Draw → EndBatch)
+- Input handling flow
+- Debug console rendering
+
+### 5. Validation Checklist
+
+Before considering the diagram update complete:
+
+- [ ] All new classes/interfaces are included
+- [ ] Relationships are accurate and up-to-date
+- [ ] Method signatures match current code
+- [ ] Sequence flows reflect actual code execution
+- [ ] No orphaned or outdated elements
+- [ ] Diagram previews correctly with PlantUML
+- [ ] Update is logged in CURSOR_HISTORY.md
+
+## Examples
+
+### Example 1: Adding New GameObject
+
+**When**: New GameObject added to `internal/gameobject/`
+
+**Update Required**:
+- Add new class to class diagram
+- Show inheritance from GameObject interface
+- Add to scene management relationships
+- Update sequence diagram if rendering changes
+
+### Example 2: Canvas Pipeline Changes
+
+**When**: `internal/canvas/canvas_webgpu.go` modified
+
+**Update Required**:
+- Update rendering sequence diagram
+- Show new pipeline steps
+- Update batch rendering flow
+- Add new rendering methods to class diagram
+
+### Example 3: New Component System
+
+**When**: New component system added (e.g., `internal/audio/`)
+
+**Update Required**:
+- Add new interfaces to types section
+- Add component classes
+- Show integration with GameObject
+- Update engine initialization sequence
+
+## Integration with Development Workflow
+
+```bash
+# 1. Make engine changes
+# ... modify engine files ...
+
+# 2. Update diagrams
+# Edit docs/architecture-class-diagram.puml
+# Edit docs/rendering-sequence-diagram.puml
+
+# 3. Test diagrams
+# Press Alt+D in VS Code to preview
+
+# 4. Log the update
+timestamp=$(date +"%Y-%m-%d %H:%M:%S %Z")
+# ... append to CURSOR_HISTORY.md ...
+```
+
+## Important Guidelines
+
+### DO:
+✅ Update diagrams immediately after engine changes  
+✅ Include all new classes and relationships  
+✅ Test diagrams with PlantUML preview  
+✅ Log diagram updates in history  
+✅ Keep diagrams synchronized with code  
+✅ Use consistent naming and formatting  
+
+### DON'T:
+❌ Leave diagrams outdated after code changes  
+❌ Skip diagram updates for "small" changes  
+❌ Forget to test diagram rendering  
+❌ Update diagrams without logging  
+❌ Let diagrams drift from actual architecture  
+❌ Include outdated or removed components  
+
+## Benefits
+
+1. **Accurate Documentation**: Diagrams always reflect current architecture
+2. **Design Validation**: Updating diagrams catches architectural inconsistencies
+3. **Knowledge Transfer**: New developers can understand the system quickly
+4. **Change Tracking**: Diagram updates show how architecture evolves
+5. **Communication**: Visual representation of complex relationships
+6. **Maintenance**: Easier to refactor when you understand the full picture
+
+## File Locations
+
+- **Class Diagram**: `docs/architecture-class-diagram.puml`
+- **Sequence Diagram**: `docs/rendering-sequence-diagram.puml`
+- **Documentation**: `docs/ARCHITECTURE.md`
+- **History**: `CURSOR_HISTORY.md`
+
+## Remember
+
+**The diagrams are living documentation. They should evolve with the code, not become stale artifacts. Every engine change should trigger a diagram update.**

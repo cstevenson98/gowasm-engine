@@ -611,3 +611,109 @@ The game engine needed a way to display text for debugging and UI purposes. Key 
 
 ---
 
+## [2025-01-27 14:23:45 GMT] - Added Configurable Character Spacing Reduction for Text Rendering
+
+**Prompt/Request**: The text renderer currently puts each letter far apart because in their texture they each have significant padding around them. Since the backgrounds are transparent, we could reduce this spacing in our render pass. Allow this to be reduced by x pixels, and add a constant to the config.
+
+**Changes Made**:
+- Added `CharacterSpacingReduction` field to `DebugSettings` in `internal/config/settings.go`
+  - New field: `CharacterSpacingReduction float64 // Pixels to reduce character spacing (reduces padding between letters)`
+  - Set default value to 4.0 pixels reduction
+- Updated `internal/text/text_renderer.go` to use the spacing reduction:
+  - Added import for `config` package
+  - Modified all character position advancement to use `scaledWidth - spacingReduction`
+  - Applied spacing reduction consistently across all code paths:
+    - Normal character rendering
+    - Space character handling
+    - Missing character fallback
+    - Texture loading error cases
+  - Spacing reduction is scaled by the font scale factor to maintain proportional spacing
+
+**Reasoning**:
+Font sprite sheets typically include padding around each character to prevent visual artifacts when characters are rendered side-by-side. However, this padding creates excessive spacing between characters in text rendering. By reducing the character spacing by a configurable amount, we can:
+
+1. **Tighten text appearance**: Characters appear closer together, more like natural text
+2. **Maintain transparency benefits**: Background transparency still works correctly
+3. **Configurable adjustment**: Easy to tune the spacing reduction for different fonts or preferences
+4. **Scale-aware**: Spacing reduction scales with font scale to maintain proportional appearance
+
+The solution applies the spacing reduction to all character advancement scenarios to ensure consistent behavior.
+
+**Impact**:
+- Text rendering now has tighter character spacing by default (4 pixels reduction)
+- Spacing reduction is configurable via `config.Global.Debug.CharacterSpacingReduction`
+- All text rendering paths (normal, spaces, errors) use consistent spacing
+- Spacing reduction scales with font scale factor
+- No breaking changes to existing interfaces
+- Debug console text will appear more compact and readable
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- No linter errors in modified files
+- Ready for browser testing via `make serve` at http://localhost:8080
+- Debug console should show tighter character spacing
+
+**Notes**:
+- Default reduction of 4.0 pixels can be adjusted in config if needed
+- Spacing reduction is applied to scaled width, so it scales with font size
+- Future enhancement: Could add per-font spacing reduction settings
+- Consider adding negative spacing reduction for fonts that need more space
+- The solution maintains all existing text rendering functionality while improving appearance
+
+---
+
+## [2025-01-27 14:45:30 GMT] - Implemented Pixel Art Rendering Mode for Font Fidelity
+
+**Prompt/Request**: Can you suggest improvements to the fidelity of the fonts displayed? I want to make a pixel art engine, so I don't want interpolation of textures at all.
+
+**Changes Made**:
+- Added `RenderingSettings` struct to `internal/config/settings.go`:
+  - `PixelArtMode bool` - Enable pixel-perfect rendering (nearest-neighbor filtering)
+  - `TextureFiltering string` - "nearest" or "linear" texture filtering mode
+  - `PixelPerfectScaling bool` - Ensure integer scaling for pixel art
+- Updated `WebGPUCanvasManager` in `internal/canvas/canvas_webgpu.go`:
+  - Added config import for accessing rendering settings
+  - Modified `createSampler()` to use nearest-neighbor filtering when `PixelArtMode` is enabled
+  - Added `RecreateSampler()` method for runtime switching between filtering modes
+  - Sampler now uses `wgpu.FilterModeNearest` for pixel art vs `wgpu.FilterModeLinear` for smooth rendering
+- Enhanced `BasicTextRenderer` in `internal/text/text_renderer.go`:
+  - Added integer scaling support for pixel-perfect text rendering
+  - When `PixelArtMode` and `PixelPerfectScaling` are enabled, scale factors are rounded to integers
+  - Updated all spacing reduction calculations to use integer scaling for pixel art
+  - Maintains fractional scaling for smooth rendering when pixel art mode is disabled
+
+**Reasoning**:
+For a pixel art engine, texture interpolation (linear filtering) causes blurry, anti-aliased fonts that break the pixel art aesthetic. The improvements address this by:
+
+1. **Nearest-Neighbor Filtering**: Eliminates texture interpolation, ensuring each pixel is rendered exactly as designed
+2. **Integer Scaling**: Prevents sub-pixel positioning that can cause blurriness in pixel art
+3. **Configurable Modes**: Allows switching between pixel art and smooth rendering as needed
+4. **Consistent Spacing**: Character spacing reduction also uses integer scaling for pixel-perfect text
+
+This creates a true pixel art rendering pipeline where fonts maintain their crisp, pixelated appearance at any scale.
+
+**Impact**:
+- Fonts now render with pixel-perfect fidelity when `PixelArtMode` is enabled
+- No texture interpolation or anti-aliasing on fonts
+- Integer scaling ensures sharp edges at all scales
+- Configurable rendering modes for different use cases
+- Debug console text will appear crisp and pixelated
+- All text rendering maintains pixel art aesthetic
+- No breaking changes to existing interfaces
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- No linter errors in modified files
+- Development server running at http://localhost:8080
+- Ready for browser testing to see pixel-perfect font rendering
+
+**Notes**:
+- Default configuration enables pixel art mode with nearest-neighbor filtering
+- Integer scaling prevents sub-pixel blurriness in pixel art
+- Can switch to smooth rendering by setting `PixelArtMode: false`
+- Future enhancement: Add runtime switching between rendering modes
+- Consider adding per-texture filtering settings for mixed content
+- The solution provides true pixel art rendering while maintaining flexibility
+
+---
+

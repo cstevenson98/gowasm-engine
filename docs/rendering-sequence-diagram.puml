@@ -1,0 +1,263 @@
+@startuml Game Rendering Flow
+!theme plain
+skinparam sequenceMessageAlign center
+
+actor Browser
+participant "Engine" as Engine
+participant "Scene\n(GameplayScene)" as Scene
+participant "GameObject\n(Player/Background)" as GameObject
+participant "Sprite" as Sprite
+participant "Mover" as Mover
+participant "CanvasManager\n(WebGPU)" as Canvas
+participant "DebugConsole" as Debug
+participant "TextRenderer" as TextRenderer
+participant "Font" as Font
+
+== Initialization ==
+Browser -> Engine: Initialize("webgpu-canvas")
+activate Engine
+Engine -> Canvas: Initialize("webgpu-canvas")
+activate Canvas
+Canvas -> Canvas: Setup WebGPU device,\nqueue, surface, pipelines
+Canvas --> Engine: Ready
+deactivate Canvas
+
+Engine -> Scene: CreateScene(GAMEPLAY)
+activate Scene
+Scene -> Scene: Initialize layers\n(BACKGROUND, ENTITIES, UI)
+Scene -> GameObject: NewBackground()
+activate GameObject
+GameObject -> Sprite: NewSpriteSheet(texture, size)
+GameObject -> Mover: NewBasicMover(position)
+GameObject --> Scene: Background instance
+deactivate GameObject
+
+Scene -> GameObject: NewPlayer()
+activate GameObject
+GameObject -> Sprite: NewSpriteSheet(texture, size)
+GameObject -> Mover: NewBasicMover(position)
+GameObject --> Scene: Player instance
+deactivate GameObject
+
+Scene --> Engine: GameplayScene ready
+deactivate Scene
+
+Engine -> Scene: SetCanvasManager(canvas)
+Engine -> Scene: InitializeDebugConsole()
+activate Scene
+Scene -> Font: LoadFont("fonts/Mono_10")
+activate Font
+Font -> Font: Fetch JSON metadata
+Font -> Font: Parse character map
+Font --> Scene: Font loaded
+deactivate Font
+Scene -> TextRenderer: NewTextRenderer(canvas)
+Scene --> Engine: Debug console ready
+deactivate Scene
+
+Engine --> Browser: Engine ready
+deactivate Engine
+
+== Game Loop (Every Frame) ==
+Browser -> Engine: requestAnimationFrame()
+activate Engine
+
+=== Update Phase ===
+Engine -> Engine: Calculate deltaTime
+Engine -> Scene: Update(deltaTime)
+activate Scene
+
+Scene -> GameObject: player.HandleInput(inputState)
+activate GameObject
+GameObject -> Mover: SetVelocity(velocity)
+GameObject --> Scene
+deactivate GameObject
+
+Scene -> GameObject: player.Update(deltaTime)
+activate GameObject
+GameObject -> GameObject: Update debug timer
+alt Debug message interval reached
+  GameObject -> Debug: PostMessage("Player", "Position: (x, y)")
+  activate Debug
+  Debug -> Debug: Add to circular buffer
+  Debug --> GameObject
+  deactivate Debug
+end
+GameObject --> Scene
+deactivate GameObject
+
+Scene -> GameObject: mover.Update(deltaTime)
+activate GameObject
+GameObject -> Mover: Update(deltaTime)
+activate Mover
+Mover -> Mover: Update position\nbased on velocity
+Mover --> GameObject: Updated position
+deactivate Mover
+GameObject --> Scene
+deactivate GameObject
+
+Scene -> GameObject: sprite.Update(deltaTime)
+activate GameObject
+GameObject -> Sprite: Update(deltaTime)
+activate Sprite
+Sprite -> Sprite: Update animation frame
+Sprite --> GameObject
+deactivate Sprite
+GameObject --> Scene
+deactivate GameObject
+
+Scene -> Debug: Update(deltaTime)
+activate Debug
+Debug -> Debug: Age messages,\nremove old ones
+Debug --> Scene
+deactivate Debug
+
+Scene --> Engine: Updated
+deactivate Scene
+
+Engine -> Engine: loadSpriteTextures()
+activate Engine
+loop For each GameObject
+  Engine -> GameObject: GetSprite().GetSpriteRenderData()
+  activate GameObject
+  GameObject -> Sprite: GetSpriteRenderData(position)
+  activate Sprite
+  Sprite --> GameObject: SpriteRenderData\n(texture, position, size, UV)
+  deactivate Sprite
+  GameObject --> Engine: Render data
+  deactivate GameObject
+  
+  Engine -> Canvas: LoadTexture(texturePath)
+  activate Canvas
+  Canvas -> Canvas: Check if already loaded
+  alt Not loaded
+    Canvas -> Canvas: Create Image element
+    Canvas -> Canvas: Async load from URL
+    Canvas -> Canvas: Upload to GPU when ready
+  end
+  Canvas --> Engine: Loading...
+  deactivate Canvas
+end
+
+Engine -> Font: GetTexturePath()
+Engine -> Canvas: LoadTexture(fontTexturePath)
+deactivate Engine
+
+=== Render Phase ===
+Engine -> Scene: GetRenderables()
+activate Scene
+Scene -> Scene: Collect GameObjects\nfrom layers in order:\nBACKGROUND → ENTITIES → UI
+Scene --> Engine: []GameObject (ordered)
+deactivate Scene
+
+Engine -> Canvas: BeginBatch()
+activate Canvas
+Canvas -> Canvas: Clear staged vertices
+Canvas -> Canvas: Enter batch mode
+Canvas --> Engine
+deactivate Canvas
+
+loop For each GameObject
+  Engine -> GameObject: GetSprite().GetSpriteRenderData(position)
+  activate GameObject
+  GameObject -> Mover: GetPosition()
+  activate Mover
+  Mover --> GameObject: Vector2
+  deactivate Mover
+  
+  GameObject -> Sprite: GetSpriteRenderData(position)
+  activate Sprite
+  Sprite -> Sprite: Calculate UV for current frame
+  Sprite --> GameObject: SpriteRenderData
+  deactivate Sprite
+  GameObject --> Engine: texture, position, size, UV
+  deactivate GameObject
+  
+  Engine -> Canvas: DrawTexturedRect(texture, pos, size, UV)
+  activate Canvas
+  Canvas -> Canvas: Generate quad vertices\n(6 vertices, 4 floats each)
+  Canvas -> Canvas: Append to staged vertices
+  Canvas -> Canvas: Group by texture in batches
+  Canvas --> Engine: Batched
+  deactivate Canvas
+end
+
+=== Render Debug Console ===
+Engine -> Scene: RenderDebugConsole()
+activate Scene
+Scene -> Debug: Render(canvas, textRenderer, font)
+activate Debug
+
+Debug -> Font: IsLoaded()
+activate Font
+Font --> Debug: true/false
+deactivate Font
+
+alt Font is loaded
+  loop For each message
+    Debug -> TextRenderer: RenderTextScaled(text, position, font, scale, color)
+    activate TextRenderer
+    
+    loop For each character
+      TextRenderer -> Font: GetCharacterUV(char)
+      activate Font
+      Font -> Font: Lookup in character map
+      Font --> TextRenderer: UVRect
+      deactivate Font
+      
+      TextRenderer -> Canvas: DrawTexturedRect(fontTexture, charPos, size, UV)
+      activate Canvas
+      Canvas -> Canvas: Generate vertices
+      Canvas -> Canvas: Append to batch
+      Canvas --> TextRenderer
+      deactivate Canvas
+    end
+    
+    TextRenderer --> Debug: Text rendered (batched)
+    deactivate TextRenderer
+  end
+end
+
+Debug --> Scene
+deactivate Debug
+Scene --> Engine
+deactivate Scene
+
+=== Finalize Rendering ===
+Engine -> Canvas: EndBatch()
+activate Canvas
+Canvas -> Canvas: Finalize all batches
+Canvas -> Canvas: Create bind groups\nfor each texture
+Canvas --> Engine: Batches ready
+deactivate Canvas
+
+Engine -> Canvas: Render()
+activate Canvas
+Canvas -> Canvas: Get next frame texture
+Canvas -> Canvas: Create command encoder
+
+loop For each texture batch
+  Canvas -> Canvas: Set pipeline
+  Canvas -> Canvas: Upload batch vertices to GPU
+  Canvas -> Canvas: Set bind group (texture)
+  Canvas -> Canvas: Draw(vertexCount)
+end
+
+Canvas -> Canvas: Submit commands to GPU
+Canvas -> Canvas: Present to screen
+Canvas --> Engine: Frame rendered
+deactivate Canvas
+
+Engine --> Browser: Frame complete
+deactivate Engine
+
+Browser -> Browser: Schedule next\nrequestAnimationFrame
+
+@enduml
+
+
+
+
+
+
+

@@ -1,0 +1,300 @@
+@startuml Game Engine Class Structure
+!theme plain
+skinparam linetype ortho
+skinparam groupInheritance 2
+
+' Core Engine
+package "Engine" {
+  class Engine {
+    - canvasManager: CanvasManager
+    - inputCapturer: InputCapturer
+    - currentScene: Scene
+    - currentGameState: GameState
+    - screenWidth: float64
+    - screenHeight: float64
+    + Initialize(canvasID: string): error
+    + Start()
+    + Update(deltaTime: float64)
+    + Render()
+    + SetGameState(state: GameState): error
+  }
+}
+
+' Scene Management
+package "Scene" {
+  interface Scene {
+    + Initialize(): error
+    + Update(deltaTime: float64)
+    + GetRenderables(): []GameObject
+    + Cleanup()
+    + GetName(): string
+  }
+  
+  class GameplayScene {
+    - layers: map[SceneLayer][]GameObject
+    - player: *Player
+    - debugFont: Font
+    - debugTextRenderer: TextRenderer
+    - canvasManager: CanvasManager
+    + Initialize(): error
+    + Update(deltaTime: float64)
+    + GetRenderables(): []GameObject
+    + RenderDebugConsole(): error
+    + AddGameObject(layer: SceneLayer, obj: GameObject)
+  }
+  
+  enum SceneLayer {
+    BACKGROUND
+    ENTITIES
+    UI
+  }
+  
+  GameplayScene ..|> Scene
+  GameplayScene o-- SceneLayer
+}
+
+' Game Objects
+package "GameObject" {
+  interface GameObject {
+    + GetSprite(): Sprite
+    + GetMover(): Mover
+    + Update(deltaTime: float64)
+    + GetState(): *ObjectState
+    + SetState(state: ObjectState)
+    + GetID(): string
+  }
+  
+  class Player {
+    - sprite: Sprite
+    - mover: Mover
+    - state: ObjectState
+    - moveSpeed: float64
+    - debugMessageTimer: float64
+    + HandleInput(inputState: InputState)
+    + Update(deltaTime: float64)
+  }
+  
+  class Background {
+    - sprite: Sprite
+    - mover: Mover
+    - state: ObjectState
+    + Update(deltaTime: float64)
+  }
+  
+  class Llama {
+    - sprite: Sprite
+    - mover: Mover
+    - state: ObjectState
+    + Update(deltaTime: float64)
+  }
+  
+  class ObjectState {
+    + ID: string
+    + Position: Vector2
+    + Visible: bool
+    + Frame: int
+  }
+  
+  Player ..|> GameObject
+  Background ..|> GameObject
+  Llama ..|> GameObject
+  GameObject o-- ObjectState
+}
+
+' Component System
+package "Components" {
+  interface Sprite {
+    + Render(canvas: CanvasManager): error
+    + GetPosition(): Vector2
+    + Update(deltaTime: float64)
+    + GetSpriteRenderData(position: Vector2): SpriteRenderData
+  }
+  
+  interface Mover {
+    + Update(deltaTime: float64)
+    + GetPosition(): Vector2
+    + SetPosition(pos: Vector2)
+    + GetVelocity(): Vector2
+    + SetVelocity(vel: Vector2)
+    + SetScreenBounds(width, height: float64)
+  }
+  
+  class SpriteSheet {
+    - texturePath: string
+    - size: Vector2
+    - currentFrame: int
+    - frameTime: float64
+    - elapsedTime: float64
+    - columns: int
+    - rows: int
+    + Update(deltaTime: float64)
+    + GetSpriteRenderData(position: Vector2): SpriteRenderData
+  }
+  
+  class BasicMover {
+    - position: Vector2
+    - velocity: Vector2
+    - screenWidth: float64
+    - screenHeight: float64
+    + Update(deltaTime: float64)
+    + GetPosition(): Vector2
+    + SetVelocity(vel: Vector2)
+  }
+  
+  SpriteSheet ..|> Sprite
+  BasicMover ..|> Mover
+}
+
+' Rendering System
+package "Canvas" {
+  interface CanvasManager {
+    + Initialize(canvasID: string): error
+    + Render(): error
+    + DrawTexturedRect(texturePath: string, pos: Vector2, size: Vector2, uv: UVRect): error
+    + DrawColoredRect(pos: Vector2, size: Vector2, color: [4]float32): error
+    + LoadTexture(path: string): error
+    + BeginBatch(): error
+    + EndBatch(): error
+    + SetPipelines(pipelines: []PipelineType): error
+  }
+  
+  class WebGPUCanvasManager {
+    - device: *Device
+    - queue: *Queue
+    - surface: *Surface
+    - texturedPipeline: *RenderPipeline
+    - loadedTextures: map[string]*Texture
+    - batches: []textureBatch
+    - batchMode: bool
+    + Initialize(canvasID: string): error
+    + Render(): error
+    + DrawTexturedRect(...): error
+    + BeginBatch(): error
+    + EndBatch(): error
+  }
+  
+  class textureBatch {
+    + texturePath: string
+    + texture: *Texture
+    + bindGroup: *BindGroup
+    + vertices: []float32
+  }
+  
+  WebGPUCanvasManager ..|> CanvasManager
+  WebGPUCanvasManager o-- textureBatch
+}
+
+' Input System
+package "Input" {
+  interface InputCapturer {
+    + Initialize(): error
+    + GetInputState(): InputState
+    + Cleanup()
+  }
+  
+  class UnifiedInput {
+    - keyboard: *KeyboardInput
+    - gamepad: *GamepadInput
+    + Initialize(): error
+    + GetInputState(): InputState
+  }
+  
+  class InputState {
+    + MoveLeft: bool
+    + MoveRight: bool
+    + MoveUp: bool
+    + MoveDown: bool
+  }
+  
+  UnifiedInput ..|> InputCapturer
+  UnifiedInput --> InputState
+}
+
+' Text Rendering System
+package "Text" {
+  interface Font {
+    + GetCharacterUV(char: rune): (UVRect, error)
+    + GetTexturePath(): string
+    + GetCellSize(): (int, int)
+    + IsLoaded(): bool
+  }
+  
+  interface TextRenderer {
+    + RenderText(text: string, pos: Vector2, font: Font, color: [4]float32): error
+    + RenderTextScaled(text: string, pos: Vector2, font: Font, scale: float64, color: [4]float32): error
+  }
+  
+  class SpriteFont {
+    - texturePath: string
+    - metadata: *FontMetadata
+    - loaded: bool
+    + LoadFont(basePath: string): error
+    + GetCharacterUV(char: rune): (UVRect, error)
+  }
+  
+  class BasicTextRenderer {
+    - canvasManager: CanvasManager
+    + RenderTextScaled(...): error
+  }
+  
+  class FontMetadata {
+    + CharacterMap: map[string]CharacterData
+    + CellWidth: int
+    + CellHeight: int
+    + Columns: int
+    + Rows: int
+  }
+  
+  SpriteFont ..|> Font
+  BasicTextRenderer ..|> TextRenderer
+  SpriteFont o-- FontMetadata
+  BasicTextRenderer --> CanvasManager
+}
+
+' Debug System
+package "Debug" {
+  class DebugConsole {
+    - messages: []*DebugMessage
+    - messageBuffer: []*DebugMessage
+    - maxMessages: int
+    - currentTime: float64
+    + PostMessage(source, message: string)
+    + Update(deltaTime: float64)
+    + Render(canvas: CanvasManager, renderer: TextRenderer, font: Font): error
+    + Clear()
+  }
+  
+  class DebugMessage {
+    + Source: string
+    + Message: string
+    + Timestamp: float64
+    + Age: float64
+    + Update(deltaTime: float64)
+    + GetDisplayText(): string
+  }
+  
+  DebugConsole o-- DebugMessage
+  DebugConsole ..> CanvasManager
+  DebugConsole ..> TextRenderer
+  DebugConsole ..> Font
+}
+
+' Core Relationships
+Engine --> Scene
+Engine --> CanvasManager
+Engine --> InputCapturer
+GameplayScene --> GameObject
+GameplayScene --> TextRenderer
+GameplayScene --> Font
+GameObject --> Sprite
+GameObject --> Mover
+Player --> InputState
+
+@enduml
+
+
+
+
+
+
+

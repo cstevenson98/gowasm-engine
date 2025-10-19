@@ -6,6 +6,7 @@ type Settings struct {
 	Player    PlayerSettings
 	Animation AnimationSettings
 	Debug     DebugSettings
+	Rendering RenderingSettings
 }
 
 // ScreenSettings contains display and canvas configuration
@@ -33,14 +34,22 @@ type AnimationSettings struct {
 
 // DebugSettings contains debug console configuration
 type DebugSettings struct {
-	Enabled         bool      // Enable/disable debug console
-	FontPath        string    // Path to font sprite sheet (without .sheet.png extension)
-	FontScale       float64   // Scale factor for debug text (1.0 = normal, 2.0 = double size)
-	MaxMessages     int       // Maximum number of messages to display
-	MessageLifetime float64   // Time before messages fade out (0 = never fade)
-	ConsoleHeight   float64   // Height of the console in pixels
-	BackgroundColor [4]float32 // RGBA background color (with alpha for transparency)
-	TextColor       [4]float32 // RGBA text color
+	Enabled                bool      // Enable/disable debug console
+	FontPath               string    // Path to font sprite sheet (without .sheet.png extension)
+	FontScale              float64   // Scale factor for debug text (1.0 = normal, 2.0 = double size)
+	CharacterSpacingReduction float64 // Pixels to reduce character spacing (reduces padding between letters)
+	MaxMessages            int       // Maximum number of messages to display
+	MessageLifetime        float64   // Time before messages fade out (0 = never fade)
+	ConsoleHeight          float64   // Height of the console in pixels
+	BackgroundColor        [4]float32 // RGBA background color (with alpha for transparency)
+	TextColor              [4]float32 // RGBA text color
+}
+
+// RenderingSettings contains rendering quality and style configuration
+type RenderingSettings struct {
+	PixelArtMode           bool    // Enable pixel-perfect rendering (nearest-neighbor filtering)
+	TextureFiltering       string  // "nearest" or "linear" - texture filtering mode
+	PixelPerfectScaling    bool    // Ensure integer scaling for pixel art
 }
 
 // Global is the global settings instance
@@ -63,14 +72,20 @@ var Global = Settings{
 		DefaultFrameTime: 0.1,  // 10 FPS
 	},
 	Debug: DebugSettings{
-		Enabled:         true,
-		FontPath:        "fonts/Mono_10", // Will append .sheet.png/.sheet.json
-		FontScale:       1.5,              // Scale up for better readability
-		MaxMessages:     10,
-		MessageLifetime: 0, // 0 = never fade (keep all messages)
-		ConsoleHeight:   200.0,
-		BackgroundColor: [4]float32{0.0, 0.0, 0.0, 0.7}, // Semi-transparent black
-		TextColor:       [4]float32{0.0, 1.0, 0.0, 1.0}, // Green text (classic terminal look)
+		Enabled:                  true,
+		FontPath:                "fonts/Mono_10", // Will append .sheet.png/.sheet.json
+		FontScale:               1.5,              // Scale up for better readability
+		CharacterSpacingReduction: 8.0,            // Reduce spacing by 8 pixels (adjust as needed)
+		MaxMessages:             10,
+		MessageLifetime:         0, // 0 = never fade (keep all messages)
+		ConsoleHeight:           200.0,
+		BackgroundColor:         [4]float32{0.0, 0.0, 0.0, 0.7}, // Semi-transparent black
+		TextColor:               [4]float32{0.0, 1.0, 0.0, 1.0}, // Green text (classic terminal look)
+	},
+	Rendering: RenderingSettings{
+		PixelArtMode:        true,  // Enable pixel-perfect rendering
+		TextureFiltering:    "nearest", // Use nearest-neighbor filtering for pixel art
+		PixelPerfectScaling: true,  // Ensure integer scaling
 	},
 }
 

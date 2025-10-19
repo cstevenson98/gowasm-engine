@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/conor/webgpu-triangle/internal/canvas"
+	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
@@ -43,8 +44,21 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 	}
 
 	// Scale the cell size
-	scaledWidth := float64(cellWidth) * scale
-	scaledHeight := float64(cellHeight) * scale
+	var scaledWidth, scaledHeight float64
+	
+	if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
+		// Use integer scaling for pixel-perfect rendering
+		scaleInt := int(scale + 0.5) // Round to nearest integer
+		if scaleInt < 1 {
+			scaleInt = 1 // Minimum 1x scaling
+		}
+		scaledWidth = float64(cellWidth * scaleInt)
+		scaledHeight = float64(cellHeight * scaleInt)
+	} else {
+		// Use fractional scaling for smooth rendering
+		scaledWidth = float64(cellWidth) * scale
+		scaledHeight = float64(cellHeight) * scale
+	}
 
 	// Current position for rendering (advances with each character)
 	currentX := position.X
@@ -61,8 +75,19 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		}
 
 		if char == ' ' {
-			// Space: just advance position
-			currentX += scaledWidth
+			// Space: advance position with reduced spacing
+			spacingReduction := config.Global.Debug.CharacterSpacingReduction
+			if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
+				// Use integer scaling for spacing reduction
+				scaleInt := int(scale + 0.5)
+				if scaleInt < 1 {
+					scaleInt = 1
+				}
+				spacingReduction *= float64(scaleInt)
+			} else {
+				spacingReduction *= scale
+			}
+			currentX += scaledWidth - spacingReduction
 			continue
 		}
 
@@ -70,7 +95,17 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		uv, err := font.GetCharacterUV(char)
 		if err != nil {
 			logger.Logger.Tracef("Character '%c' not found in font, skipping", char)
-			currentX += scaledWidth
+			spacingReduction := config.Global.Debug.CharacterSpacingReduction
+			if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
+				scaleInt := int(scale + 0.5)
+				if scaleInt < 1 {
+					scaleInt = 1
+				}
+				spacingReduction *= float64(scaleInt)
+			} else {
+				spacingReduction *= scale
+			}
+			currentX += scaledWidth - spacingReduction
 			continue
 		}
 
@@ -85,12 +120,32 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		if err != nil {
 			// Texture might not be loaded yet - silently skip and continue
 			// This is normal during initial loading
-			currentX += scaledWidth
+			spacingReduction := config.Global.Debug.CharacterSpacingReduction
+			if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
+				scaleInt := int(scale + 0.5)
+				if scaleInt < 1 {
+					scaleInt = 1
+				}
+				spacingReduction *= float64(scaleInt)
+			} else {
+				spacingReduction *= scale
+			}
+			currentX += scaledWidth - spacingReduction
 			continue
 		}
 
-		// Advance to next character position
-		currentX += scaledWidth
+		// Advance to next character position, reducing spacing by configured amount
+		spacingReduction := config.Global.Debug.CharacterSpacingReduction
+		if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
+			scaleInt := int(scale + 0.5)
+			if scaleInt < 1 {
+				scaleInt = 1
+			}
+			spacingReduction *= float64(scaleInt)
+		} else {
+			spacingReduction *= scale
+		}
+		currentX += scaledWidth - spacingReduction
 	}
 
 	return nil

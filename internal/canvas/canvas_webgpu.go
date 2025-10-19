@@ -8,6 +8,7 @@ import (
 	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
+	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
@@ -537,14 +538,32 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
 
 // createSampler creates a texture sampler
 func (w *WebGPUCanvasManager) createSampler() error {
+	// Determine filtering mode based on pixel art settings
+	var magFilter, minFilter wgpu.FilterMode
+	var mipmapFilter wgpu.MipmapFilterMode
+	
+	if config.Global.Rendering.PixelArtMode {
+		// Use nearest-neighbor filtering for pixel-perfect rendering
+		magFilter = wgpu.FilterModeNearest
+		minFilter = wgpu.FilterModeNearest
+		mipmapFilter = wgpu.MipmapFilterModeNearest
+		logger.Logger.Tracef("Using nearest-neighbor filtering for pixel art")
+	} else {
+		// Use linear filtering for smooth rendering
+		magFilter = wgpu.FilterModeLinear
+		minFilter = wgpu.FilterModeLinear
+		mipmapFilter = wgpu.MipmapFilterModeLinear
+		logger.Logger.Tracef("Using linear filtering for smooth rendering")
+	}
+
 	sampler, err := w.device.CreateSampler(&wgpu.SamplerDescriptor{
 		Label:         "Texture Sampler",
 		AddressModeU:  wgpu.AddressModeClampToEdge,
 		AddressModeV:  wgpu.AddressModeClampToEdge,
 		AddressModeW:  wgpu.AddressModeClampToEdge,
-		MagFilter:     wgpu.FilterModeLinear,
-		MinFilter:     wgpu.FilterModeLinear,
-		MipmapFilter:  wgpu.MipmapFilterModeLinear,
+		MagFilter:     magFilter,
+		MinFilter:     minFilter,
+		MipmapFilter:  mipmapFilter,
 		LodMinClamp:   0,
 		LodMaxClamp:   32,
 		MaxAnisotropy: 1,
@@ -554,8 +573,17 @@ func (w *WebGPUCanvasManager) createSampler() error {
 	}
 
 	w.sampler = sampler
-	logger.Logger.Tracef("Sampler created")
+	logger.Logger.Tracef("Sampler created with %s filtering", config.Global.Rendering.TextureFiltering)
 	return nil
+}
+
+// RecreateSampler recreates the sampler with current settings
+// This is useful when switching between pixel art and smooth rendering modes
+func (w *WebGPUCanvasManager) RecreateSampler() error {
+	if w.sampler != nil {
+		w.sampler.Release()
+	}
+	return w.createSampler()
 }
 
 // createSpriteVertexBuffer creates a dynamic vertex buffer for sprite rendering
