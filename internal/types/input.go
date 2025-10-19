@@ -8,7 +8,23 @@ type InputState struct {
 	MoveLeft  bool
 	MoveRight bool
 
-	// Additional keys can be added here
+	// Arrow keys for menu navigation
+	UpPressed    bool
+	DownPressed  bool
+	LeftPressed  bool
+	RightPressed bool
+
+	// Action keys
+	EnterPressed bool
+	SpacePressed bool
+
+	// Previous frame state for detecting key presses
+	UpPressedLastFrame    bool
+	DownPressedLastFrame  bool
+	LeftPressedLastFrame  bool
+	RightPressedLastFrame bool
+	EnterPressedLastFrame bool
+	SpacePressedLastFrame bool
 }
 
 // InputCapturer is the interface for capturing user input

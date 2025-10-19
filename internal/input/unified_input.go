@@ -44,6 +44,24 @@ func (u *UnifiedInput) GetInputState() types.InputState {
 		MoveDown:  keyboardState.MoveDown || gamepadState.MoveDown,
 		MoveLeft:  keyboardState.MoveLeft || gamepadState.MoveLeft,
 		MoveRight: keyboardState.MoveRight || gamepadState.MoveRight,
+		
+		// Arrow keys (keyboard only for menu navigation)
+		UpPressed:    keyboardState.UpPressed,
+		DownPressed:  keyboardState.DownPressed,
+		LeftPressed:  keyboardState.LeftPressed,
+		RightPressed: keyboardState.RightPressed,
+		
+		// Action keys (keyboard only)
+		EnterPressed: keyboardState.EnterPressed,
+		SpacePressed: keyboardState.SpacePressed,
+		
+		// Previous frame states
+		UpPressedLastFrame:    keyboardState.UpPressedLastFrame,
+		DownPressedLastFrame:  keyboardState.DownPressedLastFrame,
+		LeftPressedLastFrame:  keyboardState.LeftPressedLastFrame,
+		RightPressedLastFrame: keyboardState.RightPressedLastFrame,
+		EnterPressedLastFrame: keyboardState.EnterPressedLastFrame,
+		SpacePressedLastFrame: keyboardState.SpacePressedLastFrame,
 	}
 }
 

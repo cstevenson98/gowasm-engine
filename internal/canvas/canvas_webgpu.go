@@ -588,7 +588,7 @@ func (w *WebGPUCanvasManager) RecreateSampler() error {
 
 // createSpriteVertexBuffer creates a dynamic vertex buffer for sprite rendering
 func (w *WebGPUCanvasManager) createSpriteVertexBuffer() error {
-	bufferSize := uint64(1024 * 24) // 1024 vertices * 24 bytes per vertex
+	bufferSize := uint64(4096 * 24) // 4096 vertices * 24 bytes per vertex (increased for text rendering)
 
 	vertexBuffer, err := w.device.CreateBuffer(&wgpu.BufferDescriptor{
 		Label: "Sprite Vertex Buffer",

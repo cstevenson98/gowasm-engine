@@ -59,18 +59,18 @@ func (e *Engine) initializeGameStates() {
 func (e *Engine) createSceneForState(state types.GameState) scene.Scene {
 	switch state {
 	case types.GAMEPLAY:
-		gameplayScene := scene.NewGameplayScene(e.screenWidth, e.screenHeight, e.inputCapturer)
+		battleScene := scene.NewBattleScene(e.screenWidth, e.screenHeight, e.inputCapturer)
 		
 		// Set canvas manager for debug rendering
-		gameplayScene.SetCanvasManager(e.canvasManager)
+		battleScene.SetCanvasManager(e.canvasManager)
 		
 		// Initialize debug console (after canvas manager is set)
-		err := gameplayScene.InitializeDebugConsole()
+		err := battleScene.InitializeDebugConsole()
 		if err != nil {
 			logger.Logger.Warnf("Failed to initialize debug console: %s", err)
 		}
 		
-		return gameplayScene
+		return battleScene
 	default:
 		logger.Logger.Warnf("No scene defined for game state: %s", state.String())
 		return nil
@@ -209,9 +209,16 @@ func (e *Engine) Render() {
 			}
 		}
 
-		// Render debug console inside batch (before EndBatch)
-		if gameplayScene, ok := currentScene.(*scene.GameplayScene); ok {
-			err := gameplayScene.RenderDebugConsole()
+		// Render battle menu and debug console inside batch (before EndBatch)
+		if battleScene, ok := currentScene.(*scene.BattleScene); ok {
+			// Render battle menu
+			err := battleScene.RenderBattleMenu()
+			if err != nil {
+				logger.Logger.Tracef("Failed to render battle menu: %s", err.Error())
+			}
+			
+			// Render debug console
+			err = battleScene.RenderDebugConsole()
 			if err != nil {
 				logger.Logger.Tracef("Failed to render debug console: %s", err.Error())
 			}
@@ -249,11 +256,14 @@ func (e *Engine) loadSpriteTextures() {
 		e.canvasManager.LoadTexture(renderData.TexturePath)
 	}
 
-	// Load debug console font texture if enabled
+	// Load debug console and menu font textures if enabled
 	if config.Global.Debug.Enabled {
-		if gameplayScene, ok := currentScene.(*scene.GameplayScene); ok {
-			if font := gameplayScene.GetDebugFont(); font != nil && font.IsLoaded() {
+		if battleScene, ok := currentScene.(*scene.BattleScene); ok {
+			if font := battleScene.GetDebugFont(); font != nil && font.IsLoaded() {
 				e.canvasManager.LoadTexture(font.GetTexturePath())
+			}
+			if menuFont := battleScene.GetMenuFont(); menuFont != nil && menuFont.IsLoaded() {
+				e.canvasManager.LoadTexture(menuFont.GetTexturePath())
 			}
 		}
 	}

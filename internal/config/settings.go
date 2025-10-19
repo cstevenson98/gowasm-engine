@@ -2,11 +2,12 @@ package config
 
 // Settings contains all global configuration for the game engine
 type Settings struct {
-	Screen    ScreenSettings
-	Player    PlayerSettings
-	Animation AnimationSettings
-	Debug     DebugSettings
-	Rendering RenderingSettings
+	Screen     ScreenSettings
+	Player     PlayerSettings
+	Animation  AnimationSettings
+	Debug      DebugSettings
+	Rendering  RenderingSettings
+	Battle     BattleSettings
 }
 
 // ScreenSettings contains display and canvas configuration
@@ -52,6 +53,17 @@ type RenderingSettings struct {
 	PixelPerfectScaling    bool    // Ensure integer scaling for pixel art
 }
 
+// BattleSettings contains battle scene configuration
+type BattleSettings struct {
+	PlayerHP     int     // Player's starting HP
+	PlayerMaxHP  int     // Player's maximum HP
+	EnemyHP      int     // Enemy's starting HP
+	EnemyMaxHP   int     // Enemy's maximum HP
+	EnemyTexture string  // Path to enemy texture
+	MenuFontPath string  // Path to menu font (without .sheet.png extension)
+	MenuFontScale float64 // Scale factor for menu text
+}
+
 // Global is the global settings instance
 var Global = Settings{
 	Screen: ScreenSettings{
@@ -86,6 +98,15 @@ var Global = Settings{
 		PixelArtMode:        true,  // Enable pixel-perfect rendering
 		TextureFiltering:    "nearest", // Use nearest-neighbor filtering for pixel art
 		PixelPerfectScaling: true,  // Ensure integer scaling
+	},
+	Battle: BattleSettings{
+		PlayerHP:     100,
+		PlayerMaxHP:  100,
+		EnemyHP:      80,
+		EnemyMaxHP:   80,
+		EnemyTexture: "art/ghost.png",
+		MenuFontPath: "fonts/Mono_10",
+		MenuFontScale: 1.0,
 	},
 }
 

@@ -717,3 +717,198 @@ This creates a true pixel art rendering pipeline where fonts maintain their cris
 
 ---
 
+
+## [2025-10-19 16:55:27 BST] - Implemented Battle Scene with Interactive Menu System
+
+**Prompt/Request**: Plan and implement a battle scene which will be the default scene, featuring a player on the left, enemy sprite on the right, and a menu consisting of battle log, character status, and action menu with ">" character showing selection. Keep battle logic unimplemented but allow menu to be interactive with arrow keys.
+
+**Changes Made**:
+- Created  - New BattleScene struct implementing Scene interface
+  - Player positioned on left side (20% from left)
+  - Enemy positioned on right side (80% from left) 
+  - Battle menu system integration
+  - Debug console support
+  - Text rendering for menu UI
+- Created  - Enemy GameObject implementation
+  - Implements all GameObject interface methods (GetSprite, GetMover, Update, GetState, SetState, GetID)
+  - Static mover (no movement in battle)
+  - Single-frame sprite (no animation)
+  - Uses configurable enemy texture
+- Created  - Battle menu system
+  - BattleLog with message history and scrolling
+  - CharacterStatus displaying player/enemy HP
+  - ActionMenu with arrow key navigation and selection indicator
+  - Menu state management and input handling
+- Updated  - Engine changes
+  - Modified createSceneForState() to use BattleScene instead of GameplayScene
+  - Updated render method to handle BattleScene debug console
+  - Updated texture loading for battle scene fonts
+- Extended  - Input system enhancements
+  - Added arrow key support (UpPressed, DownPressed, LeftPressed, RightPressed)
+  - Added action keys (EnterPressed, SpacePressed)
+  - Added previous frame state tracking for key press detection
+- Updated  - Keyboard input enhancements
+  - Added arrow key handling (ArrowUp, ArrowDown, ArrowLeft, ArrowRight)
+  - Added Enter and Space key handling
+  - Implemented previous frame state tracking
+- Updated  - Unified input integration
+  - Pass through arrow keys and action keys from keyboard
+  - Maintain previous frame state for key press detection
+- Added  - Battle configuration
+  - BattleSettings struct with HP values, enemy texture, menu font settings
+  - Player HP: 100/100, Enemy HP: 80/80
+  - Configurable enemy texture and menu font path
+- Updated battle scene text rendering with color coding:
+  - White text for battle log
+  - Green text for player status
+  - Red text for enemy status  
+  - Yellow text for action menu
+
+**Reasoning**:
+The battle scene provides a turn-based RPG interface with:
+1. **Visual Layout**: Player on left, enemy on right, menu at bottom
+2. **Interactive Menu**: Arrow key navigation with visual selection indicator (">")
+3. **Status Display**: Real-time HP display for both player and enemy
+4. **Battle Log**: Message history for battle events
+5. **Configurable**: All values (HP, textures, fonts) configurable via settings
+6. **Extensible**: Menu system ready for actual battle logic implementation
+
+The implementation follows the existing component-based architecture and uses the established text rendering system for the menu UI.
+
+**Impact**:
+- Battle scene is now the default scene (replaces GameplayScene)
+- Interactive menu system with arrow key navigation
+- Visual selection indicator for menu items
+- Color-coded status display (green player, red enemy)
+- Battle log for event tracking
+- All battle parameters configurable
+- Ready for battle logic implementation
+- No breaking changes to existing interfaces
+
+**Testing**:
+-  - Build successful
+- No linter errors in any modified files
+- All todos completed successfully
+- Ready for browser testing via [0;34mStarting HTTP server...[0m 
+[0;32m✓ Server starting at http://localhost:8080[0m 
+[1;33mPress Ctrl+C to stop[0m 
+
+**Notes**:
+- Battle logic is intentionally unimplemented (as requested)
+- Menu navigation works with arrow keys (Up/Down)
+- Enter key selects current menu item
+- Menu shows ">" indicator for selected item
+- All text rendering uses existing font sprite sheet system
+- Battle scene configuration allows easy tuning of HP, textures, fonts
+- Future work: Implement actual battle mechanics (attack, defend, items)
+- Future work: Add battle animations and effects
+- Future work: Add sound effects for menu navigation
+
+---
+
+
+## [2025-10-19 16:55:31 BST] - Implemented Battle Scene with Interactive Menu System
+
+**Prompt/Request**: Plan and implement a battle scene which will be the default scene, featuring a player on the left, enemy sprite on the right, and a menu consisting of battle log, character status, and action menu with ">" character showing selection. Keep battle logic unimplemented but allow menu to be interactive with arrow keys.
+
+**Changes Made**:
+- Created `internal/scene/battle_scene.go` - New BattleScene struct implementing Scene interface
+- Created `internal/gameobject/enemy.go` - Enemy GameObject implementation  
+- Created `internal/scene/battle_menu.go` - Battle menu system
+- Updated `internal/engine/engine.go` - Engine changes
+- Extended `internal/types/input.go` - Input system enhancements
+- Updated keyboard and unified input systems
+- Added battle configuration to settings
+- Implemented color-coded text rendering for menu
+
+**Reasoning**: Battle scene provides turn-based RPG interface with interactive menu, status display, and battle log. Follows existing component-based architecture.
+
+**Impact**: Battle scene is now default scene with interactive menu system, arrow key navigation, and visual selection indicators.
+
+**Testing**: Build successful, no linter errors, ready for browser testing.
+
+**Notes**: Battle logic intentionally unimplemented as requested. Menu navigation works with arrow keys and Enter key selection.
+
+---
+
+
+## [2025-10-19 16:59:44 BST] - Fixed WebGPU Vertex Buffer Overflow in Battle Scene
+
+**Prompt/Request**: Battle scene worked initially but then got a black screen with WebGPU buffer overflow errors. The vertex buffer was too small for the text rendering in the battle menu.
+
+**Changes Made**:
+- Updated `internal/canvas/canvas_webgpu.go` - Increased vertex buffer size
+  - Changed buffer size from 1024 vertices to 4096 vertices
+  - Buffer size increased from 24,576 bytes to 98,304 bytes
+  - This provides 4x more capacity for text rendering
+
+**Reasoning**:
+The battle scene text rendering generates many vertices (one per character), and the original buffer size of 1024 vertices was insufficient. The error showed:
+- `Write range (bufferOffset: 288, size: 24384) does not fit in [Buffer "Sprite Vertex Buffer"] size (24576)`
+- `Vertex range (first: 0, count: 1524) requires a larger buffer (24384) than the bound buffer size (24288)`
+
+The battle menu renders multiple text elements:
+- Battle log messages
+- Character status (player/enemy HP)
+- Action menu with selection indicator
+- Debug console text
+
+Each character requires vertices, and with multiple text elements, the total vertex count exceeded the buffer capacity.
+
+**Impact**:
+- Battle scene should now render without buffer overflow errors
+- Text rendering in battle menu will work correctly
+- 4x more vertex capacity for complex text scenes
+- No performance impact (buffer is only allocated once)
+- Maintains compatibility with existing sprite rendering
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- Updated WASM file copied to dist directory
+- Ready for browser testing to verify fix
+
+**Notes**:
+- Buffer size calculation: 4096 vertices × 24 bytes per vertex = 98,304 bytes
+- This should handle even complex text scenes with many characters
+- Future optimization: Could implement dynamic buffer resizing if needed
+- The fix addresses the root cause of the black screen issue
+
+---
+
+
+## [2025-10-19 20:36:27 BST] - Updated Enemy to Use Ghost Sprite Sheet Animation
+
+**Prompt/Request**: Make the enemies use the ghost.png sprite sheet which is 2 rows 3 columns.
+
+**Changes Made**:
+- Updated `internal/gameobject/enemy.go` - Modified enemy sprite creation
+  - Changed from 1x1 sprite sheet (single frame) to 3x2 sprite sheet (6 frames)
+  - Updated columns from 1 to 3
+  - Updated rows from 1 to 2
+  - Enemy now has animated sprite with 6 total frames
+- Updated `internal/config/settings.go` - Changed enemy texture
+  - Changed EnemyTexture from "llama.png" to "art/ghost.png"
+  - Enemy now uses ghost sprite sheet instead of llama
+
+**Reasoning**:
+The ghost.png sprite sheet provides a proper animated enemy with 6 frames arranged in a 3x2 grid. This gives the enemy visual animation during battle, making it more engaging than a static sprite. The animation will cycle through all 6 frames automatically.
+
+**Impact**:
+- Enemy now uses ghost.png sprite sheet with animation
+- 6-frame animation (3 columns × 2 rows)
+- Animation follows row-first ordering (left-to-right, top-to-bottom)
+- More visually interesting battle scene
+- Enemy will animate continuously during battle
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- Updated WASM file copied to dist directory
+- Ready for browser testing to see animated ghost enemy
+
+**Notes**:
+- Ghost sprite sheet: 2 rows × 3 columns = 6 total frames
+- Animation order: Frame 0-2 (top row), Frame 3-5 (bottom row)
+- Enemy will animate automatically using the sprite sheet's frame timing
+- Ghost texture path: "art/ghost.png" (relative to assets directory)
+
+---

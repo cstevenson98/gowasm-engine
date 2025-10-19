@@ -12,6 +12,7 @@ import (
 // KeyboardInput captures keyboard input from the browser
 type KeyboardInput struct {
 	inputState  types.InputState
+	lastState   types.InputState // Previous frame state
 	mu          sync.RWMutex
 	keydownFunc js.Func
 	keyupFunc   js.Func
@@ -30,7 +31,20 @@ func NewKeyboardInput() *KeyboardInput {
 func (k *KeyboardInput) GetInputState() types.InputState {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
-	return k.inputState
+	
+	// Copy current state and set previous frame states
+	state := k.inputState
+	state.UpPressedLastFrame = k.lastState.UpPressed
+	state.DownPressedLastFrame = k.lastState.DownPressed
+	state.LeftPressedLastFrame = k.lastState.LeftPressed
+	state.RightPressedLastFrame = k.lastState.RightPressed
+	state.EnterPressedLastFrame = k.lastState.EnterPressed
+	state.SpacePressedLastFrame = k.lastState.SpacePressed
+	
+	// Update last state for next frame
+	k.lastState = k.inputState
+	
+	return state
 }
 
 // Initialize sets up keyboard event listeners
@@ -60,6 +74,18 @@ func (k *KeyboardInput) Initialize() error {
 			k.inputState.MoveLeft = true
 		case "d", "D":
 			k.inputState.MoveRight = true
+		case "ArrowUp":
+			k.inputState.UpPressed = true
+		case "ArrowDown":
+			k.inputState.DownPressed = true
+		case "ArrowLeft":
+			k.inputState.LeftPressed = true
+		case "ArrowRight":
+			k.inputState.RightPressed = true
+		case "Enter":
+			k.inputState.EnterPressed = true
+		case " ":
+			k.inputState.SpacePressed = true
 		}
 
 		return nil
@@ -86,6 +112,18 @@ func (k *KeyboardInput) Initialize() error {
 			k.inputState.MoveLeft = false
 		case "d", "D":
 			k.inputState.MoveRight = false
+		case "ArrowUp":
+			k.inputState.UpPressed = false
+		case "ArrowDown":
+			k.inputState.DownPressed = false
+		case "ArrowLeft":
+			k.inputState.LeftPressed = false
+		case "ArrowRight":
+			k.inputState.RightPressed = false
+		case "Enter":
+			k.inputState.EnterPressed = false
+		case " ":
+			k.inputState.SpacePressed = false
 		}
 
 		return nil
