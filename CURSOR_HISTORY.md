@@ -433,3 +433,68 @@ A centralized config system provides:
 
 ---
 
+
+## [2025-10-19 12:58:14 BST] - Created Font Sprite Sheet Generator Script
+
+**Prompt/Request**: Create a Python script that generates sprite sheets of letters, numbers, and special characters from a given font. Support multiple font sizes, output PNG with 16x16 cells, and provide JSON metadata with character mapping. Use system python3 instead of virtual environment due to Cursor compatibility issues.
+
+**Changes Made**:
+- Created `scripts/font_spritesheet_generator.py` - Main Python script for generating font sprite sheets
+  - Renders A-Z, a-z, 0-9, and common punctuation characters
+  - Fixed 16x16 pixel cells in grid layout (10 columns by default)
+  - Auto-adjusts font size to fit within 16x16 cells (with padding)
+  - Outputs PNG with transparency
+  - Generates JSON metadata with character-to-sprite mapping and UV coordinates
+  - Supports multiple font sizes via `--sizes` flag
+  - Command-line interface with argparse
+- Created `scripts/requirements.txt` - Pillow dependency specification
+  - Added note about using system python3 instead of venv
+- Created `scripts/README.md` - Comprehensive usage documentation
+  - Installation instructions
+  - Usage examples
+  - Output format documentation
+  - Troubleshooting guide
+  - Integration examples for game engine
+- Updated `.gitignore` - Added Python-related ignores
+  - `scripts/__pycache__/`
+  - `scripts/*.pyc`
+  - `scripts/test_output/`
+
+**Reasoning**:
+The game engine needs a way to render text using sprite sheets for performance and WebGPU compatibility. This script allows generating font sprite sheets from any system font with:
+
+1. **Fixed 16x16 cells**: Matches common texture atlas patterns, easy to work with in shaders
+2. **Grid layout**: Simple indexing, predictable UV coordinate calculation
+3. **JSON metadata**: Provides character-to-sprite mapping for runtime lookups
+4. **UV coordinates**: Pre-calculated texture coordinates for WebGPU rendering
+5. **Multiple sizes**: Generate different font sizes as separate sheets for various UI scales
+
+Initially attempted to use Python virtual environment, but Cursor has compatibility issues where python3 symlinks resolve to cursor binary. Switched to system python3 which works correctly.
+
+**Impact**:
+- Can now generate font sprite sheets for text rendering in the game engine
+- JSON metadata enables easy character lookups at runtime
+- UV coordinates ready for direct use in WebGPU texture sampling
+- System python3 approach avoids Cursor venv issues
+- No breaking changes to existing Go code
+- Adds new capability for future text rendering implementation
+
+**Testing**:
+- Tested with DejaVuSans font (falls back to default font when not found)
+- Verified PNG sprite sheet generation with transparency
+- Confirmed JSON metadata structure with correct UV coordinates
+- Tested multiple font sizes generation (--sizes flag)
+- Verified 16x16 cell grid layout
+- Confirmed 96 characters (A-Z, a-z, 0-9, punctuation) rendered correctly
+
+**Notes**:
+- Script is located in `scripts/` directory with other project utilities
+- Uses system python3 due to Cursor virtual environment compatibility issues
+- Pillow must be installed: `python3 -m pip install --user Pillow`
+- Default font fallback works when specified font not found
+- Font size auto-adjusts to fit 16x16 cells (typically 8-10pt for most fonts)
+- Future work: Integrate with engine's text rendering system
+- Consider adding support for custom character sets for localization
+
+---
+

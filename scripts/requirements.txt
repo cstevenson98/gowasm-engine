@@ -1,0 +1,6 @@
+# Font Sprite Sheet Generator Dependencies
+# Note: Use system python3 due to Cursor venv issues
+# Install with: python3 -m pip install --user -r requirements.txt
+
+Pillow>=10.0.0
+
