@@ -94,6 +94,7 @@ func (s *SpriteSheet) Update(deltaTime float64) {
 			s.currentFrame = (s.currentFrame + 1) % s.totalFrames
 		}
 	}
+	// If totalFrames == 1, this is a static sprite - no animation
 }
 
 // SetVisible sets whether the sprite should be rendered

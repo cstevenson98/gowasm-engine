@@ -12,6 +12,14 @@ import (
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
+// textureBatch represents a batch of vertices for a single texture
+type textureBatch struct {
+	texturePath string
+	texture     *wgpu.Texture
+	bindGroup   *wgpu.BindGroup
+	vertices    []float32
+}
+
 // WebGPUCanvasManager implements CanvasManager using cogentcore/webgpu library
 type WebGPUCanvasManager struct {
 	// Canvas element
@@ -46,8 +54,10 @@ type WebGPUCanvasManager struct {
 
 	// Batch rendering
 	batchMode         bool
+	batches           []textureBatch // Multiple batches, one per texture
 	stagedVertices    []float32
 	stagedVertexCount int
+	currentBatchTexturePath string // Track current texture in batch to break batches on texture change
 
 	// Status
 	initialized bool
@@ -661,11 +671,54 @@ func (w *WebGPUCanvasManager) executePipeline(renderPass *wgpu.RenderPassEncoder
 			renderPass.Draw(uint32(w.stagedVertexCount), 1, 0, 0)
 		}
 	case types.TexturedPipeline:
-		if w.texturedPipeline != nil && w.stagedVertexCount > 0 && w.currentTexture != nil && w.textureBindGroup != nil {
+		if w.texturedPipeline != nil && len(w.batches) > 0 {
 			renderPass.SetPipeline(w.texturedPipeline)
-			renderPass.SetBindGroup(0, w.textureBindGroup, nil)
-			renderPass.SetVertexBuffer(0, w.vertexBuffer, 0, wgpu.WholeSize)
-			renderPass.Draw(uint32(w.stagedVertexCount), 1, 0, 0)
+			
+			// Upload all batches to different offsets in the vertex buffer
+			// This ensures they don't overwrite each other
+			var currentOffset uint64 = 0
+			type batchDrawInfo struct {
+				bindGroup   *wgpu.BindGroup
+				vertexCount uint32
+				offset      uint64
+				texturePath string
+			}
+			drawInfos := make([]batchDrawInfo, 0, len(w.batches))
+			
+			for _, batch := range w.batches {
+				if batch.bindGroup == nil || len(batch.vertices) == 0 {
+					continue
+				}
+				
+				// Upload vertices for this batch at the current offset
+				batchBytes := float32SliceToBytes(batch.vertices)
+				w.queue.WriteBuffer(w.vertexBuffer, currentOffset, batchBytes)
+				
+				// Calculate vertex count (4 floats per vertex for textured quads)
+				vertexCount := uint32(len(batch.vertices) / 4)
+				
+				// Store draw info for later
+				drawInfos = append(drawInfos, batchDrawInfo{
+					bindGroup:   batch.bindGroup,
+					vertexCount: vertexCount,
+					offset:      currentOffset,
+					texturePath: batch.texturePath,
+				})
+				
+				// Move offset forward (each float32 is 4 bytes)
+				currentOffset += uint64(len(batchBytes))
+				
+				logger.Logger.Tracef("Uploaded batch for texture %s: %d vertices at offset %d", batch.texturePath, vertexCount, currentOffset-uint64(len(batchBytes)))
+			}
+			
+			// Now draw all batches using their stored data
+			for _, info := range drawInfos {
+				renderPass.SetBindGroup(0, info.bindGroup, nil)
+				renderPass.SetVertexBuffer(0, w.vertexBuffer, info.offset, wgpu.WholeSize)
+				renderPass.Draw(info.vertexCount, 1, 0, 0)
+				
+				logger.Logger.Tracef("Drawing batch for texture %s: %d vertices from offset %d", info.texturePath, info.vertexCount, info.offset)
+			}
 		}
 	}
 }
@@ -827,16 +880,32 @@ func (w *WebGPUCanvasManager) DrawTexturedRect(texturePath string, position type
 
 	vertices := w.generateTexturedQuadVertices(position, size, uv)
 
-	// Create bind group for this texture
-	w.textureBindGroup = w.createTextureBindGroup(gpuTexture)
-	w.currentTexture = gpuTexture
-
 	if w.batchMode {
-		// Batch mode - accumulate vertices
+		// In batch mode, check if we need to start a new batch for this texture
+		if w.currentBatchTexturePath != texturePath {
+			// Save current batch if it has vertices
+			if len(w.stagedVertices) > 0 {
+				bindGroup := w.createTextureBindGroup(w.loadedTextures[w.currentBatchTexturePath])
+				w.batches = append(w.batches, textureBatch{
+					texturePath: w.currentBatchTexturePath,
+					texture:     w.loadedTextures[w.currentBatchTexturePath],
+					bindGroup:   bindGroup,
+					vertices:    append([]float32{}, w.stagedVertices...), // Copy vertices
+				})
+				logger.Logger.Tracef("Saved batch for texture %s with %d vertices", w.currentBatchTexturePath, len(w.stagedVertices))
+				w.stagedVertices = make([]float32, 0) // Clear for new batch
+			}
+			w.currentBatchTexturePath = texturePath
+		}
+		
+		// Accumulate vertices for current texture
 		w.stagedVertices = append(w.stagedVertices, vertices...)
-		logger.Logger.Tracef("Batched textured rect at %f, %f", position.X, position.Y)
+		logger.Logger.Tracef("Batched textured rect at %f, %f with texture %s", position.X, position.Y, texturePath)
 	} else {
 		// Immediate mode - upload and stage
+		w.textureBindGroup = w.createTextureBindGroup(gpuTexture)
+		w.currentTexture = gpuTexture
+		
 		w.queue.WriteBuffer(w.vertexBuffer, 0, float32SliceToBytes(vertices))
 		w.stagedVertexCount = len(vertices) / 4 // 4 floats per vertex
 		logger.Logger.Tracef("Immediate mode - Drew textured rect - %d vertices", w.stagedVertexCount)
@@ -909,14 +978,16 @@ func (w *WebGPUCanvasManager) BeginBatch() error {
 	}
 
 	w.batchMode = true
+	w.batches = make([]textureBatch, 0) // Clear previous batches
 	w.stagedVertices = make([]float32, 0)
 	w.stagedVertexCount = 0
+	w.currentBatchTexturePath = "" // Reset texture tracking for new batch
 
 	logger.Logger.Tracef("BeginBatch - Batch mode enabled")
 	return nil
 }
 
-// EndBatch ends batch rendering mode and uploads all batched vertices
+// EndBatch ends batch rendering mode and saves the final batch
 func (w *WebGPUCanvasManager) EndBatch() error {
 	if !w.initialized {
 		return &CanvasError{Message: "Canvas not initialized"}
@@ -927,13 +998,21 @@ func (w *WebGPUCanvasManager) EndBatch() error {
 		return nil
 	}
 
-	err := w.FlushBatch()
-	if err != nil {
-		return err
+	// Save the final batch if it has vertices
+	if len(w.stagedVertices) > 0 && w.currentBatchTexturePath != "" {
+		texture := w.loadedTextures[w.currentBatchTexturePath]
+		bindGroup := w.createTextureBindGroup(texture)
+		w.batches = append(w.batches, textureBatch{
+			texturePath: w.currentBatchTexturePath,
+			texture:     texture,
+			bindGroup:   bindGroup,
+			vertices:    append([]float32{}, w.stagedVertices...), // Copy vertices
+		})
+		logger.Logger.Tracef("Saved final batch for texture %s with %d vertices", w.currentBatchTexturePath, len(w.stagedVertices))
 	}
 
 	w.batchMode = false
-	logger.Logger.Tracef("EndBatch - Batch mode disabled, %d vertices uploaded", w.stagedVertexCount)
+	logger.Logger.Tracef("EndBatch - Batch mode disabled, %d batches ready to render", len(w.batches))
 
 	return nil
 }
@@ -962,7 +1041,10 @@ func (w *WebGPUCanvasManager) FlushBatch() error {
 		w.stagedVertexCount = len(w.stagedVertices) / 6
 	}
 
-	logger.Logger.Tracef("FlushBatch - Uploaded %d floats (%d vertices)", len(w.stagedVertices), w.stagedVertexCount)
+	logger.Logger.Tracef("FlushBatch - Uploaded %d floats (%d vertices) for texture %s", len(w.stagedVertices), w.stagedVertexCount, w.currentBatchTexturePath)
+
+	// Clear staged vertices for next batch (but keep texture tracking until BeginBatch)
+	w.stagedVertices = make([]float32, 0)
 
 	return nil
 }

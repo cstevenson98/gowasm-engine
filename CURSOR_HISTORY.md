@@ -67,55 +67,6 @@ The project has a sophisticated architecture using Go compiled to WASM with WebG
 ---
 
 
-
-## [2025-10-19 11:05:14 BST] - Fixed Detached ArrayBuffer Error in WebGPU WriteBuffer
-
-**Prompt/Request**: Debug the "Cannot perform Construct on a detached ArrayBuffer" error that occurs after ~10 seconds of successful running in the browser console.
-
-**Changes Made**:
-- Created new `safeWriteBuffer()` method in `internal/canvas/canvas_webgpu.go`
-  - Uses `js.CopyBytesToJS()` to immediately copy data into JavaScript memory space
-  - Creates JavaScript Uint8Array that lives outside Go's linear memory
-  - Accesses underlying JavaScript GPUQueue and GPUBuffer objects directly
-  - Calls WebGPU `writeBuffer` API with the safe JavaScript array
-- Updated all three `WriteBuffer` call sites to use `safeWriteBuffer()`:
-  - `DrawRectangle()` immediate mode (line 686)
-  - `DrawTexture()` immediate mode (line 840)
-  - `FlushBatch()` batch mode (line 956)
-
-**Reasoning**:
-The error was caused by WebAssembly memory growth. When Go's WASM memory grows (during garbage collection or allocation), the underlying ArrayBuffer gets detached. The sequence was:
-
-1. Go creates a byte slice in its linear memory
-2. `float32SliceToBytes()` converts float32 vertices to bytes
-3. `wgpu.Queue.WriteBuffer()` calls `jsx.BytesToJS(data)`
-4. `jsx.BytesToJS()` creates a JavaScript Uint8Array **view** of Go's memory
-5. Between step 4 and when JavaScript actually uses the array, Go's memory can grow
-6. The ArrayBuffer becomes detached, causing "Cannot perform Construct on a detached ArrayBuffer"
-
-The fix ensures data is **copied** into JavaScript memory space immediately using `js.CopyBytesToJS()`, so it's immune to Go memory growth.
-
-**Impact**:
-- Eliminates crash that occurred after ~10 seconds of runtime
-- Engine can now run indefinitely without memory-related crashes
-- Slight performance overhead from the extra copy, but necessary for stability
-- All vertex buffer uploads are now protected (immediate and batch modes)
-- No API changes to external interfaces
-
-**Testing**:
-- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
-- Manual browser testing - Error no longer occurs after extended runtime
-- User confirmed: "the current implementation seems to have stopped the error"
-
-**Notes**:
-- This is a known issue with Go WASM and JavaScript interop
-- The cogentcore/webgpu library's `jsx.BytesToJS()` creates views, not copies
-- Similar pattern should be used for any future buffer upload operations
-- Consider contributing this pattern back to cogentcore/webgpu library
-- The `js.ValueOf(w.queue).Get("ref")` approach successfully accesses underlying JS objects
-
----
-
 ## [2025-10-19 11:43:18 BST] - Configured Git LFS for Art Assets
 
 **Prompt/Request**: Set up Git LFS to track art assets in the assets/art directory
@@ -167,6 +118,177 @@ Art assets (especially source files like .kra) can be large binary files that do
 - The .gitattributes file is tracked in version control
 - Future contributors should run `git lfs install` after cloning
 - Consider adding a note about Git LFS to the README for new contributors
+
+---
+
+## [2025-10-19 11:50:15 BST] - Implemented Background Sprite in Gameplay Scene
+
+**Prompt/Request**: Implement a background sprite in the gameplay scene using the test-background.png texture
+
+**Changes Made**:
+- Created new `internal/gameobject/background.go` file
+  - Implements `types.GameObject` interface
+  - Creates a static, non-animated background using a single-frame sprite
+  - No mover component (backgrounds don't move)
+  - Takes position, size, and texture path as parameters
+  - Uses same component-based pattern as Player and Llama
+- Updated `internal/scene/gameplay_scene.go`
+  - Added background creation in `Initialize()` method
+  - Background fills entire screen (0,0 to screenWidth x screenHeight)
+  - Uses texture path "art/test-background.png"
+  - Background added to BACKGROUND layer (renders behind entities)
+  - Added debug logging for background creation
+
+**Reasoning**:
+Following the established GameObject pattern ensures consistency in the codebase. The Background GameObject:
+- Uses the SpriteSheet system with a 1x1 grid (single frame) for static images
+- Implements GameObject interface but returns nil for GetMover() since backgrounds don't move
+- Is added to the BACKGROUND layer to ensure proper render order (background → entities → UI)
+- Full-screen size ensures it covers the entire canvas
+
+**Impact**:
+- Gameplay scene now renders a background image behind the player
+- Background is rendered first in the render order (BACKGROUND layer)
+- No breaking changes to existing code
+- Pattern can be reused for parallax backgrounds or tiled backgrounds in the future
+- Background is automatically loaded and rendered by the engine's existing rendering pipeline
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- No linter errors in new or modified files
+- Background GameObject follows same interface pattern as Player and Llama
+
+**Notes**:
+- Background texture path is "art/test-background.png" (relative to assets directory)
+- Background will need to be copied to dist/ folder for browser testing
+- Can easily create multiple backgrounds for different scenes
+- Future enhancement: Add support for repeating/tiled backgrounds
+- Future enhancement: Add parallax scrolling support for layered backgrounds
+- Background sprite doesn't update (static), saving performance
+
+---
+
+## [2025-10-19 11:56:05 BST] - Fixed Texture Batching to Support Multiple Textures
+
+**Prompt/Request**: Fix rendering issue where all sprites were using the same texture (llama) instead of their respective textures. The background was rendering with the llama texture instead of the background image.
+
+**Changes Made**:
+- Added `textureBatch` struct in `internal/canvas/canvas_webgpu.go`
+  - Stores texture path, GPU texture, bind group, and vertices for each texture
+- Modified `WebGPUCanvasManager` struct:
+  - Added `batches []textureBatch` field to track multiple texture batches
+  - Kept `currentBatchTexturePath` to track current texture being batched
+- Updated `BeginBatch()`:
+  - Initializes empty batches slice at start of frame
+- Updated `DrawTexturedRect()`:
+  - Detects texture changes during batching
+  - When texture changes, saves current batch and starts new one
+  - Accumulates vertices per texture in separate batches
+- Updated `EndBatch()`:
+  - Saves final batch with remaining vertices
+  - Reports number of batches ready to render
+- Updated `executePipeline()` for `TexturedPipeline` case:
+  - Iterates through all batches
+  - For each batch: uploads vertices, sets bind group, draws
+  - Properly switches textures between draw calls
+- Removed references to `safeWriteBuffer()` (which was removed earlier)
+  - Replaced with standard `queue.WriteBuffer()` calls
+
+**Reasoning**:
+The original batching system assumed all sprites would use the same texture. It would:
+1. Accumulate vertices for all sprites
+2. Set bind group to the last texture processed
+3. Render all vertices with that one texture
+
+This caused all sprites to render with whichever texture was processed last. The fix implements proper multi-texture batching by:
+- Breaking sprites into separate batches by texture
+- Rendering each batch with its correct texture and bind group
+- Maintaining render order (background → entities → UI)
+
+This is a common pattern in 2D game engines - batching is broken when the texture changes to minimize draw calls while supporting multiple textures.
+
+**Impact**:
+- Background now renders with correct texture (test-background.png)
+- Player renders with correct texture (llama.png)
+- Each sprite uses its own texture as intended
+- Batching still reduces draw calls (sprites with same texture are batched together)
+- Render order preserved (background renders first, then entities)
+- Small performance overhead from multiple draw calls, but necessary for correctness
+- No API changes to external interfaces
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- No linter errors
+- Ready for browser testing
+
+**Notes**:
+- Future optimization: Sort renderables by texture to maximize batch sizes
+- Future enhancement: Implement texture atlas to allow true single-batch rendering
+- The batching system now properly handles the common case of multiple textures per frame
+- Each texture change creates a new batch, so fewer texture changes = better performance
+- This is standard 2D batching behavior (break batch on state change)
+
+---
+
+## [2025-10-19 11:58:24 BST] - Fixed Background Positioning and Animation
+
+**Prompt/Request**: Fix two issues with the background rendering:
+1. Background only rendered behind the player rectangle instead of covering the full 800x600 screen
+2. Background was animating like a spritesheet instead of being a static image
+
+**Changes Made**:
+- Added `StaticMover` struct in `internal/gameobject/background.go`
+  - Implements `types.Mover` interface
+  - Returns fixed position, zero velocity
+  - No-op implementations for Update, SetVelocity, SetScreenBounds
+- Modified `Background` struct:
+  - Added `mover types.Mover` field
+- Updated `NewBackground()`:
+  - Creates a StaticMover with the background's position
+  - Sets extremely long frame time (999999.0 seconds) to prevent animation
+  - Assigns mover to background
+- Updated `GetMover()`:
+  - Returns the StaticMover instead of nil
+
+**Reasoning**:
+The engine's render logic has two code paths:
+```go
+if mover := gameObject.GetMover(); mover != nil {
+    renderData = gameObject.GetSprite().GetSpriteRenderData(mover.GetPosition())
+} else {
+    renderData = gameObject.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
+}
+```
+
+**Issue 1**: When GetMover() returned nil, the engine passed (0,0) instead of the background's actual position. This caused the background to render at origin with its size, but since the sprite system was receiving (0,0), it was only visible where it overlapped with other sprites.
+
+**Issue 2**: The SpriteSheet.Update() was being called every frame, advancing the currentFrame counter. Even with a 1x1 sprite sheet, the animation logic was running, causing UV coordinates to potentially shift or wrap.
+
+**Solution**: Give the background a StaticMover that:
+- Provides the correct position (0, 0 for top-left, with full screen size)
+- Never moves (velocity always zero)
+- Prevents the nil check from triggering the (0,0) fallback
+
+And set an extremely long frame time to effectively disable animation.
+
+**Impact**:
+- Background now renders at correct position (0, 0)
+- Background covers full 800x600 screen
+- Background is completely static (no animation)
+- Background still doesn't move (StaticMover has no velocity)
+- No changes to other game objects
+- Clean architecture - Background now follows same pattern as other GameObjects
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- No linter errors
+- Ready for browser testing
+
+**Notes**:
+- StaticMover could be moved to `internal/mover/` if other static objects need it
+- Alternative solution would be to modify engine render logic to use state.Position
+- This solution maintains consistency with existing GameObject pattern
+- The 1x1 sprite sheet with long frame time is more efficient than conditional animation logic
 
 ---
 

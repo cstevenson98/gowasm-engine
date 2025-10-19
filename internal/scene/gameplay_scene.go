@@ -42,6 +42,15 @@ func (s *GameplayScene) Initialize() error {
 	s.layers[ENTITIES] = []types.GameObject{}
 	s.layers[UI] = []types.GameObject{}
 
+	// Create background (BACKGROUND layer)
+	background := gameobject.NewBackground(
+		types.Vector2{X: 0, Y: 0}, // Top-left corner
+		types.Vector2{X: s.screenWidth, Y: s.screenHeight},
+		"art/test-background.png",
+	)
+	s.AddGameObject(BACKGROUND, background)
+	logger.Logger.Debugf("Created Background in %s scene", s.name)
+
 	// Create player in the center of the screen (ENTITIES layer)
 	playerSize := 128.0
 	s.player = gameobject.NewPlayer(
