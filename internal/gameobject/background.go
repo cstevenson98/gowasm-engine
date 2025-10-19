@@ -107,3 +107,10 @@ func (b *Background) Update(deltaTime float64) {
 	// Backgrounds don't update
 }
 
+// GetID returns the Background's unique identifier
+func (b *Background) GetID() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.state.ID
+}
+

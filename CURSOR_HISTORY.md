@@ -498,3 +498,116 @@ Initially attempted to use Python virtual environment, but Cursor has compatibil
 
 ---
 
+
+## [2025-10-19 13:09:57 BST] - Implemented Text Rendering and Debug Console System
+
+**Prompt/Request**: Implement text rendering system using font sprite sheets with a debug console displayed at the bottom of the screen. GameObjects should be able to post messages for debugging.
+
+**Changes Made**:
+
+**New Files Created**:
+1. `internal/text/interface.go` - Text rendering interfaces
+   - `Font` interface with GetCharacterUV, GetTexturePath, GetCellSize
+   - `TextRenderer` interface with RenderText and RenderTextScaled
+2. `internal/text/font.go` - Font sprite sheet loader (with js build tag)
+   - `SpriteFont` struct implementing Font interface
+   - `LoadFont()` - Loads PNG and JSON metadata using fetch API
+   - `GetCharacterUV()` - Returns UV coordinates for characters
+   - Handles missing characters with '?' fallback
+3. `internal/text/text_renderer.go` - Text rendering implementation (with js build tag)
+   - `BasicTextRenderer` implementing TextRenderer interface
+   - Uses canvas DrawTexturedRect for each character
+   - Supports scaling and character spacing
+   - Handles newlines and spaces
+4. `internal/text/mock_text.go` - Mock implementations for testing (no build tag)
+   - MockFont and MockTextRenderer for unit tests
+5. `internal/debug/message.go` - Debug message structure
+   - `DebugMessage` struct with Source, Message, Timestamp, Age
+   - GetDisplayText() formats messages with source prefix
+6. `internal/debug/console.go` - Debug console implementation (with js build tag)
+   - `DebugConsole` with thread-safe circular message buffer
+   - Global singleton `debug.Console`
+   - PostMessage() for adding messages
+   - Update() for message aging
+   - Render() draws semi-transparent background and messages
+   - JavaScript API via InitJSAPI()
+
+**Modified Files**:
+1. `internal/config/settings.go` - Added debug configuration
+   - `DebugSettings` struct with Enabled, FontPath, FontScale, MaxMessages, MessageLifetime, ConsoleHeight, BackgroundColor, TextColor
+   - Default: enabled, green text on semi-transparent black, 1.5x scale
+2. `internal/types/gameobject.go` - Added GetID to GameObject interface
+   - `DebugMessagePoster` interface for posting messages
+   - Global debug poster registration system
+   - `PostDebugMessage()` and `PostDebugMessageSimple()` helper functions
+3. `internal/gameobject/player.go` - Added GetID and debug messages
+   - GetID() returns player ID
+   - Update() posts position every 2 seconds
+   - Debug message timer to avoid spamming
+4. `internal/gameobject/background.go` - Added GetID implementation
+5. `internal/gameobject/llama.go` - Added GetID implementation
+6. `internal/scene/gameplay_scene.go` - Integrated debug console
+   - Added debugFont, debugTextRenderer, canvasManager fields
+   - SetCanvasManager() method
+   - InitializeDebugConsole() loads font and creates renderer
+   - Update() calls debug.Console.Update()
+   - RenderDebugConsole() draws the console
+7. `internal/engine/engine.go` - Engine initialization
+   - Registers debug.Console as global debug poster
+   - createSceneForState() sets canvas manager and initializes debug console
+   - Render() calls scene.RenderDebugConsole() after game objects
+
+**Reasoning**:
+
+The game engine needed a way to display text for debugging and UI purposes. Key design decisions:
+
+1. **Font Sprite Sheets**: Using pre-generated sprite sheets from the Python script provides consistent, fast rendering without runtime font rasterization.
+
+2. **JSON Metadata**: Character UV coordinates pre-calculated in JSON eliminate runtime lookups and calculations.
+
+3. **Text Renderer Architecture**: Separated Font (data) from TextRenderer (rendering logic) for flexibility and testability.
+
+4. **Debug Console Features**:
+   - Thread-safe circular buffer prevents memory growth
+   - Semi-transparent background for readability
+   - Bottom-of-screen positioning doesn't obstruct gameplay
+   - Configurable colors, scaling, and lifetime
+   - Global singleton for easy access from any GameObject
+
+5. **Integration Pattern**: 
+   - Scene owns the debug console rendering
+   - Engine initializes and registers global debug poster
+   - GameObjects use simple helper functions to post messages
+   - No circular dependencies via interface abstraction
+
+6. **Build Tags**: Font and text renderer use `//go:build js` tags, with mock implementations for testing without browser.
+
+**Impact**:
+- Text rendering system ready for debug console and future UI
+- Debug console displays at bottom of screen with green terminal-style text
+- Player posts position messages every 2 seconds
+- Thread-safe message posting from any GameObject
+- No breaking changes to existing game objects
+- Foundation for future UI text (scores, menus, dialogs)
+
+**Testing**:
+- Built successfully with `GOOS=js GOARCH=wasm go build`
+- All todos completed
+- Font sprite sheet generated (Mono_10.sheet.png/json)
+- Player configured to post debug messages every 2 seconds
+- Debug console configuration in place (enabled by default)
+- Ready for browser testing via `make serve`
+
+**Notes**:
+- Font path in config: "fonts/Mono_10" (without extensions)
+- Debug console height: 200px at bottom of screen
+- Font scale: 1.5x for better readability (16px cells → 24px display)
+- Message lifetime: 0 (never fade, keep all messages up to max)
+- Max messages: 10 (circular buffer)
+- Text color: Green (#00FF00) on semi-transparent black background
+- Future: Add input handling for toggling console, scrolling, filtering
+- Consider adding console commands system for runtime debugging
+- Text alignment and word wrapping not yet implemented (future enhancement)
+
+---
+

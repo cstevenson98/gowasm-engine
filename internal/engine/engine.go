@@ -8,6 +8,7 @@ import (
 
 	"github.com/conor/webgpu-triangle/internal/canvas"
 	"github.com/conor/webgpu-triangle/internal/config"
+	"github.com/conor/webgpu-triangle/internal/debug"
 	"github.com/conor/webgpu-triangle/internal/input"
 	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/scene"
@@ -58,7 +59,18 @@ func (e *Engine) initializeGameStates() {
 func (e *Engine) createSceneForState(state types.GameState) scene.Scene {
 	switch state {
 	case types.GAMEPLAY:
-		return scene.NewGameplayScene(e.screenWidth, e.screenHeight, e.inputCapturer)
+		gameplayScene := scene.NewGameplayScene(e.screenWidth, e.screenHeight, e.inputCapturer)
+		
+		// Set canvas manager for debug rendering
+		gameplayScene.SetCanvasManager(e.canvasManager)
+		
+		// Initialize debug console (after canvas manager is set)
+		err := gameplayScene.InitializeDebugConsole()
+		if err != nil {
+			logger.Logger.Warnf("Failed to initialize debug console: %s", err)
+		}
+		
+		return gameplayScene
 	default:
 		logger.Logger.Warnf("No scene defined for game state: %s", state.String())
 		return nil
@@ -68,6 +80,9 @@ func (e *Engine) createSceneForState(state types.GameState) scene.Scene {
 // Initialize sets up the engine with the specified canvas ID
 func (e *Engine) Initialize(canvasID string) error {
 	logger.Logger.Debugf("Engine initializing with canvas: %s", canvasID)
+
+	// Register debug console as global debug poster
+	types.SetGlobalDebugPoster(debug.Console)
 
 	err := e.canvasManager.Initialize(canvasID)
 	if err != nil {
@@ -194,6 +209,14 @@ func (e *Engine) Render() {
 			}
 		}
 
+		// Render debug console inside batch (before EndBatch)
+		if gameplayScene, ok := currentScene.(*scene.GameplayScene); ok {
+			err := gameplayScene.RenderDebugConsole()
+			if err != nil {
+				logger.Logger.Tracef("Failed to render debug console: %s", err.Error())
+			}
+		}
+
 		err = e.canvasManager.EndBatch()
 		if err != nil {
 			logger.Logger.Errorf("Failed to end batch: %s", err.Error())
@@ -224,6 +247,15 @@ func (e *Engine) loadSpriteTextures() {
 		}
 		renderData := gameObject.GetSprite().GetSpriteRenderData(pos)
 		e.canvasManager.LoadTexture(renderData.TexturePath)
+	}
+
+	// Load debug console font texture if enabled
+	if config.Global.Debug.Enabled {
+		if gameplayScene, ok := currentScene.(*scene.GameplayScene); ok {
+			if font := gameplayScene.GetDebugFont(); font != nil && font.IsLoaded() {
+				e.canvasManager.LoadTexture(font.GetTexturePath())
+			}
+		}
 	}
 }
 

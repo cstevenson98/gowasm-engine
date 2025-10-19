@@ -82,3 +82,10 @@ func (l *Llama) SetState(state types.ObjectState) {
 // Update updates the Llama's state
 func (l *Llama) Update(deltaTime float64) {
 }
+
+// GetID returns the Llama's unique identifier
+func (l *Llama) GetID() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.state.ID
+}

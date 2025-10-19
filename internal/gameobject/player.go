@@ -9,7 +9,6 @@ import (
 	"github.com/conor/webgpu-triangle/internal/mover"
 	"github.com/conor/webgpu-triangle/internal/sprite"
 	"github.com/conor/webgpu-triangle/internal/types"
-	"github.com/google/uuid"
 )
 
 // Player is a GameObject that represents the player character
@@ -19,6 +18,10 @@ type Player struct {
 	state  types.ObjectState
 
 	moveSpeed float64 // Base movement speed in pixels per second
+
+	// Debug message timing
+	debugMessageTimer float64
+	debugMessageInterval float64 // Post debug message every N seconds
 
 	mu sync.Mutex
 }
@@ -48,11 +51,13 @@ func NewPlayer(position types.Vector2, size types.Vector2, moveSpeed float64) *P
 	playerMover.SetScreenBounds(config.Global.Screen.Width, config.Global.Screen.Height)
 
 	return &Player{
-		sprite:    playerSprite,
-		mover:     playerMover,
-		moveSpeed: moveSpeed,
+		sprite:               playerSprite,
+		mover:                playerMover,
+		moveSpeed:            moveSpeed,
+		debugMessageTimer:    0,
+		debugMessageInterval: 2.0, // Post every 2 seconds
 		state: types.ObjectState{
-			ID:       uuid.New().String(),
+			ID:       "Player",
 			Position: position,
 			Visible:  true,
 			Frame:    0,
@@ -84,8 +89,18 @@ func (p *Player) SetState(state types.ObjectState) {
 
 // Update updates the Player's state
 func (p *Player) Update(deltaTime float64) {
-	// Player-specific behavior can go here
-	// (Movement is handled externally by input system updating the mover's velocity)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	// Update debug message timer
+	p.debugMessageTimer += deltaTime
+
+	// Post debug message periodically
+	if p.debugMessageTimer >= p.debugMessageInterval {
+		p.debugMessageTimer = 0
+		pos := p.mover.GetPosition()
+		types.PostDebugMessageSimple("Player", "Position: (%.0f, %.0f)", pos.X, pos.Y)
+	}
 }
 
 // HandleInput updates the player's velocity based on input state
@@ -118,4 +133,11 @@ func (p *Player) HandleInput(inputState types.InputState) {
 
 	// Update the mover's velocity
 	p.mover.SetVelocity(types.Vector2{X: velocityX, Y: velocityY})
+}
+
+// GetID returns the player's unique identifier
+func (p *Player) GetID() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.state.ID
 }

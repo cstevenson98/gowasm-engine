@@ -5,6 +5,7 @@ type Settings struct {
 	Screen    ScreenSettings
 	Player    PlayerSettings
 	Animation AnimationSettings
+	Debug     DebugSettings
 }
 
 // ScreenSettings contains display and canvas configuration
@@ -26,8 +27,20 @@ type PlayerSettings struct {
 
 // AnimationSettings contains animation timing configuration
 type AnimationSettings struct {
-	PlayerFrameTime float64 // Time per frame for player animation (seconds)
+	PlayerFrameTime  float64 // Time per frame for player animation (seconds)
 	DefaultFrameTime float64 // Default frame time for other sprites (seconds)
+}
+
+// DebugSettings contains debug console configuration
+type DebugSettings struct {
+	Enabled         bool      // Enable/disable debug console
+	FontPath        string    // Path to font sprite sheet (without .sheet.png extension)
+	FontScale       float64   // Scale factor for debug text (1.0 = normal, 2.0 = double size)
+	MaxMessages     int       // Maximum number of messages to display
+	MessageLifetime float64   // Time before messages fade out (0 = never fade)
+	ConsoleHeight   float64   // Height of the console in pixels
+	BackgroundColor [4]float32 // RGBA background color (with alpha for transparency)
+	TextColor       [4]float32 // RGBA text color
 }
 
 // Global is the global settings instance
@@ -48,6 +61,16 @@ var Global = Settings{
 	Animation: AnimationSettings{
 		PlayerFrameTime:  0.15, // 6.67 FPS
 		DefaultFrameTime: 0.1,  // 10 FPS
+	},
+	Debug: DebugSettings{
+		Enabled:         true,
+		FontPath:        "fonts/Mono_10", // Will append .sheet.png/.sheet.json
+		FontScale:       1.5,              // Scale up for better readability
+		MaxMessages:     10,
+		MessageLifetime: 0, // 0 = never fade (keep all messages)
+		ConsoleHeight:   200.0,
+		BackgroundColor: [4]float32{0.0, 0.0, 0.0, 0.7}, // Semi-transparent black
+		TextColor:       [4]float32{0.0, 1.0, 0.0, 1.0}, // Green text (classic terminal look)
 	},
 }
 

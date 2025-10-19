@@ -3,9 +3,12 @@
 package scene
 
 import (
+	"github.com/conor/webgpu-triangle/internal/canvas"
 	"github.com/conor/webgpu-triangle/internal/config"
+	"github.com/conor/webgpu-triangle/internal/debug"
 	"github.com/conor/webgpu-triangle/internal/gameobject"
 	"github.com/conor/webgpu-triangle/internal/logger"
+	"github.com/conor/webgpu-triangle/internal/text"
 	"github.com/conor/webgpu-triangle/internal/types"
 )
 
@@ -21,6 +24,11 @@ type GameplayScene struct {
 
 	// Game objects organized by layer
 	layers map[SceneLayer][]types.GameObject
+
+	// Debug rendering
+	debugFont         text.Font
+	debugTextRenderer text.TextRenderer
+	canvasManager     canvas.CanvasManager
 }
 
 // NewGameplayScene creates a new gameplay scene
@@ -32,6 +40,37 @@ func NewGameplayScene(screenWidth, screenHeight float64, inputCapturer types.Inp
 		inputCapturer: inputCapturer,
 		layers:        make(map[SceneLayer][]types.GameObject),
 	}
+}
+
+// SetCanvasManager sets the canvas manager for debug rendering
+func (s *GameplayScene) SetCanvasManager(cm canvas.CanvasManager) {
+	s.canvasManager = cm
+}
+
+// InitializeDebugConsole initializes the debug console font and text renderer
+func (s *GameplayScene) InitializeDebugConsole() error {
+	if !config.Global.Debug.Enabled {
+		return nil
+	}
+
+	logger.Logger.Debugf("Initializing debug console for %s scene", s.name)
+
+	// Create and load font metadata
+	s.debugFont = text.NewSpriteFont()
+	err := s.debugFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
+	if err != nil {
+		logger.Logger.Errorf("Failed to load debug font: %s", err)
+		return err
+	}
+
+	// Create text renderer (texture will be loaded by engine's loadSpriteTextures)
+	s.debugTextRenderer = text.NewTextRenderer(s.canvasManager)
+
+	logger.Logger.Debugf("Debug console initialized successfully")
+	// Post a welcome message after a short delay to allow texture loading
+	debug.Console.PostMessage("System", "Debug console ready")
+
+	return nil
 }
 
 // Initialize sets up the gameplay scene and creates game objects
@@ -101,6 +140,20 @@ func (s *GameplayScene) Update(deltaTime float64) {
 			gameObject.Update(deltaTime)
 		}
 	}
+
+	// Update debug console
+	if config.Global.Debug.Enabled {
+		debug.Console.Update(deltaTime)
+	}
+}
+
+// RenderDebugConsole renders the debug console UI
+func (s *GameplayScene) RenderDebugConsole() error {
+	if !config.Global.Debug.Enabled || s.debugFont == nil || s.debugTextRenderer == nil {
+		return nil
+	}
+
+	return debug.Console.Render(s.canvasManager, s.debugTextRenderer, s.debugFont)
 }
 
 // GetRenderables returns all game objects in the correct render order
@@ -161,4 +214,9 @@ func (s *GameplayScene) RemoveGameObject(layer SceneLayer, obj types.GameObject)
 // GetPlayer returns the player object (for special access if needed)
 func (s *GameplayScene) GetPlayer() *gameobject.Player {
 	return s.player
+}
+
+// GetDebugFont returns the debug font (for texture loading)
+func (s *GameplayScene) GetDebugFont() text.Font {
+	return s.debugFont
 }
