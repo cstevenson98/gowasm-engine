@@ -292,3 +292,75 @@ And set an extremely long frame time to effectively disable animation.
 
 ---
 
+## [2025-10-19 12:06:40 BST] - Fixed Multi-Texture Batch Rendering with Buffer Offsets
+
+**Prompt/Request**: Background was still only visible behind the llama and moved with it, despite correct render data being generated. User reported the background appeared to animate like a spritesheet and followed the player.
+
+**Root Cause Identified**:
+The batching system was uploading each batch to the SAME buffer location (offset 0). When multiple batches were uploaded via `queue.WriteBuffer(buffer, 0, data)`, they would overwrite each other in the GPU command queue before being processed. Only the last batch's data would actually be present when the draw calls executed.
+
+**Changes Made**:
+- Modified `executePipeline()` for `TexturedPipeline` case in `internal/canvas/canvas_webgpu.go`:
+  - Added buffer offset tracking with `currentOffset` variable
+  - Upload each batch to a different offset in the vertex buffer
+  - Calculate offset as cumulative sum of previous batch sizes
+  - Store draw info (bind group, vertex count, offset) for each batch
+  - Draw all batches in order using their correct buffer offsets
+- Removed debug logging from:
+  - `internal/gameobject/background.go` - Removed construction logging
+  - `internal/engine/engine.go` - Removed per-frame render data logging  
+  - `internal/canvas/canvas_webgpu.go` - Removed batch upload/draw logging
+- Cleaned up `internal/sprite/sprite.go` comment for clarity
+
+**Technical Details**:
+```go
+// Old (broken) approach:
+for batch in batches:
+    WriteBuffer(buffer, 0, batch.vertices)  // All write to offset 0!
+    Draw(batch)                              // Draws garbage or last batch
+
+// New (fixed) approach:
+offset = 0
+for batch in batches:
+    WriteBuffer(buffer, offset, batch.vertices)  // Different offset each time
+    offset += len(batch.vertices) * 4            // Move forward
+    store draw info
+for drawInfo in drawInfos:
+    SetVertexBuffer(buffer, drawInfo.offset)     // Read from correct offset
+    Draw(drawInfo.vertexCount)                   // Draws correct data
+```
+
+**Why This Works**:
+- Each batch gets its own space in the vertex buffer
+- Queue operations (`WriteBuffer`) complete before render pass begins
+- Each draw call reads from the correct offset where its data was uploaded
+- No overwrites, no race conditions
+- Batches render in correct order: BACKGROUND → ENTITIES → UI
+
+**Impact**:
+- Background now renders correctly at full screen (800x600)
+- Background stays stationary at (0, 0)
+- Player renders correctly on top with llama texture
+- Each sprite uses its correct texture
+- Proper layering maintained
+- No performance regression (still batching effectively)
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- Browser testing confirmed:
+  - ✅ Background fills entire screen
+  - ✅ Background is static (doesn't move)
+  - ✅ Background doesn't animate
+  - ✅ Player renders on top with correct texture
+  - ✅ Player moves independently of background
+
+**Notes**:
+- This is a critical fix for the multi-texture batching system
+- The issue was WebGPU command queue ordering, not game logic
+- Similar to the classic "double buffering" problem in graphics programming
+- Future enhancement: Pre-allocate buffer with known maximum size
+- Future enhancement: Track buffer usage to warn if approaching limit
+- This pattern is standard for batching different draw states (textures, materials, etc.)
+
+---
+

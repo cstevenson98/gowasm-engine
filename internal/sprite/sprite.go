@@ -84,7 +84,7 @@ func (s *SpriteSheet) GetSize() types.Vector2 {
 
 // Update updates the sprite's animation state
 func (s *SpriteSheet) Update(deltaTime float64) {
-	// Update animation
+	// Only animate if there are multiple frames
 	if s.totalFrames > 1 {
 		s.elapsed += deltaTime
 
@@ -94,7 +94,6 @@ func (s *SpriteSheet) Update(deltaTime float64) {
 			s.currentFrame = (s.currentFrame + 1) % s.totalFrames
 		}
 	}
-	// If totalFrames == 1, this is a static sprite - no animation
 }
 
 // SetVisible sets whether the sprite should be rendered

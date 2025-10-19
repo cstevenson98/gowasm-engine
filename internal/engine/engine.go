@@ -173,17 +173,10 @@ func (e *Engine) Render() {
 		}
 
 		// Render all game objects in layer order
-		for i, gameObject := range renderables {
+		for _, gameObject := range renderables {
 			var renderData types.SpriteRenderData
 			if mover := gameObject.GetMover(); mover != nil {
-				pos := mover.GetPosition()
-				renderData = gameObject.GetSprite().GetSpriteRenderData(pos)
-				if i < 3 { // Log first few objects for debugging
-					logger.Logger.Debugf("Renderable[%d]: pos=(%f,%f), texture=%s, size=(%f,%f), UV=(%f,%f,%f,%f)", 
-						i, pos.X, pos.Y, renderData.TexturePath, 
-						renderData.Size.X, renderData.Size.Y,
-						renderData.UV.U, renderData.UV.V, renderData.UV.W, renderData.UV.H)
-				}
+				renderData = gameObject.GetSprite().GetSpriteRenderData(mover.GetPosition())
 			} else {
 				renderData = gameObject.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
 			}

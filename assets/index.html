@@ -17,13 +17,17 @@
         html {
             width: 100%;
             height: 100%;
-            overflow: hidden;
+            background-color: #d3d3d3;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         #webgpu-canvas {
             display: block;
-            width: 100%;
-            height: 100%;
+            width: 800px;
+            height: 600px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
@@ -45,15 +49,14 @@
             go.run(result.instance);
         });
 
-        // Resize canvas to fill window
-        function resizeCanvas() {
+        // Set canvas to fixed 800x600 size
+        function setupCanvas() {
             const canvas = document.getElementById('webgpu-canvas');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
+            canvas.width = 800;
+            canvas.height = 600;
         }
 
-        window.addEventListener('resize', resizeCanvas);
-        window.addEventListener('load', resizeCanvas);
+        window.addEventListener('load', setupCanvas);
     </script>
 </body>
 

@@ -5,7 +5,6 @@ package gameobject
 import (
 	"sync"
 
-	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/sprite"
 	"github.com/conor/webgpu-triangle/internal/types"
 	"github.com/google/uuid"
@@ -54,9 +53,6 @@ type Background struct {
 // size: width and height of the background
 // texturePath: path to the background texture
 func NewBackground(position types.Vector2, size types.Vector2, texturePath string) *Background {
-	logger.Logger.Infof("Creating Background: position=(%f, %f), size=(%f, %f), texture=%s", 
-		position.X, position.Y, size.X, size.Y, texturePath)
-	
 	// Create a single-frame sprite (no animation)
 	backgroundSprite := sprite.NewSpriteSheet(
 		texturePath,

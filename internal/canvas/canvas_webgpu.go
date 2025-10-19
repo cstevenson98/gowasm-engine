@@ -707,8 +707,6 @@ func (w *WebGPUCanvasManager) executePipeline(renderPass *wgpu.RenderPassEncoder
 				
 				// Move offset forward (each float32 is 4 bytes)
 				currentOffset += uint64(len(batchBytes))
-				
-				logger.Logger.Tracef("Uploaded batch for texture %s: %d vertices at offset %d", batch.texturePath, vertexCount, currentOffset-uint64(len(batchBytes)))
 			}
 			
 			// Now draw all batches using their stored data
@@ -716,8 +714,6 @@ func (w *WebGPUCanvasManager) executePipeline(renderPass *wgpu.RenderPassEncoder
 				renderPass.SetBindGroup(0, info.bindGroup, nil)
 				renderPass.SetVertexBuffer(0, w.vertexBuffer, info.offset, wgpu.WholeSize)
 				renderPass.Draw(info.vertexCount, 1, 0, 0)
-				
-				logger.Logger.Tracef("Drawing batch for texture %s: %d vertices from offset %d", info.texturePath, info.vertexCount, info.offset)
 			}
 		}
 	}
