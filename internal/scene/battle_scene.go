@@ -5,6 +5,7 @@ package scene
 import (
 	"fmt"
 
+	"github.com/conor/webgpu-triangle/internal/battle"
 	"github.com/conor/webgpu-triangle/internal/canvas"
 	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/debug"
@@ -27,6 +28,10 @@ type BattleScene struct {
 
 	// Battle menu system
 	menuSystem *BattleMenuSystem
+
+	// Battle system
+	battleManager *battle.BattleManager
+	effectManager *battle.EffectManager
 
 	// Game objects organized by layer
 	layers map[SceneLayer][]types.GameObject
@@ -146,7 +151,26 @@ func (s *BattleScene) Initialize() error {
 	// Initialize battle menu system
 	s.menuSystem = NewBattleMenuSystem(s.screenWidth, s.screenHeight)
 	s.menuSystem.Initialize()
+	
+	// Set up action callback
+	s.menuSystem.SetActionCallback(s.EnqueuePlayerAction)
+	
+	// Set player reference for timer checking
+	s.menuSystem.SetPlayer(s.player)
 
+	// Initialize battle system
+	s.battleManager = battle.NewBattleManager()
+	
+	// Add entities to battle manager
+	s.battleManager.AddEntity(s.player)
+	s.battleManager.AddEntity(s.enemy)
+	
+	// Get effect manager from battle manager
+	s.effectManager = s.battleManager.GetEffectManager()
+	
+	// Start battle processing
+	s.battleManager.StartProcessing()
+	
 	// Initialize menu text rendering
 	err := s.InitializeMenuText()
 	if err != nil {
@@ -158,6 +182,16 @@ func (s *BattleScene) Initialize() error {
 
 // Update updates all game objects in the scene
 func (s *BattleScene) Update(deltaTime float64) {
+	// Update battle system
+	if s.battleManager != nil {
+		s.battleManager.Update(deltaTime)
+	}
+	
+	// Update effect manager
+	if s.effectManager != nil {
+		s.effectManager.Update(deltaTime)
+	}
+
 	// Update player (no input handling in battle - menu handles input)
 	if s.player != nil {
 		// Update player sprite (animation only, no movement)
@@ -224,6 +258,124 @@ func (s *BattleScene) RenderDebugConsole() error {
 	}
 
 	return debug.Console.Render(s.canvasManager, s.debugTextRenderer, s.debugFont)
+}
+
+// RenderDamageEffects renders damage/healing numbers
+func (s *BattleScene) RenderDamageEffects() error {
+	if s.effectManager == nil || s.menuFont == nil || s.menuTextRenderer == nil {
+		return nil
+	}
+	
+	effects := s.effectManager.GetActiveEffects()
+	for _, effect := range effects {
+		pos := effect.GetPosition()
+		value := effect.GetValue()
+		alpha := effect.GetAlpha()
+		
+		// Determine color based on effect type
+		var color [4]float32
+		if effect.IsHealingEffect() {
+			color = [4]float32{0.0, 1.0, 0.0, alpha} // Green for healing
+		} else {
+			color = [4]float32{1.0, 0.0, 0.0, alpha} // Red for damage
+		}
+		
+		// Format the damage/healing text
+		var text string
+		if effect.IsHealingEffect() {
+			text = fmt.Sprintf("+%d", value)
+		} else {
+			text = fmt.Sprintf("-%d", value)
+		}
+		
+		// Render the text
+		err := s.menuTextRenderer.RenderText(
+			text,
+			pos,
+			s.menuFont,
+			color,
+		)
+		if err != nil {
+			logger.Logger.Tracef("Failed to render damage effect: %s", err)
+		}
+	}
+	
+	return nil
+}
+
+// RenderActionTimerBars renders action timer bars for player and enemy
+func (s *BattleScene) RenderActionTimerBars() error {
+	if s.menuFont == nil || s.menuTextRenderer == nil {
+		return nil
+	}
+	
+	// Render player timer bar
+	if s.player != nil {
+		s.renderEntityTimerBar(s.player, types.Vector2{X: 20, Y: 500}, "Player")
+	}
+	
+	// Render enemy timer bar
+	if s.enemy != nil {
+		s.renderEntityTimerBar(s.enemy, types.Vector2{X: 20, Y: 520}, "Enemy")
+	}
+	
+	return nil
+}
+
+// renderEntityTimerBar renders a timer bar for a specific entity
+func (s *BattleScene) renderEntityTimerBar(entity types.BattleEntity, position types.Vector2, label string) {
+	timer := entity.GetActionTimer()
+	current := timer.Current
+	
+	// Create timer bar: [=====] format
+	bar := "["
+	
+	// Add = characters based on timer progress
+	if current >= 0.2 {
+		bar += "="
+	}
+	if current >= 0.4 {
+		bar += "="
+	}
+	if current >= 0.6 {
+		bar += "="
+	}
+	if current >= 0.8 {
+		bar += "="
+	}
+	if current >= 1.0 {
+		bar += "="
+	}
+	
+	// Add spaces for remaining segments
+	segments := int(current / 0.2)
+	for i := segments; i < 5; i++ {
+		bar += " "
+	}
+	
+	bar += "]"
+	
+	// Add label
+	fullText := fmt.Sprintf("%s: %s", label, bar)
+	
+	// Determine color based on readiness
+	var color [4]float32
+	if current >= 1.0 {
+		color = [4]float32{0.0, 1.0, 0.0, 1.0} // Green when ready
+	} else {
+		color = [4]float32{1.0, 1.0, 1.0, 1.0} // White when charging
+	}
+	
+	// Render the timer bar
+	err := s.menuTextRenderer.RenderText(
+		fullText,
+		position,
+		s.menuFont,
+		color,
+	)
+	if err != nil {
+		logger.Logger.Tracef("Failed to render timer bar: %s", err)
+	}
 }
 
 // RenderBattleMenu renders the battle menu UI
@@ -347,6 +499,15 @@ func (s *BattleScene) GetRenderables() []types.GameObject {
 func (s *BattleScene) Cleanup() {
 	logger.Logger.Debugf("Cleaning up %s scene", s.name)
 
+	// Stop battle system
+	if s.battleManager != nil {
+		s.battleManager.StopProcessing()
+		s.battleManager = nil
+	}
+	
+	// Clear effect manager
+	s.effectManager = nil
+
 	// Clear player and enemy references
 	s.player = nil
 	s.enemy = nil
@@ -405,4 +566,28 @@ func (s *BattleScene) GetDebugFont() text.Font {
 // GetMenuFont returns the menu font (for texture loading)
 func (s *BattleScene) GetMenuFont() text.Font {
 	return s.menuFont
+}
+
+// EnqueuePlayerAction creates and enqueues a player action
+func (s *BattleScene) EnqueuePlayerAction(actionType types.ActionType) {
+	if s.battleManager == nil || s.player == nil || s.enemy == nil {
+		return
+	}
+	
+	// Create the action using the battle system
+	action := battle.CreatePlayerAction(actionType, s.player, s.enemy)
+	if action != nil {
+		s.battleManager.EnqueueAction(action)
+		logger.Logger.Debugf("Enqueued player action: %s", actionType.String())
+	}
+}
+
+// GetBattleManager returns the battle manager (for external access)
+func (s *BattleScene) GetBattleManager() *battle.BattleManager {
+	return s.battleManager
+}
+
+// GetEffectManager returns the effect manager (for external access)
+func (s *BattleScene) GetEffectManager() *battle.EffectManager {
+	return s.effectManager
 }

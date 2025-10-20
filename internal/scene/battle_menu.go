@@ -24,6 +24,12 @@ type BattleMenuSystem struct {
 	textRenderer text.TextRenderer
 	font         text.Font
 	canvasManager canvas.CanvasManager
+	
+	// Action callback
+	onActionSelected func(types.ActionType)
+	
+	// Player reference for timer checking
+	player types.BattleEntity
 }
 
 // BattleLog displays battle messages
@@ -128,9 +134,22 @@ func (bms *BattleMenuSystem) Update(deltaTime float64, inputCapturer types.Input
 
 	// Handle action selection (Enter key)
 	if inputState.EnterPressed && !inputState.EnterPressedLastFrame {
+		// Check if player is ready to act
+		if bms.player != nil && !bms.player.IsReady() {
+			bms.battleLog.AddMessage("Not ready yet! Wait for timer to fill.")
+			logger.Logger.Debugf("Player not ready, timer at: %.2f", bms.player.GetActionTimer().Current)
+			return
+		}
+		
 		selectedAction := bms.actionMenu.actions[bms.actionMenu.selectedIndex]
 		bms.battleLog.AddMessage("Selected: " + selectedAction)
 		logger.Logger.Debugf("Action selected: %s", selectedAction)
+		
+		// Convert string action to ActionType and trigger callback
+		actionType := bms.convertStringToActionType(selectedAction)
+		if actionType != types.ActionRun && bms.onActionSelected != nil {
+			bms.onActionSelected(actionType)
+		}
 	}
 }
 
@@ -230,4 +249,30 @@ func (am *ActionMenu) GetPosition() types.Vector2 {
 // GetSize returns the action menu size
 func (am *ActionMenu) GetSize() types.Vector2 {
 	return am.size
+}
+
+// SetActionCallback sets the callback function for when an action is selected
+func (bms *BattleMenuSystem) SetActionCallback(callback func(types.ActionType)) {
+	bms.onActionSelected = callback
+}
+
+// SetPlayer sets the player reference for timer checking
+func (bms *BattleMenuSystem) SetPlayer(player types.BattleEntity) {
+	bms.player = player
+}
+
+// convertStringToActionType converts a string action to ActionType
+func (bms *BattleMenuSystem) convertStringToActionType(action string) types.ActionType {
+	switch action {
+	case "Attack":
+		return types.ActionAttack
+	case "Defend":
+		return types.ActionDefend
+	case "Item":
+		return types.ActionItem
+	case "Run":
+		return types.ActionRun
+	default:
+		return types.ActionAttack // Default fallback
+	}
 }

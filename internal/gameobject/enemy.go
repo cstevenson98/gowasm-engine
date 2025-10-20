@@ -3,6 +3,8 @@
 package gameobject
 
 import (
+	"sync"
+
 	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/logger"
 	"github.com/conor/webgpu-triangle/internal/mover"
@@ -18,6 +20,11 @@ type Enemy struct {
 	sprite   types.Sprite
 	mover    types.Mover
 	visible  bool
+
+	// Battle system
+	actionTimer *types.ActionTimer
+	stats       *types.EntityStats
+	mu          sync.Mutex
 }
 
 // NewEnemy creates a new enemy game object
@@ -27,6 +34,12 @@ func NewEnemy(position, size types.Vector2, texturePath string) *Enemy {
 		position: position,
 		size:     size,
 		visible:  true,
+		actionTimer: types.NewActionTimer(),
+		stats: &types.EntityStats{
+			HP:    80, // Will be overridden by config
+			MaxHP: 80,
+			Speed: 1.0,
+		},
 	}
 
 	// Create sprite with ghost animation (2 rows, 3 columns)
@@ -95,4 +108,50 @@ func (e *Enemy) GetState() *types.ObjectState {
 func (e *Enemy) SetState(state types.ObjectState) {
 	e.position = state.Position
 	e.visible = state.Visible
+}
+
+// BattleEntity interface implementation
+
+// GetActionTimer returns the enemy's action timer
+func (e *Enemy) GetActionTimer() *types.ActionTimer {
+	return e.actionTimer
+}
+
+// ChargeTimer charges the action timer by deltaTime
+func (e *Enemy) ChargeTimer(deltaTime float64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.actionTimer.Charge(deltaTime)
+}
+
+// ResetTimer resets the action timer to 0
+func (e *Enemy) ResetTimer() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.actionTimer.Reset()
+}
+
+// IsReady returns true if the enemy can take an action
+func (e *Enemy) IsReady() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.actionTimer.IsFull()
+}
+
+// GetStats returns the enemy's battle stats
+func (e *Enemy) GetStats() *types.EntityStats {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.stats
+}
+
+// SelectAction returns the enemy's selected action (random for now)
+func (e *Enemy) SelectAction() *types.Action {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	
+	// For now, enemies always use the "Haunt" action
+	// In the future, this could be expanded with AI logic
+	// We need a target - this will be set by the battle manager
+	return nil // Battle manager will create the action with proper target
 }

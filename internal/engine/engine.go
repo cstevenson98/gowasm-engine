@@ -217,6 +217,18 @@ func (e *Engine) Render() {
 				logger.Logger.Tracef("Failed to render battle menu: %s", err.Error())
 			}
 			
+			// Render damage effects
+			err = battleScene.RenderDamageEffects()
+			if err != nil {
+				logger.Logger.Tracef("Failed to render damage effects: %s", err.Error())
+			}
+			
+			// Render action timer bars
+			err = battleScene.RenderActionTimerBars()
+			if err != nil {
+				logger.Logger.Tracef("Failed to render action timer bars: %s", err.Error())
+			}
+			
 			// Render debug console
 			err = battleScene.RenderDebugConsole()
 			if err != nil {

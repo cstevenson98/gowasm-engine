@@ -23,6 +23,11 @@ type Player struct {
 	debugMessageTimer float64
 	debugMessageInterval float64 // Post debug message every N seconds
 
+	// Battle system
+	actionTimer *types.ActionTimer
+	stats       *types.EntityStats
+	selectedAction types.ActionType // Player's selected action from menu
+
 	mu sync.Mutex
 }
 
@@ -56,6 +61,13 @@ func NewPlayer(position types.Vector2, size types.Vector2, moveSpeed float64) *P
 		moveSpeed:            moveSpeed,
 		debugMessageTimer:    0,
 		debugMessageInterval: 2.0, // Post every 2 seconds
+		actionTimer:          types.NewActionTimer(),
+		stats: &types.EntityStats{
+			HP:    100, // Will be overridden by config
+			MaxHP: 100,
+			Speed: 1.0,
+		},
+		selectedAction: types.ActionAttack, // Default action
 		state: types.ObjectState{
 			ID:       "Player",
 			Position: position,
@@ -140,4 +152,64 @@ func (p *Player) GetID() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.state.ID
+}
+
+// BattleEntity interface implementation
+
+// GetActionTimer returns the player's action timer
+func (p *Player) GetActionTimer() *types.ActionTimer {
+	return p.actionTimer
+}
+
+// ChargeTimer charges the action timer by deltaTime
+func (p *Player) ChargeTimer(deltaTime float64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.actionTimer.Charge(deltaTime)
+}
+
+// ResetTimer resets the action timer to 0
+func (p *Player) ResetTimer() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.actionTimer.Reset()
+}
+
+// IsReady returns true if the player can take an action
+func (p *Player) IsReady() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.actionTimer.IsFull()
+}
+
+// GetStats returns the player's battle stats
+func (p *Player) GetStats() *types.EntityStats {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.stats
+}
+
+// SelectAction returns the player's selected action (from menu)
+func (p *Player) SelectAction() *types.Action {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	
+	// Player actions are selected through the menu system
+	// This will be called when the timer is ready
+	// For now, return nil - the menu system will handle action creation
+	return nil
+}
+
+// SetSelectedAction sets the player's selected action from the menu
+func (p *Player) SetSelectedAction(actionType types.ActionType) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.selectedAction = actionType
+}
+
+// GetSelectedAction returns the player's currently selected action
+func (p *Player) GetSelectedAction() types.ActionType {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.selectedAction
 }

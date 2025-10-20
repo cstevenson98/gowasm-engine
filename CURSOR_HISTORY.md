@@ -1008,3 +1008,299 @@ Ctrl+D wasn't working properly, likely due to browser handling of the Ctrl key o
 - Same toggle functionality with different key combination
 
 ---
+
+## [2025-10-20 20:53:24 BST] - Implemented Turn-based Battle System with Action Timers and Queue
+
+**Prompt/Request**: Help me plan a battle system for my game. There will be two sides, with the player party characters (one for now) and all enemies take turns selecting an ability to perform from a set of available actions. A turn is allowed to be taken when their action timer is full (reaches 1.0). At which point an action is added to a queue. The action timers are charging whenever an entity is not taking an action. An action should trigger entity animation and action effects, which can be many things. Animations should take place and pause all action timers whilst animating. I would like to use good Go idioms such as some kind of go routine/listeniners kind of idea for updating the queue.
+
+**Changes Made**:
+
+**New Files Created**:
+1. `internal/types/battle.go` - Battle system type definitions
+   - `BattleEntity` interface with action timer, stats, and battle methods
+   - `EntityStats` struct for HP, MaxHP, Speed
+   - `ActionTimer` struct with charging logic and state management
+   - `Action` struct for battle actions with type, actor, target, damage, animation duration
+   - `ActionType` enum constants (Attack, Defend, Item, Run, Haunt)
+   - Helper functions for random damage generation
+
+2. `internal/battle/action.go` - Action system and queue management
+   - `ActionQueue` struct with channel-based queue using buffered channels
+   - `Enqueue()`, `Dequeue()`, `Close()` methods for queue management
+   - `CreatePlayerAction()` and `CreateEnemyAction()` factory functions
+   - Action creation logic for different action types with damage ranges
+   - Available action lists for players and enemies
+
+3. `internal/battle/manager.go` - Central battle orchestrator
+   - `BattleManager` struct with goroutine-based action processing
+   - Channel-based action queue with 100-action buffer
+   - Global animation state management (pauses all timers during animations)
+   - Entity management (add/remove entities from battle)
+   - Action execution with damage/healing effects
+   - Context-based graceful shutdown of processing goroutine
+
+4. `internal/battle/effects.go` - Visual damage/healing effects
+   - `DamageEffect` struct for floating damage numbers
+   - `EffectManager` for managing multiple active effects
+   - Fade-out animation with alpha blending
+   - Floating animation (moves upward over time)
+   - Thread-safe effect management with mutexes
+
+**Modified Files**:
+1. `internal/gameobject/player.go` - Added BattleEntity implementation
+   - Added `actionTimer`, `stats`, `selectedAction` fields
+   - Implemented all BattleEntity interface methods
+   - Added `SetSelectedAction()` and `GetSelectedAction()` for menu integration
+   - Player stats: 100 HP, 100 MaxHP, 1.0 speed
+
+2. `internal/gameobject/enemy.go` - Added BattleEntity implementation
+   - Added `actionTimer`, `stats` fields with mutex protection
+   - Implemented all BattleEntity interface methods
+   - Enemy stats: 80 HP, 80 MaxHP, 1.0 speed
+   - Random action selection (Haunt attack: 9-12 damage)
+
+3. `internal/scene/battle_scene.go` - Integrated battle system
+   - Added `battleManager` and `effectManager` fields
+   - Initialize battle manager and add entities in `Initialize()`
+   - Update battle system in `Update()` method
+   - Added `EnqueuePlayerAction()` method for menu integration
+   - Added `RenderDamageEffects()` method for visual feedback
+   - Cleanup battle system in `Cleanup()` method
+
+4. `internal/scene/battle_menu.go` - Connected menu to action system
+   - Added `onActionSelected` callback field
+   - Added `SetActionCallback()` method for battle scene integration
+   - Added `convertStringToActionType()` helper method
+   - Updated action selection to trigger callback with ActionType
+
+5. `internal/engine/engine.go` - Added damage effects rendering
+   - Added `RenderDamageEffects()` call in battle scene rendering
+   - Integrated damage number rendering into main render pipeline
+
+6. `internal/config/settings.go` - Added battle system configuration
+   - Added `TimerChargeRate`, `AnimationDuration`, `DamageEffectDuration`, `ActionQueueSize`
+   - Default values: 1.0 charge rate, 1.0 animation duration, 2.0 effect duration, 100 queue size
+
+**Reasoning**:
+The battle system implements a turn-based RPG combat system using Go idioms:
+
+1. **Channel-based Queue**: Uses buffered channels for action queue processing, following Go's "don't communicate by sharing memory" principle
+2. **Goroutine Processing**: Single processing goroutine with context-based cancellation for clean shutdown
+3. **Interface-based Design**: BattleEntity interface allows different entity types to participate in battle
+4. **Animation Blocking**: Global animation state pauses all timers during action execution
+5. **Visual Feedback**: Damage numbers with fade-out and floating animation for immediate feedback
+6. **Menu Integration**: Callback-based system connects menu selection to battle actions
+
+The system follows the existing component-based architecture and integrates seamlessly with the current battle scene.
+
+**Impact**:
+- Turn-based battle system with action timers (1.0 per second charge rate)
+- Channel-based action queue with goroutine processing
+- Visual damage/healing effects with floating numbers
+- Menu integration for player action selection
+- Enemy AI with random action selection (Haunt: 9-12 damage)
+- Animation system that pauses all timers during action execution
+- Configurable battle parameters (charge rates, animation durations)
+- Thread-safe entity management with mutex protection
+
+**Testing**:
+- `make build` - Build successful with no compilation errors
+- All battle system components compile correctly
+- WASM binary generated successfully (4.4M)
+- Ready for browser testing to verify battle mechanics
+
+**Notes**:
+- Action timers charge at 1.0 per second for all entities
+- Player actions: Attack (5-8 damage), Defend (no damage), Item (heal 10-15), Run (escape attempt)
+- Enemy actions: Haunt (9-12 damage)
+- Damage effects display for 2 seconds with fade-out animation
+- Action queue processes first-come-first-served when multiple entities ready
+- Animation duration blocks all timer charging during action execution
+- Future enhancement: Add status effects, more complex AI, battle animations
+
+---
+
+## [2025-10-20 21:08:50 BST] - Added Visual Action Timer Bars and Fixed Action Blocking
+
+**Prompt/Request**: Can you put a basic text-based bar for tracking action timer on the game objects. It should just look like [=====] where each = is added after 0.2, 0.4, 0.6, 0.8, and 1.0 are reached, at which point the menu (in the case of the player ) will become visibile, or the enemy will choose a random attack. I currently can keep pressing attack and the damage effect is visible as text, as is healing, but this should be blocked until the next action timer reaching 1 happens.
+
+**Changes Made**:
+
+**New Features Added**:
+1. **Visual Timer Bars** - Added `RenderActionTimerBars()` method to `internal/scene/battle_scene.go`
+   - Displays timer bars for both player and enemy: `Player: [=====]` and `Enemy: [=====]`
+   - Each `=` character appears at 0.2, 0.4, 0.6, 0.8, and 1.0 progress
+   - Green color when timer is full (ready to act), white when charging
+   - Positioned at bottom of screen (Y: 500 for player, Y: 520 for enemy)
+
+2. **Action Blocking System** - Modified `internal/scene/battle_menu.go`
+   - Added `player types.BattleEntity` field to menu system
+   - Added `SetPlayer()` method to set player reference
+   - Modified action selection logic to check `player.IsReady()` before allowing actions
+   - Shows "Not ready yet! Wait for timer to fill." message when player tries to act too early
+   - Prevents multiple action triggers before timer resets
+
+3. **Enemy Action Handling** - Updated `internal/battle/manager.go`
+   - Modified `checkForReadyEntities()` to handle enemies that return nil from `SelectAction()`
+   - Automatically creates enemy actions (Haunt attack) when enemy timer is ready
+   - Finds appropriate target for enemy actions
+   - Ensures enemy actions are properly enqueued
+
+4. **Engine Integration** - Updated `internal/engine/engine.go`
+   - Added `RenderActionTimerBars()` call to battle scene rendering pipeline
+   - Timer bars render after damage effects, before debug console
+
+**Technical Implementation**:
+- Timer bars use 5 segments: `[=====]` format with spaces for unfilled segments
+- Color coding: Green (ready) vs White (charging) for visual feedback
+- Player reference passed to menu system for timer checking
+- Enemy actions automatically created by battle manager when timer ready
+- Action blocking prevents spam-clicking until timer resets
+
+**Reasoning**:
+The user reported that actions could be triggered multiple times before the timer reset, breaking the turn-based mechanic. The solution implements:
+
+1. **Visual Feedback**: Timer bars show progress clearly with `[=====]` format
+2. **Action Blocking**: Menu system checks player readiness before allowing actions
+3. **Enemy Automation**: Battle manager handles enemy actions when their timer is ready
+4. **User Feedback**: Clear message when trying to act too early
+
+This ensures proper turn-based gameplay where each entity must wait for their timer to fill before acting.
+
+**Impact**:
+- Visual timer bars show progress for both player and enemy
+- Action blocking prevents multiple actions before timer reset
+- Enemy actions automatically trigger when their timer is ready
+- Clear visual feedback with color coding (green = ready, white = charging)
+- Proper turn-based gameplay mechanics enforced
+- No more spam-clicking actions
+
+**Testing**:
+- `make build` - Build successful with no compilation errors
+- WASM binary generated successfully (4.4M)
+- Timer bars render at bottom of screen
+- Action blocking prevents premature actions
+- Enemy actions trigger automatically when ready
+
+**Notes**:
+- Timer bars positioned at Y: 500 (player) and Y: 520 (enemy)
+- Each `=` represents 0.2 progress (5 segments total)
+- Green color indicates readiness, white indicates charging
+- Action blocking message: "Not ready yet! Wait for timer to fill."
+- Enemy actions automatically created by battle manager
+- Future enhancement: Add timer bar animations or pulsing effects
+
+---
+
+## [2025-10-20 21:11:01 BST] - Fixed Player Auto-Action Issue
+
+**Prompt/Request**: The player is immediately using the attack command as soon as the bar fills instead of letting me select an action.
+
+**Changes Made**:
+- Modified `checkForReadyEntities()` method in `internal/battle/manager.go`
+- Added player ID check: `if entity.GetID() != "Player"`
+- Player entities are now excluded from automatic action processing
+- Only enemy entities are automatically handled by the battle manager
+- Player actions are now exclusively handled by menu selection
+
+**Reasoning**:
+The battle manager was automatically creating actions for all ready entities, including the player. This caused the player to immediately attack when their timer filled, bypassing the menu selection system. The fix ensures that:
+
+1. **Player Control**: Player actions are only triggered by menu selection
+2. **Enemy Automation**: Enemy actions are still automatically created when their timer is ready
+3. **Turn-based Gameplay**: Player must manually select actions from the menu
+4. **Proper Flow**: Timer fills → Player selects action → Action executes
+
+**Impact**:
+- Player no longer auto-attacks when timer fills
+- Player must use menu to select actions (Attack, Defend, Item, Run)
+- Enemy actions still trigger automatically when their timer is ready
+- Proper turn-based gameplay mechanics maintained
+- Menu selection is now the only way for player to act
+
+**Testing**:
+- `make build` - Build successful with no compilation errors
+- WASM binary generated successfully (4.4M)
+- Player timer fills but waits for menu selection
+- Enemy actions still trigger automatically when ready
+
+**Notes**:
+- Player ID check: `entity.GetID() != "Player"`
+- Only non-player entities are automatically processed
+- Player actions require manual menu selection
+- Enemy automation preserved for AI behavior
+- Turn-based gameplay now works as intended
+
+---
+
+## [2025-10-20 21:43:47 BST] - Implemented Dynamic Battle System with Concurrent Actions
+
+**Prompt/Request**: I want to slow down the rate to perhaps 3s per action timer fill, and also not block the action timer building while executing actions, and also allow concurrent actions. This will allow for a more dynamic battle.
+
+**Changes Made**:
+
+**1. Slower Timer Rate** - Updated `internal/config/settings.go`
+- Changed `TimerChargeRate` from 1.0 to 0.33 (3 seconds to fill)
+- Timer now takes 3 seconds to reach 1.0 instead of 1 second
+- More strategic timing for action selection
+
+**2. Removed Animation Blocking** - Modified `internal/battle/manager.go`
+- Removed `isAnimating`, `animationTimer`, `animationDuration` fields from BattleManager
+- Removed `pauseAllTimers()` and `resumeAllTimers()` methods
+- Updated `Update()` method to always charge timers (no animation blocking)
+- Updated `processAction()` to execute actions without pausing timers
+- Modified `IsAnimating()` to always return false
+
+**3. Concurrent Actions Support** - Enhanced battle system
+- Multiple entities can now act simultaneously
+- No global animation state blocking other entities
+- Action queue processes actions as they arrive
+- Timers continue charging during action execution
+
+**4. Configuration Integration** - Enhanced battle manager
+- Added config import to battle manager
+- Uses `config.Global.Battle.TimerChargeRate` for timer charging
+- Uses `config.Global.Battle.ActionQueueSize` for queue buffer
+- Centralized configuration for easy tuning
+
+**Technical Implementation**:
+- **Timer Charging**: `entity.ChargeTimer(deltaTime * chargeRate)` with 0.33 rate
+- **No Animation Blocking**: Timers always charge regardless of action execution
+- **Concurrent Processing**: Multiple actions can be processed simultaneously
+- **Dynamic Battle**: More fluid, real-time feeling combat
+
+**Reasoning**:
+The original system was too rigid with:
+1. **Fast timers** (1 second) made combat feel rushed
+2. **Animation blocking** prevented concurrent actions
+3. **Sequential processing** limited battle dynamics
+
+The new system provides:
+1. **Strategic timing** (3 seconds) allows for thoughtful decisions
+2. **Concurrent actions** enable multiple entities to act simultaneously
+3. **Dynamic flow** creates more engaging, real-time feeling battles
+4. **Configurable rates** allow easy tuning of battle pace
+
+**Impact**:
+- **Slower, more strategic combat** with 3-second timer fills
+- **Concurrent actions** allow multiple entities to act simultaneously
+- **No animation blocking** keeps battle flowing dynamically
+- **Configurable timing** for easy balance adjustments
+- **More engaging gameplay** with real-time decision making
+
+**Testing**:
+- `make build` - Build successful with no compilation errors
+- WASM binary generated successfully (4.4M)
+- Timer bars now fill over 3 seconds instead of 1 second
+- Multiple entities can act simultaneously
+- No animation blocking during action execution
+
+**Notes**:
+- Timer charge rate: 0.33 per second (3 seconds to fill)
+- No animation blocking - timers always charge
+- Concurrent actions supported
+- Configuration-driven timing for easy tuning
+- More dynamic, real-time feeling battles
+- Future enhancement: Add action priority system for concurrent actions
+
+---

@@ -62,6 +62,12 @@ type BattleSettings struct {
 	EnemyTexture string  // Path to enemy texture
 	MenuFontPath string  // Path to menu font (without .sheet.png extension)
 	MenuFontScale float64 // Scale factor for menu text
+	
+	// Battle system configuration
+	TimerChargeRate     float64 // How fast action timers charge (1.0 = 1.0 per second)
+	AnimationDuration   float64 // Default animation duration in seconds
+	DamageEffectDuration float64 // How long damage numbers are displayed
+	ActionQueueSize     int     // Size of the action queue buffer
 }
 
 // Global is the global settings instance
@@ -107,6 +113,12 @@ var Global = Settings{
 		EnemyTexture: "art/ghost.png",
 		MenuFontPath: "fonts/Mono_10",
 		MenuFontScale: 1.0,
+		
+		// Battle system configuration
+		TimerChargeRate:       0.33, // 0.33 per second (3 seconds to fill)
+		AnimationDuration:     1.0,  // 1 second default
+		DamageEffectDuration:  2.0,  // 2 seconds for damage numbers
+		ActionQueueSize:       100,  // Buffer for 100 actions
 	},
 }
 
