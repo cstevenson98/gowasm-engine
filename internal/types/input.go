@@ -17,6 +17,10 @@ type InputState struct {
 	// Action keys
 	EnterPressed bool
 	SpacePressed bool
+	F2Pressed     bool // F2 key for debug console toggle
+
+	// Modifier keys
+	ShiftPressed bool
 
 	// Previous frame state for detecting key presses
 	UpPressedLastFrame    bool
@@ -25,6 +29,8 @@ type InputState struct {
 	RightPressedLastFrame bool
 	EnterPressedLastFrame bool
 	SpacePressedLastFrame bool
+	F2PressedLastFrame     bool
+	ShiftPressedLastFrame bool
 }
 
 // InputCapturer is the interface for capturing user input

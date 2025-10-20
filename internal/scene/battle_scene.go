@@ -39,6 +39,9 @@ type BattleScene struct {
 	// Menu text rendering
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
+	
+	// Debug console toggle state
+	f2PressedLastFrame bool
 }
 
 // NewBattleScene creates a new battle scene
@@ -190,6 +193,22 @@ func (s *BattleScene) Update(deltaTime float64) {
 	// Update battle menu system
 	if s.menuSystem != nil {
 		s.menuSystem.Update(deltaTime, s.inputCapturer)
+	}
+
+	// Handle debug console toggle (F2)
+	if s.inputCapturer != nil {
+		inputState := s.inputCapturer.GetInputState()
+		// Debug logging to see what keys are being pressed
+		if inputState.F2Pressed {
+			logger.Logger.Debugf("F2 key detected: %t, LastFrame: %t", inputState.F2Pressed, s.f2PressedLastFrame)
+		}
+		// Check for F2 key press using local state
+		if inputState.F2Pressed && !s.f2PressedLastFrame {
+			debug.Console.ToggleVisibility()
+			logger.Logger.Debugf("Debug console toggled via F2")
+		}
+		// Update local state
+		s.f2PressedLastFrame = inputState.F2Pressed
 	}
 
 	// Update debug console

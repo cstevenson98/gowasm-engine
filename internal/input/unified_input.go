@@ -54,6 +54,10 @@ func (u *UnifiedInput) GetInputState() types.InputState {
 		// Action keys (keyboard only)
 		EnterPressed: keyboardState.EnterPressed,
 		SpacePressed: keyboardState.SpacePressed,
+		F2Pressed:     keyboardState.F2Pressed,
+		
+		// Modifier keys (keyboard only)
+		ShiftPressed: keyboardState.ShiftPressed,
 		
 		// Previous frame states
 		UpPressedLastFrame:    keyboardState.UpPressedLastFrame,
@@ -62,6 +66,8 @@ func (u *UnifiedInput) GetInputState() types.InputState {
 		RightPressedLastFrame: keyboardState.RightPressedLastFrame,
 		EnterPressedLastFrame: keyboardState.EnterPressedLastFrame,
 		SpacePressedLastFrame: keyboardState.SpacePressedLastFrame,
+		F2PressedLastFrame:     keyboardState.F2PressedLastFrame,
+		ShiftPressedLastFrame: keyboardState.ShiftPressedLastFrame,
 	}
 }
 

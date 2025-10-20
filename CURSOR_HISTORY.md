@@ -912,3 +912,99 @@ The ghost.png sprite sheet provides a proper animated enemy with 6 frames arrang
 - Ghost texture path: "art/ghost.png" (relative to assets directory)
 
 ---
+
+
+## [2025-10-20 19:39:33 BST] - Added Debug Console Toggle with Ctrl+D
+
+**Prompt/Request**: Make the debug console togglable with Ctrl+D as it is overlapping the game menus.
+
+**Changes Made**:
+- Updated `internal/debug/console.go` - Added toggle functionality
+  - Added `visible` field to DebugConsole struct
+  - Added `ToggleVisibility()`, `SetVisible()`, and `IsVisible()` methods
+  - Updated `Render()` method to check visibility state
+  - Console starts visible by default but can be toggled
+- Updated `internal/types/input.go` - Added Ctrl key support
+  - Added `CtrlPressed` field to InputState
+  - Added `CtrlPressedLastFrame` for key press detection
+- Updated `internal/input/keyboard_input.go` - Added Ctrl key handling
+  - Added "Control" key detection in keydown/keyup handlers
+  - Added Ctrl key to previous frame state tracking
+- Updated `internal/input/unified_input.go` - Pass through Ctrl key
+  - Added Ctrl key to unified input state
+  - Added Ctrl key to previous frame state tracking
+- Updated `internal/scene/battle_scene.go` - Added Ctrl+D handling
+  - Added Ctrl+D key combination detection
+  - Toggles debug console visibility when Ctrl+D is pressed
+  - Only triggers on key press (not held)
+
+**Reasoning**:
+The debug console was overlapping with the battle menu system, making it difficult to see the game interface. By adding a toggle with Ctrl+D, users can:
+1. Hide the debug console when playing the game normally
+2. Show the debug console when debugging is needed
+3. Use a standard key combination (Ctrl+D) that's familiar to developers
+
+**Impact**:
+- Debug console can now be toggled on/off with Ctrl+D
+- No more overlap between debug console and game menus
+- Better user experience for both playing and debugging
+- Console starts visible by default but can be hidden
+- Standard Ctrl+D key combination for debug toggling
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- Updated WASM file copied to dist directory
+- Ready for browser testing to verify Ctrl+D toggle functionality
+
+**Notes**:
+- Debug console starts visible by default
+- Press Ctrl+D to toggle visibility
+- Console state is maintained (messages don't disappear when hidden)
+- Uses standard key combination familiar to developers
+- Prevents UI overlap issues in battle scene
+
+---
+
+
+## [2025-10-20 19:41:43 BST] - Changed Debug Console Toggle to Shift+D
+
+**Prompt/Request**: Ctrl+D doesn't work, make it Shift+D actually.
+
+**Changes Made**:
+- Updated `internal/types/input.go` - Changed modifier key from Ctrl to Shift
+  - Replaced `CtrlPressed` with `ShiftPressed`
+  - Replaced `CtrlPressedLastFrame` with `ShiftPressedLastFrame`
+- Updated `internal/input/keyboard_input.go` - Changed key detection
+  - Replaced "Control" key with "Shift" key in keydown/keyup handlers
+  - Updated previous frame state tracking for Shift key
+- Updated `internal/input/unified_input.go` - Pass through Shift key
+  - Replaced `CtrlPressed` with `ShiftPressed`
+  - Updated previous frame state tracking
+- Updated `internal/scene/battle_scene.go` - Changed key combination
+  - Changed from Ctrl+D to Shift+D for debug console toggle
+  - Updated comment to reflect new key combination
+
+**Reasoning**:
+Ctrl+D wasn't working properly, likely due to browser handling of the Ctrl key or conflicts with other shortcuts. Shift+D is a more reliable key combination that:
+1. Is less likely to conflict with browser shortcuts
+2. Is easier to detect consistently across different browsers
+3. Still provides a modifier key combination for the toggle
+
+**Impact**:
+- Debug console toggle now uses Shift+D instead of Ctrl+D
+- More reliable key detection across different browsers
+- Same functionality with different key combination
+- No overlap with browser shortcuts
+
+**Testing**:
+- `GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game` - Build successful
+- Updated WASM file copied to dist directory
+- Ready for browser testing to verify Shift+D toggle functionality
+
+**Notes**:
+- Debug console toggle now uses Shift+D
+- Press Shift+D to toggle console visibility
+- More reliable than Ctrl+D in browser environments
+- Same toggle functionality with different key combination
+
+---

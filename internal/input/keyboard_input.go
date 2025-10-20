@@ -40,6 +40,8 @@ func (k *KeyboardInput) GetInputState() types.InputState {
 	state.RightPressedLastFrame = k.lastState.RightPressed
 	state.EnterPressedLastFrame = k.lastState.EnterPressed
 	state.SpacePressedLastFrame = k.lastState.SpacePressed
+	state.F2PressedLastFrame = k.lastState.F2Pressed
+	state.ShiftPressedLastFrame = k.lastState.ShiftPressed
 	
 	// Update last state for next frame
 	k.lastState = k.inputState
@@ -86,6 +88,10 @@ func (k *KeyboardInput) Initialize() error {
 			k.inputState.EnterPressed = true
 		case " ":
 			k.inputState.SpacePressed = true
+		case "F2":
+			k.inputState.F2Pressed = true
+		case "Shift":
+			k.inputState.ShiftPressed = true
 		}
 
 		return nil
@@ -124,6 +130,10 @@ func (k *KeyboardInput) Initialize() error {
 			k.inputState.EnterPressed = false
 		case " ":
 			k.inputState.SpacePressed = false
+		case "F2":
+			k.inputState.F2Pressed = false
+		case "Shift":
+			k.inputState.ShiftPressed = false
 		}
 
 		return nil
