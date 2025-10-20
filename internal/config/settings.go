@@ -2,12 +2,12 @@ package config
 
 // Settings contains all global configuration for the game engine
 type Settings struct {
-	Screen     ScreenSettings
-	Player     PlayerSettings
-	Animation  AnimationSettings
-	Debug      DebugSettings
-	Rendering  RenderingSettings
-	Battle     BattleSettings
+	Screen    ScreenSettings
+	Player    PlayerSettings
+	Animation AnimationSettings
+	Debug     DebugSettings
+	Rendering RenderingSettings
+	Battle    BattleSettings
 }
 
 // ScreenSettings contains display and canvas configuration
@@ -18,13 +18,13 @@ type ScreenSettings struct {
 
 // PlayerSettings contains player-specific configuration
 type PlayerSettings struct {
-	SpawnX       float64 // X position for player spawn (0 = left, Screen.Width = right)
-	SpawnY       float64 // Y position for player spawn (0 = top, Screen.Height = bottom)
-	Size         float64 // Player sprite size (width and height)
-	Speed        float64 // Movement speed in pixels per second
-	TexturePath  string  // Path to player texture
-	SpriteColumns int    // Number of columns in sprite sheet
-	SpriteRows    int    // Number of rows in sprite sheet
+	SpawnX        float64 // X position for player spawn (0 = left, Screen.Width = right)
+	SpawnY        float64 // Y position for player spawn (0 = top, Screen.Height = bottom)
+	Size          float64 // Player sprite size (width and height)
+	Speed         float64 // Movement speed in pixels per second
+	TexturePath   string  // Path to player texture
+	SpriteColumns int     // Number of columns in sprite sheet
+	SpriteRows    int     // Number of rows in sprite sheet
 }
 
 // AnimationSettings contains animation timing configuration
@@ -35,39 +35,39 @@ type AnimationSettings struct {
 
 // DebugSettings contains debug console configuration
 type DebugSettings struct {
-	Enabled                bool      // Enable/disable debug console
-	FontPath               string    // Path to font sprite sheet (without .sheet.png extension)
-	FontScale              float64   // Scale factor for debug text (1.0 = normal, 2.0 = double size)
-	CharacterSpacingReduction float64 // Pixels to reduce character spacing (reduces padding between letters)
-	MaxMessages            int       // Maximum number of messages to display
-	MessageLifetime        float64   // Time before messages fade out (0 = never fade)
-	ConsoleHeight          float64   // Height of the console in pixels
-	BackgroundColor        [4]float32 // RGBA background color (with alpha for transparency)
-	TextColor              [4]float32 // RGBA text color
+	Enabled                   bool       // Enable/disable debug console
+	FontPath                  string     // Path to font sprite sheet (without .sheet.png extension)
+	FontScale                 float64    // Scale factor for debug text (1.0 = normal, 2.0 = double size)
+	CharacterSpacingReduction float64    // Pixels to reduce character spacing (reduces padding between letters)
+	MaxMessages               int        // Maximum number of messages to display
+	MessageLifetime           float64    // Time before messages fade out (0 = never fade)
+	ConsoleHeight             float64    // Height of the console in pixels
+	BackgroundColor           [4]float32 // RGBA background color (with alpha for transparency)
+	TextColor                 [4]float32 // RGBA text color
 }
 
 // RenderingSettings contains rendering quality and style configuration
 type RenderingSettings struct {
-	PixelArtMode           bool    // Enable pixel-perfect rendering (nearest-neighbor filtering)
-	TextureFiltering       string  // "nearest" or "linear" - texture filtering mode
-	PixelPerfectScaling    bool    // Ensure integer scaling for pixel art
+	PixelArtMode        bool   // Enable pixel-perfect rendering (nearest-neighbor filtering)
+	TextureFiltering    string // "nearest" or "linear" - texture filtering mode
+	PixelPerfectScaling bool   // Ensure integer scaling for pixel art
 }
 
 // BattleSettings contains battle scene configuration
 type BattleSettings struct {
-	PlayerHP     int     // Player's starting HP
-	PlayerMaxHP  int     // Player's maximum HP
-	EnemyHP      int     // Enemy's starting HP
-	EnemyMaxHP   int     // Enemy's maximum HP
-	EnemyTexture string  // Path to enemy texture
-	MenuFontPath string  // Path to menu font (without .sheet.png extension)
+	PlayerHP      int     // Player's starting HP
+	PlayerMaxHP   int     // Player's maximum HP
+	EnemyHP       int     // Enemy's starting HP
+	EnemyMaxHP    int     // Enemy's maximum HP
+	EnemyTexture  string  // Path to enemy texture
+	MenuFontPath  string  // Path to menu font (without .sheet.png extension)
 	MenuFontScale float64 // Scale factor for menu text
-	
+
 	// Battle system configuration
-	TimerChargeRate     float64 // How fast action timers charge (1.0 = 1.0 per second)
-	AnimationDuration   float64 // Default animation duration in seconds
+	TimerChargeRate      float64 // How fast action timers charge (1.0 = 1.0 per second)
+	AnimationDuration    float64 // Default animation duration in seconds
 	DamageEffectDuration float64 // How long damage numbers are displayed
-	ActionQueueSize     int     // Size of the action queue buffer
+	ActionQueueSize      int     // Size of the action queue buffer
 }
 
 // Global is the global settings instance
@@ -77,11 +77,11 @@ var Global = Settings{
 		Height: 600.0,
 	},
 	Player: PlayerSettings{
-		SpawnX:       0.0, // Will be calculated as center in scene
-		SpawnY:       0.0, // Will be calculated as center in scene
-		Size:         128.0,
-		Speed:        200.0, // pixels per second
-		TexturePath:  "llama.png",
+		SpawnX:        0.0, // Will be calculated as center in scene
+		SpawnY:        0.0, // Will be calculated as center in scene
+		Size:          128.0,
+		Speed:         200.0, // pixels per second
+		TexturePath:   "llama.png",
 		SpriteColumns: 2,
 		SpriteRows:    3,
 	},
@@ -90,35 +90,35 @@ var Global = Settings{
 		DefaultFrameTime: 0.1,  // 10 FPS
 	},
 	Debug: DebugSettings{
-		Enabled:                  true,
-		FontPath:                "fonts/Mono_10", // Will append .sheet.png/.sheet.json
-		FontScale:               1.5,              // Scale up for better readability
-		CharacterSpacingReduction: 8.0,            // Reduce spacing by 8 pixels (adjust as needed)
-		MaxMessages:             10,
-		MessageLifetime:         0, // 0 = never fade (keep all messages)
-		ConsoleHeight:           200.0,
-		BackgroundColor:         [4]float32{0.0, 0.0, 0.0, 0.7}, // Semi-transparent black
-		TextColor:               [4]float32{0.0, 1.0, 0.0, 1.0}, // Green text (classic terminal look)
+		Enabled:                   true,
+		FontPath:                  "fonts/Mono_10", // Will append .sheet.png/.sheet.json
+		FontScale:                 1.5,             // Scale up for better readability
+		CharacterSpacingReduction: 8.0,             // Reduce spacing by 8 pixels (adjust as needed)
+		MaxMessages:               10,
+		MessageLifetime:           0, // 0 = never fade (keep all messages)
+		ConsoleHeight:             200.0,
+		BackgroundColor:           [4]float32{0.0, 0.0, 0.0, 0.7}, // Semi-transparent black
+		TextColor:                 [4]float32{0.0, 1.0, 0.0, 1.0}, // Green text (classic terminal look)
 	},
 	Rendering: RenderingSettings{
-		PixelArtMode:        true,  // Enable pixel-perfect rendering
+		PixelArtMode:        true,      // Enable pixel-perfect rendering
 		TextureFiltering:    "nearest", // Use nearest-neighbor filtering for pixel art
-		PixelPerfectScaling: true,  // Ensure integer scaling
+		PixelPerfectScaling: true,      // Ensure integer scaling
 	},
 	Battle: BattleSettings{
-		PlayerHP:     100,
-		PlayerMaxHP:  100,
-		EnemyHP:      80,
-		EnemyMaxHP:   80,
-		EnemyTexture: "art/ghost.png",
-		MenuFontPath: "fonts/Mono_10",
+		PlayerHP:      100,
+		PlayerMaxHP:   100,
+		EnemyHP:       80,
+		EnemyMaxHP:    80,
+		EnemyTexture:  "art/ghost.png",
+		MenuFontPath:  "fonts/Mono_10",
 		MenuFontScale: 1.0,
-		
+
 		// Battle system configuration
-		TimerChargeRate:       0.33, // 0.33 per second (3 seconds to fill)
-		AnimationDuration:     1.0,  // 1 second default
-		DamageEffectDuration:  2.0,  // 2 seconds for damage numbers
-		ActionQueueSize:       100,  // Buffer for 100 actions
+		TimerChargeRate:      0.33, // 0.33 per second (3 seconds to fill)
+		AnimationDuration:    1.0,  // 1 second default
+		DamageEffectDuration: 2.0,  // 2 seconds for damage numbers
+		ActionQueueSize:      100,  // Buffer for 100 actions
 	},
 }
 
@@ -128,4 +128,3 @@ func GetPlayerSpawnPosition() (x, y float64) {
 	y = (Global.Screen.Height - Global.Player.Size) / 2
 	return
 }
-

@@ -84,7 +84,7 @@ func (f *SpriteFont) loadMetadata(path string) error {
 	// Handle the promise
 	promise.Call("then", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		response := args[0]
-		
+
 		// Check if response is OK
 		if !response.Get("ok").Bool() {
 			done <- fmt.Errorf("failed to fetch metadata: HTTP %d", response.Get("status").Int())
@@ -173,4 +173,3 @@ func (f *SpriteFont) GetCellSize() (int, int) {
 func (f *SpriteFont) IsLoaded() bool {
 	return f.loaded && f.metadata != nil
 }
-

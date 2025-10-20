@@ -27,4 +27,3 @@ type TextRenderer interface {
 	// RenderTextScaled renders a string at the given position with scaling and color
 	RenderTextScaled(text string, position types.Vector2, font Font, scale float64, color [4]float32) error
 }
-

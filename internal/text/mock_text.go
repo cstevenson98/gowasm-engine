@@ -109,4 +109,3 @@ func (m *MockTextRenderer) GetRenderedTextCount() int {
 func (m *MockTextRenderer) Clear() {
 	m.RenderedTexts = make([]MockRenderedText, 0)
 }
-

@@ -17,7 +17,7 @@ type InputState struct {
 	// Action keys
 	EnterPressed bool
 	SpacePressed bool
-	F2Pressed     bool // F2 key for debug console toggle
+	F2Pressed    bool // F2 key for debug console toggle
 
 	// Modifier keys
 	ShiftPressed bool
@@ -29,7 +29,7 @@ type InputState struct {
 	RightPressedLastFrame bool
 	EnterPressedLastFrame bool
 	SpacePressedLastFrame bool
-	F2PressedLastFrame     bool
+	F2PressedLastFrame    bool
 	ShiftPressedLastFrame bool
 }
 

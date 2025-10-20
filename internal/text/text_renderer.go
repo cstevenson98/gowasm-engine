@@ -45,7 +45,7 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 
 	// Scale the cell size
 	var scaledWidth, scaledHeight float64
-	
+
 	if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
 		// Use integer scaling for pixel-perfect rendering
 		scaleInt := int(scale + 0.5) // Round to nearest integer
@@ -150,4 +150,3 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 
 	return nil
 }
-

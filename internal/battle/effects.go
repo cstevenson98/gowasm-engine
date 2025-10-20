@@ -31,7 +31,7 @@ func NewDamageEffect(position types.Vector2, value int, duration float64, isHeal
 func (de *DamageEffect) Update(deltaTime float64) {
 	de.mu.Lock()
 	defer de.mu.Unlock()
-	
+
 	de.Elapsed += deltaTime
 }
 
@@ -39,7 +39,7 @@ func (de *DamageEffect) Update(deltaTime float64) {
 func (de *DamageEffect) IsFinished() bool {
 	de.mu.RLock()
 	defer de.mu.RUnlock()
-	
+
 	return de.Elapsed >= de.Duration
 }
 
@@ -47,11 +47,11 @@ func (de *DamageEffect) IsFinished() bool {
 func (de *DamageEffect) GetAlpha() float32 {
 	de.mu.RLock()
 	defer de.mu.RUnlock()
-	
+
 	if de.Elapsed >= de.Duration {
 		return 0.0
 	}
-	
+
 	// Linear fade from 1.0 to 0.0
 	progress := de.Elapsed / de.Duration
 	return float32(1.0 - progress)
@@ -61,7 +61,7 @@ func (de *DamageEffect) GetAlpha() float32 {
 func (de *DamageEffect) GetPosition() types.Vector2 {
 	de.mu.RLock()
 	defer de.mu.RUnlock()
-	
+
 	// Simple floating animation - move up over time
 	floatOffset := de.Elapsed * 30.0 // 30 pixels per second upward
 	return types.Vector2{
@@ -74,7 +74,7 @@ func (de *DamageEffect) GetPosition() types.Vector2 {
 func (de *DamageEffect) GetValue() int {
 	de.mu.RLock()
 	defer de.mu.RUnlock()
-	
+
 	return de.Value
 }
 
@@ -82,7 +82,7 @@ func (de *DamageEffect) GetValue() int {
 func (de *DamageEffect) IsHealingEffect() bool {
 	de.mu.RLock()
 	defer de.mu.RUnlock()
-	
+
 	return de.IsHealing
 }
 
@@ -103,7 +103,7 @@ func NewEffectManager() *EffectManager {
 func (em *EffectManager) AddEffect(effect *DamageEffect) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
-	
+
 	em.effects = append(em.effects, effect)
 }
 
@@ -111,12 +111,12 @@ func (em *EffectManager) AddEffect(effect *DamageEffect) {
 func (em *EffectManager) Update(deltaTime float64) {
 	em.mu.Lock()
 	defer em.mu.Unlock()
-	
+
 	// Update all effects
 	for _, effect := range em.effects {
 		effect.Update(deltaTime)
 	}
-	
+
 	// Remove finished effects
 	activeEffects := make([]*DamageEffect, 0)
 	for _, effect := range em.effects {
@@ -131,7 +131,7 @@ func (em *EffectManager) Update(deltaTime float64) {
 func (em *EffectManager) GetActiveEffects() []*DamageEffect {
 	em.mu.RLock()
 	defer em.mu.RUnlock()
-	
+
 	effects := make([]*DamageEffect, len(em.effects))
 	copy(effects, em.effects)
 	return effects
@@ -141,7 +141,7 @@ func (em *EffectManager) GetActiveEffects() []*DamageEffect {
 func (em *EffectManager) ClearAllEffects() {
 	em.mu.Lock()
 	defer em.mu.Unlock()
-	
+
 	em.effects = make([]*DamageEffect, 0)
 }
 
@@ -149,6 +149,6 @@ func (em *EffectManager) ClearAllEffects() {
 func (em *EffectManager) GetEffectCount() int {
 	em.mu.RLock()
 	defer em.mu.RUnlock()
-	
+
 	return len(em.effects)
 }

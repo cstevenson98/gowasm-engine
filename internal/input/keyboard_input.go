@@ -31,7 +31,7 @@ func NewKeyboardInput() *KeyboardInput {
 func (k *KeyboardInput) GetInputState() types.InputState {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
-	
+
 	// Copy current state and set previous frame states
 	state := k.inputState
 	state.UpPressedLastFrame = k.lastState.UpPressed
@@ -42,10 +42,10 @@ func (k *KeyboardInput) GetInputState() types.InputState {
 	state.SpacePressedLastFrame = k.lastState.SpacePressed
 	state.F2PressedLastFrame = k.lastState.F2Pressed
 	state.ShiftPressedLastFrame = k.lastState.ShiftPressed
-	
+
 	// Update last state for next frame
 	k.lastState = k.inputState
-	
+
 	return state
 }
 

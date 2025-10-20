@@ -26,7 +26,7 @@ func (aq *ActionQueue) Enqueue(action *types.Action) bool {
 	if aq.closed {
 		return false
 	}
-	
+
 	select {
 	case aq.actions <- action:
 		return true
@@ -46,7 +46,7 @@ func (aq *ActionQueue) Dequeue() (*types.Action, bool) {
 func (aq *ActionQueue) Close() {
 	aq.processing.Lock()
 	defer aq.processing.Unlock()
-	
+
 	if !aq.closed {
 		close(aq.actions)
 		aq.closed = true

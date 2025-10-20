@@ -9,35 +9,35 @@ import (
 type BattleEntity interface {
 	// GetActionTimer returns the entity's action timer
 	GetActionTimer() *ActionTimer
-	
+
 	// ChargeTimer charges the action timer by deltaTime
 	ChargeTimer(deltaTime float64)
-	
+
 	// ResetTimer resets the action timer to 0
 	ResetTimer()
-	
+
 	// IsReady returns true if the entity can take an action (timer >= 1.0)
 	IsReady() bool
-	
+
 	// GetStats returns the entity's battle stats
 	GetStats() *EntityStats
-	
+
 	// SelectAction returns the action this entity wants to perform
 	// Returns nil if no action should be taken
 	SelectAction() *Action
-	
+
 	// GetID returns the entity's unique identifier
 	GetID() string
-	
+
 	// GetMover returns the mover component for position access
 	GetMover() Mover
 }
 
 // EntityStats represents the battle statistics of an entity
 type EntityStats struct {
-	HP     int
-	MaxHP  int
-	Speed  float64 // Charge rate multiplier (1.0 = normal speed)
+	HP    int
+	MaxHP int
+	Speed float64 // Charge rate multiplier (1.0 = normal speed)
 }
 
 // ActionTimer represents an entity's action timer
@@ -112,23 +112,23 @@ func (at ActionType) String() string {
 
 // Action represents a battle action to be performed
 type Action struct {
-	Type             ActionType
-	Actor            BattleEntity
-	Target           BattleEntity
-	Damage           int
+	Type              ActionType
+	Actor             BattleEntity
+	Target            BattleEntity
+	Damage            int
 	AnimationDuration float64
-	Description      string
+	Description       string
 }
 
 // NewAction creates a new action
 func NewAction(actionType ActionType, actor, target BattleEntity, damage int, duration float64, description string) *Action {
 	return &Action{
-		Type:             actionType,
-		Actor:            actor,
-		Target:           target,
-		Damage:           damage,
+		Type:              actionType,
+		Actor:             actor,
+		Target:            target,
+		Damage:            damage,
 		AnimationDuration: duration,
-		Description:      description,
+		Description:       description,
 	}
 }
 

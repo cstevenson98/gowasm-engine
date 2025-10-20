@@ -12,13 +12,13 @@ import (
 
 // BattleManager manages the battle system including action queue processing
 type BattleManager struct {
-	actionQueue     *ActionQueue
-	entities        []types.BattleEntity
-	mu              sync.RWMutex
-	ctx             context.Context
-	cancel          context.CancelFunc
-	processingDone  chan bool
-	effectManager   *EffectManager
+	actionQueue    *ActionQueue
+	entities       []types.BattleEntity
+	mu             sync.RWMutex
+	ctx            context.Context
+	cancel         context.CancelFunc
+	processingDone chan bool
+	effectManager  *EffectManager
 }
 
 // NewBattleManager creates a new battle manager
@@ -31,7 +31,7 @@ func NewBattleManager() *BattleManager {
 		ctx:            ctx,
 		cancel:         cancel,
 		processingDone: make(chan bool, 1),
-		effectManager:   NewEffectManager(),
+		effectManager:  NewEffectManager(),
 	}
 }
 
@@ -39,7 +39,7 @@ func NewBattleManager() *BattleManager {
 func (bm *BattleManager) AddEntity(entity types.BattleEntity) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
-	
+
 	bm.entities = append(bm.entities, entity)
 	logger.Logger.Debugf("Added entity %s to battle manager", entity.GetID())
 }
@@ -48,7 +48,7 @@ func (bm *BattleManager) AddEntity(entity types.BattleEntity) {
 func (bm *BattleManager) RemoveEntity(entity types.BattleEntity) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
-	
+
 	for i, e := range bm.entities {
 		if e.GetID() == entity.GetID() {
 			bm.entities = append(bm.entities[:i], bm.entities[i+1:]...)
@@ -68,7 +68,7 @@ func (bm *BattleManager) StartProcessing() {
 func (bm *BattleManager) StopProcessing() {
 	bm.cancel()
 	bm.actionQueue.Close()
-	
+
 	// Wait for processing to complete
 	select {
 	case <-bm.processingDone:
@@ -83,7 +83,7 @@ func (bm *BattleManager) EnqueueAction(action *types.Action) bool {
 	if action == nil {
 		return false
 	}
-	
+
 	success := bm.actionQueue.Enqueue(action)
 	if success {
 		logger.Logger.Debugf("Enqueued action: %s", action.Description)
@@ -97,10 +97,10 @@ func (bm *BattleManager) EnqueueAction(action *types.Action) bool {
 func (bm *BattleManager) Update(deltaTime float64) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
-	
+
 	// Always charge timers for all entities (no animation blocking)
 	bm.chargeAllTimers(deltaTime)
-	
+
 	// Check for entities ready to act
 	bm.checkForReadyEntities()
 }
@@ -114,7 +114,7 @@ func (bm *BattleManager) IsAnimating() bool {
 func (bm *BattleManager) GetEntities() []types.BattleEntity {
 	bm.mu.RLock()
 	defer bm.mu.RUnlock()
-	
+
 	entities := make([]types.BattleEntity, len(bm.entities))
 	copy(entities, bm.entities)
 	return entities
@@ -130,7 +130,7 @@ func (bm *BattleManager) processActions() {
 	defer func() {
 		bm.processingDone <- true
 	}()
-	
+
 	for {
 		select {
 		case <-bm.ctx.Done():
@@ -141,7 +141,7 @@ func (bm *BattleManager) processActions() {
 				logger.Logger.Debugf("Action queue closed")
 				return
 			}
-			
+
 			bm.processAction(action)
 		}
 	}
@@ -150,10 +150,10 @@ func (bm *BattleManager) processActions() {
 // processAction executes a single action
 func (bm *BattleManager) processAction(action *types.Action) {
 	logger.Logger.Debugf("Processing action: %s %s", action.Actor.GetID(), action.Description)
-	
+
 	// Execute the action (no animation blocking)
 	bm.executeAction(action)
-	
+
 	// Reset the actor's timer
 	action.Actor.ResetTimer()
 }
@@ -180,13 +180,13 @@ func (bm *BattleManager) executeDamage(action *types.Action) {
 		logger.Logger.Warnf("Damage action has no target")
 		return
 	}
-	
+
 	stats := action.Target.GetStats()
 	stats.HP -= action.Damage
 	if stats.HP < 0 {
 		stats.HP = 0
 	}
-	
+
 	// Create damage effect
 	// Get target position (assuming it has a mover)
 	if mover := action.Target.GetMover(); mover != nil {
@@ -196,9 +196,9 @@ func (bm *BattleManager) executeDamage(action *types.Action) {
 		damageEffect := NewDamageEffect(effectPos, action.Damage, 2.0, false) // 2 second duration
 		bm.effectManager.AddEffect(damageEffect)
 	}
-	
-	logger.Logger.Debugf("%s deals %d damage to %s (HP: %d/%d)", 
-		action.Actor.GetID(), action.Damage, action.Target.GetID(), 
+
+	logger.Logger.Debugf("%s deals %d damage to %s (HP: %d/%d)",
+		action.Actor.GetID(), action.Damage, action.Target.GetID(),
 		stats.HP, stats.MaxHP)
 }
 
@@ -214,14 +214,14 @@ func (bm *BattleManager) executeHeal(action *types.Action) {
 		logger.Logger.Warnf("Heal action has no target")
 		return
 	}
-	
+
 	stats := action.Target.GetStats()
 	healAmount := -action.Damage // Negative damage = healing
 	stats.HP += healAmount
 	if stats.HP > stats.MaxHP {
 		stats.HP = stats.MaxHP
 	}
-	
+
 	// Create healing effect
 	if mover := action.Target.GetMover(); mover != nil {
 		pos := mover.GetPosition()
@@ -230,9 +230,9 @@ func (bm *BattleManager) executeHeal(action *types.Action) {
 		healEffect := NewDamageEffect(effectPos, healAmount, 2.0, true) // 2 second duration, healing
 		bm.effectManager.AddEffect(healEffect)
 	}
-	
-	logger.Logger.Debugf("%s heals %d HP to %s (HP: %d/%d)", 
-		action.Actor.GetID(), healAmount, action.Target.GetID(), 
+
+	logger.Logger.Debugf("%s heals %d HP to %s (HP: %d/%d)",
+		action.Actor.GetID(), healAmount, action.Target.GetID(),
 		stats.HP, stats.MaxHP)
 }
 
@@ -250,7 +250,6 @@ func (bm *BattleManager) chargeAllTimers(deltaTime float64) {
 		entity.ChargeTimer(deltaTime * chargeRate)
 	}
 }
-
 
 // checkForReadyEntities checks if any entities are ready to act
 func (bm *BattleManager) checkForReadyEntities() {
@@ -272,7 +271,7 @@ func (bm *BattleManager) checkForReadyEntities() {
 							break
 						}
 					}
-					
+
 					if target != nil {
 						// Create enemy action (for now, always Haunt attack)
 						action := CreateEnemyAction(entity, target)
