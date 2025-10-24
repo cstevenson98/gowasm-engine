@@ -99,7 +99,18 @@ func (w *WebGPUCanvasManager) Initialize(canvasID string) error {
 		canvas.Set("height", height)
 	}
 
+	// Adjust canvas dimensions to be multiples of pixel scale for pixel-perfect rendering
+	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
+		pixelScale := uint32(config.Global.Rendering.PixelScale)
+		width = (width / pixelScale) * pixelScale
+		height = (height / pixelScale) * pixelScale
+		canvas.Set("width", width)
+		canvas.Set("height", height)
+		logger.Logger.Tracef("Adjusted canvas size to pixel scale multiple: %dx%d", width, height)
+	}
+
 	logger.Logger.Tracef("Canvas size: %dx%d", width, height)
+	logger.Logger.Infof("PixelScale configuration: %d (PixelPerfectScaling: %v)", config.Global.Rendering.PixelScale, config.Global.Rendering.PixelPerfectScaling)
 
 	// Create WebGPU instance
 	w.instance = wgpu.CreateInstance(nil)
@@ -684,6 +695,42 @@ func (w *WebGPUCanvasManager) canvasToNDC(x, y float64) (float32, float32) {
 	return ndcX, ndcY
 }
 
+// snapToGamePixel snaps a screen coordinate to the nearest game pixel boundary
+func (w *WebGPUCanvasManager) snapToGamePixel(coord float64) float64 {
+	if !config.Global.Rendering.PixelPerfectScaling || config.Global.Rendering.PixelScale <= 1 {
+		return coord
+	}
+
+	pixelScale := float64(config.Global.Rendering.PixelScale)
+	// Divide by scale, round to nearest integer, multiply back
+	return float64(int(coord/pixelScale+0.5)) * pixelScale
+}
+
+// scaleToGamePixels scales a size value by the pixel scale factor
+func (w *WebGPUCanvasManager) scaleToGamePixels(size float64) float64 {
+	if !config.Global.Rendering.PixelPerfectScaling || config.Global.Rendering.PixelScale <= 1 {
+		return size
+	}
+
+	return size * float64(config.Global.Rendering.PixelScale)
+}
+
+// snapPositionToGamePixel snaps a Vector2 position to game pixel boundaries
+func (w *WebGPUCanvasManager) snapPositionToGamePixel(pos types.Vector2) types.Vector2 {
+	return types.Vector2{
+		X: w.snapToGamePixel(pos.X),
+		Y: w.snapToGamePixel(pos.Y),
+	}
+}
+
+// scaleSizeToGamePixels scales a Vector2 size by the pixel scale factor
+func (w *WebGPUCanvasManager) scaleSizeToGamePixels(size types.Vector2) types.Vector2 {
+	return types.Vector2{
+		X: w.scaleToGamePixels(size.X),
+		Y: w.scaleToGamePixels(size.Y),
+	}
+}
+
 // executePipeline executes a specific pipeline type during rendering
 func (w *WebGPUCanvasManager) executePipeline(renderPass *wgpu.RenderPassEncoder, pipelineType types.PipelineType) {
 	switch pipelineType {
@@ -770,10 +817,14 @@ func (w *WebGPUCanvasManager) DrawColoredRect(position types.Vector2, size types
 
 // generateQuadVertices generates vertices for a colored rectangle
 func (w *WebGPUCanvasManager) generateQuadVertices(pos types.Vector2, size types.Vector2, color [4]float32) []float32 {
-	x0 := pos.X
-	y0 := pos.Y
-	x1 := pos.X + size.X
-	y1 := pos.Y + size.Y
+	// Snap position to game pixel grid and scale size
+	snappedPos := w.snapPositionToGamePixel(pos)
+	scaledSize := w.scaleSizeToGamePixels(size)
+
+	x0 := snappedPos.X
+	y0 := snappedPos.Y
+	x1 := snappedPos.X + scaledSize.X
+	y1 := snappedPos.Y + scaledSize.Y
 
 	ndcX0, ndcY0 := w.canvasToNDC(x0, y0)
 	ndcX1, ndcY1 := w.canvasToNDC(x1, y1)
@@ -940,10 +991,14 @@ func (w *WebGPUCanvasManager) DrawTexturedRect(texturePath string, position type
 
 // generateTexturedQuadVertices generates vertices for a textured rectangle
 func (w *WebGPUCanvasManager) generateTexturedQuadVertices(pos types.Vector2, size types.Vector2, uv types.UVRect) []float32 {
-	x0 := pos.X
-	y0 := pos.Y
-	x1 := pos.X + size.X
-	y1 := pos.Y + size.Y
+	// Snap position to game pixel grid and scale size
+	snappedPos := w.snapPositionToGamePixel(pos)
+	scaledSize := w.scaleSizeToGamePixels(size)
+
+	x0 := snappedPos.X
+	y0 := snappedPos.Y
+	x1 := snappedPos.X + scaledSize.X
+	y1 := snappedPos.Y + scaledSize.Y
 
 	ndcX0, ndcY0 := w.canvasToNDC(x0, y0)
 	ndcX1, ndcY1 := w.canvasToNDC(x1, y1)
