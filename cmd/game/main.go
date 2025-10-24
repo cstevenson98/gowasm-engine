@@ -5,6 +5,7 @@ package main
 import (
 	"syscall/js"
 
+	"github.com/conor/webgpu-triangle/internal/config"
 	"github.com/conor/webgpu-triangle/internal/engine"
 	"github.com/conor/webgpu-triangle/internal/logger"
 )
@@ -37,10 +38,40 @@ func main() {
 	<-make(chan bool)
 }
 
+// createCanvas creates the game canvas element and adds it to the DOM
+func createCanvas() string {
+	document := js.Global().Get("document")
+
+	// Create canvas element
+	canvas := document.Call("createElement", "canvas")
+	canvas.Set("id", "webgpu-canvas")
+	canvas.Set("width", config.Global.Screen.CanvasWidth)
+	canvas.Set("height", config.Global.Screen.CanvasHeight)
+
+	// Add canvas to game-container
+	container := document.Call("getElementById", "game-container")
+	if container.IsNull() || container.IsUndefined() {
+		logger.Logger.Error("game-container element not found")
+		return ""
+	}
+
+	container.Call("appendChild", canvas)
+
+	logger.Logger.Infof("Canvas created: %dx%d", config.Global.Screen.CanvasWidth, config.Global.Screen.CanvasHeight)
+	return "webgpu-canvas"
+}
+
 func initializeEngine() {
 	logger.Logger.Info("Starting engine initialization")
 
-	err := gameEngine.Initialize("webgpu-canvas")
+	// Create the canvas element
+	canvasID := createCanvas()
+	if canvasID == "" {
+		logger.Logger.Error("Failed to create canvas")
+		return
+	}
+
+	err := gameEngine.Initialize(canvasID)
 	if err != nil {
 		logger.Logger.Errorf("Engine initialization failed: %s", err.Error())
 		return

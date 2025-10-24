@@ -44,21 +44,24 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 	}
 
 	// Scale the cell size
-	var scaledWidth, scaledHeight float64
+	// Note: The canvas manager will handle pixel-perfect snapping and upscaling automatically
+	// based on the PixelScale setting, so we just apply the font scale here
+	scaledWidth := float64(cellWidth) * scale
+	scaledHeight := float64(cellHeight) * scale
 
-	if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
-		// Use integer scaling for pixel-perfect rendering
-		scaleInt := int(scale + 0.5) // Round to nearest integer
-		if scaleInt < 1 {
-			scaleInt = 1 // Minimum 1x scaling
-		}
-		scaledWidth = float64(cellWidth * scaleInt)
-		scaledHeight = float64(cellHeight * scaleInt)
-	} else {
-		// Use fractional scaling for smooth rendering
-		scaledWidth = float64(cellWidth) * scale
-		scaledHeight = float64(cellHeight) * scale
+	// Account for pixel scale when advancing character positions
+	// The canvas scales sizes by PixelScale, so we need to advance by the same amount
+	pixelScale := 1.0
+	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
+		pixelScale = float64(config.Global.Rendering.PixelScale)
 	}
+
+	// Actual rendered dimensions (after canvas scaling)
+	renderedWidth := scaledWidth * pixelScale
+	renderedHeight := scaledHeight * pixelScale
+
+	// Line height includes extra spacing between lines for paragraph text
+	lineHeight := renderedHeight * config.Global.Rendering.TextLineSpacing
 
 	// Current position for rendering (advances with each character)
 	currentX := position.X
@@ -68,26 +71,16 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 	for _, char := range text {
 		// Handle special characters
 		if char == '\n' {
-			// Newline: move to next line
+			// Newline: move to next line with proper line spacing
 			currentX = position.X
-			currentY += scaledHeight
+			currentY += lineHeight
 			continue
 		}
 
 		if char == ' ' {
 			// Space: advance position with reduced spacing
-			spacingReduction := config.Global.Debug.CharacterSpacingReduction
-			if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
-				// Use integer scaling for spacing reduction
-				scaleInt := int(scale + 0.5)
-				if scaleInt < 1 {
-					scaleInt = 1
-				}
-				spacingReduction *= float64(scaleInt)
-			} else {
-				spacingReduction *= scale
-			}
-			currentX += scaledWidth - spacingReduction
+			spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
+			currentX += renderedWidth - spacingReduction
 			continue
 		}
 
@@ -95,17 +88,8 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		uv, err := font.GetCharacterUV(char)
 		if err != nil {
 			logger.Logger.Tracef("Character '%c' not found in font, skipping", char)
-			spacingReduction := config.Global.Debug.CharacterSpacingReduction
-			if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
-				scaleInt := int(scale + 0.5)
-				if scaleInt < 1 {
-					scaleInt = 1
-				}
-				spacingReduction *= float64(scaleInt)
-			} else {
-				spacingReduction *= scale
-			}
-			currentX += scaledWidth - spacingReduction
+			spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
+			currentX += renderedWidth - spacingReduction
 			continue
 		}
 
@@ -120,32 +104,14 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		if err != nil {
 			// Texture might not be loaded yet - silently skip and continue
 			// This is normal during initial loading
-			spacingReduction := config.Global.Debug.CharacterSpacingReduction
-			if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
-				scaleInt := int(scale + 0.5)
-				if scaleInt < 1 {
-					scaleInt = 1
-				}
-				spacingReduction *= float64(scaleInt)
-			} else {
-				spacingReduction *= scale
-			}
-			currentX += scaledWidth - spacingReduction
+			spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
+			currentX += renderedWidth - spacingReduction
 			continue
 		}
 
 		// Advance to next character position, reducing spacing by configured amount
-		spacingReduction := config.Global.Debug.CharacterSpacingReduction
-		if config.Global.Rendering.PixelArtMode && config.Global.Rendering.PixelPerfectScaling {
-			scaleInt := int(scale + 0.5)
-			if scaleInt < 1 {
-				scaleInt = 1
-			}
-			spacingReduction *= float64(scaleInt)
-		} else {
-			spacingReduction *= scale
-		}
-		currentX += scaledWidth - spacingReduction
+		spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
+		currentX += renderedWidth - spacingReduction
 	}
 
 	return nil

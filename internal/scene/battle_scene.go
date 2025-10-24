@@ -309,6 +309,14 @@ func (s *BattleScene) RenderActionTimerBars() error {
 		return nil
 	}
 
+	// Calculate line height accounting for pixel scale
+	_, cellHeight := s.menuFont.GetCellSize()
+	lineHeight := float64(cellHeight)
+	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
+		lineHeight *= float64(config.Global.Rendering.PixelScale)
+	}
+	lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
+
 	// Render player timer bar
 	if s.player != nil {
 		s.renderEntityTimerBar(s.player, types.Vector2{X: 20, Y: 500}, "Player")
@@ -316,7 +324,7 @@ func (s *BattleScene) RenderActionTimerBars() error {
 
 	// Render enemy timer bar
 	if s.enemy != nil {
-		s.renderEntityTimerBar(s.enemy, types.Vector2{X: 20, Y: 520}, "Enemy")
+		s.renderEntityTimerBar(s.enemy, types.Vector2{X: 20, Y: 500 + lineHeight}, "Enemy")
 	}
 
 	return nil
@@ -387,6 +395,14 @@ func (s *BattleScene) RenderBattleMenu() error {
 	// Render battle log
 	battleLog := s.menuSystem.battleLog
 	if battleLog != nil {
+		// Calculate line height accounting for pixel scale
+		_, cellHeight := s.menuFont.GetCellSize()
+		lineHeight := float64(cellHeight)
+		if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
+			lineHeight *= float64(config.Global.Rendering.PixelScale)
+		}
+		lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
+
 		y := battleLog.GetPosition().Y
 		for i, message := range battleLog.GetMessages() {
 			if i >= battleLog.maxLines {
@@ -401,7 +417,7 @@ func (s *BattleScene) RenderBattleMenu() error {
 			if err != nil {
 				logger.Logger.Tracef("Failed to render battle log message: %s", err)
 			}
-			y += 20 // Line spacing
+			y += lineHeight // Line spacing with pixel scale
 		}
 	}
 
@@ -409,6 +425,14 @@ func (s *BattleScene) RenderBattleMenu() error {
 	characterStatus := s.menuSystem.characterStatus
 	if characterStatus != nil {
 		pos := characterStatus.GetPosition()
+
+		// Calculate line height accounting for pixel scale
+		_, cellHeight := s.menuFont.GetCellSize()
+		lineHeight := float64(cellHeight)
+		if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
+			lineHeight *= float64(config.Global.Rendering.PixelScale)
+		}
+		lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
 
 		// Player status
 		playerText := fmt.Sprintf("Player: %d/%d HP", characterStatus.GetPlayerHP(), characterStatus.GetPlayerMaxHP())
@@ -426,7 +450,7 @@ func (s *BattleScene) RenderBattleMenu() error {
 		enemyText := fmt.Sprintf("Enemy: %d/%d HP", characterStatus.GetEnemyHP(), characterStatus.GetEnemyMaxHP())
 		err = s.menuTextRenderer.RenderText(
 			enemyText,
-			types.Vector2{X: pos.X, Y: pos.Y + 20},
+			types.Vector2{X: pos.X, Y: pos.Y + lineHeight},
 			s.menuFont,
 			[4]float32{1.0, 0.0, 0.0, 1.0}, // Red text for enemy
 		)
@@ -442,6 +466,14 @@ func (s *BattleScene) RenderBattleMenu() error {
 		actions := actionMenu.GetActions()
 		selectedIndex := actionMenu.GetSelectedIndex()
 
+		// Calculate line height accounting for pixel scale
+		_, cellHeight := s.menuFont.GetCellSize()
+		lineHeight := float64(cellHeight)
+		if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
+			lineHeight *= float64(config.Global.Rendering.PixelScale)
+		}
+		lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
+
 		for i, action := range actions {
 			// Add selection indicator
 			displayText := action
@@ -453,7 +485,7 @@ func (s *BattleScene) RenderBattleMenu() error {
 
 			err := s.menuTextRenderer.RenderText(
 				displayText,
-				types.Vector2{X: pos.X, Y: pos.Y + float64(i*25)},
+				types.Vector2{X: pos.X, Y: pos.Y + float64(i)*lineHeight},
 				s.menuFont,
 				[4]float32{1.0, 1.0, 0.0, 1.0}, // Yellow text for menu
 			)
