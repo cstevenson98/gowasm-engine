@@ -16,18 +16,18 @@ type BattleMenuSystem struct {
 	screenHeight float64
 
 	// Menu components
-	battleLog     *BattleLog
+	battleLog       *BattleLog
 	characterStatus *CharacterStatus
-	actionMenu    *ActionMenu
+	actionMenu      *ActionMenu
 
 	// Text rendering
-	textRenderer text.TextRenderer
-	font         text.Font
+	textRenderer  text.TextRenderer
+	font          text.Font
 	canvasManager canvas.CanvasManager
-	
+
 	// Action callback
 	onActionSelected func(types.ActionType)
-	
+
 	// Player reference for timer checking
 	player types.BattleEntity
 }
@@ -52,10 +52,10 @@ type CharacterStatus struct {
 
 // ActionMenu displays available actions with selection indicator
 type ActionMenu struct {
-	actions     []string
+	actions       []string
 	selectedIndex int
-	position    types.Vector2
-	size        types.Vector2
+	position      types.Vector2
+	size          types.Vector2
 }
 
 // NewBattleMenuSystem creates a new battle menu system
@@ -95,7 +95,7 @@ func (bms *BattleMenuSystem) Initialize() {
 	bms.actionMenu = &ActionMenu{
 		actions: []string{
 			"Attack",
-			"Defend", 
+			"Defend",
 			"Item",
 			"Run",
 		},
@@ -140,11 +140,11 @@ func (bms *BattleMenuSystem) Update(deltaTime float64, inputCapturer types.Input
 			logger.Logger.Debugf("Player not ready, timer at: %.2f", bms.player.GetActionTimer().Current)
 			return
 		}
-		
+
 		selectedAction := bms.actionMenu.actions[bms.actionMenu.selectedIndex]
 		bms.battleLog.AddMessage("Selected: " + selectedAction)
 		logger.Logger.Debugf("Action selected: %s", selectedAction)
-		
+
 		// Convert string action to ActionType and trigger callback
 		actionType := bms.convertStringToActionType(selectedAction)
 		if actionType != types.ActionRun && bms.onActionSelected != nil {
@@ -171,7 +171,7 @@ func (bms *BattleMenuSystem) Cleanup() {
 // AddMessage adds a message to the battle log
 func (bl *BattleLog) AddMessage(message string) {
 	bl.messages = append(bl.messages, message)
-	
+
 	// Keep only the last maxLines messages
 	if len(bl.messages) > bl.maxLines {
 		bl.messages = bl.messages[len(bl.messages)-bl.maxLines:]

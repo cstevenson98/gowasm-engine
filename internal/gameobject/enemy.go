@@ -30,10 +30,10 @@ type Enemy struct {
 // NewEnemy creates a new enemy game object
 func NewEnemy(position, size types.Vector2, texturePath string) *Enemy {
 	enemy := &Enemy{
-		id:       "enemy",
-		position: position,
-		size:     size,
-		visible:  true,
+		id:          "enemy",
+		position:    position,
+		size:        size,
+		visible:     true,
 		actionTimer: types.NewActionTimer(),
 		stats: &types.EntityStats{
 			HP:    80, // Will be overridden by config
@@ -149,7 +149,7 @@ func (e *Enemy) GetStats() *types.EntityStats {
 func (e *Enemy) SelectAction() *types.Action {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	
+
 	// For now, enemies always use the "Haunt" action
 	// In the future, this could be expanded with AI logic
 	// We need a target - this will be set by the battle manager

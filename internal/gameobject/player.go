@@ -20,12 +20,12 @@ type Player struct {
 	moveSpeed float64 // Base movement speed in pixels per second
 
 	// Debug message timing
-	debugMessageTimer float64
+	debugMessageTimer    float64
 	debugMessageInterval float64 // Post debug message every N seconds
 
 	// Battle system
-	actionTimer *types.ActionTimer
-	stats       *types.EntityStats
+	actionTimer    *types.ActionTimer
+	stats          *types.EntityStats
 	selectedAction types.ActionType // Player's selected action from menu
 
 	mu sync.Mutex
@@ -193,7 +193,7 @@ func (p *Player) GetStats() *types.EntityStats {
 func (p *Player) SelectAction() *types.Action {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	// Player actions are selected through the menu system
 	// This will be called when the timer is ready
 	// For now, return nil - the menu system will handle action creation

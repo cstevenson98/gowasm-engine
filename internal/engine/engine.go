@@ -60,16 +60,16 @@ func (e *Engine) createSceneForState(state types.GameState) scene.Scene {
 	switch state {
 	case types.GAMEPLAY:
 		battleScene := scene.NewBattleScene(e.screenWidth, e.screenHeight, e.inputCapturer)
-		
+
 		// Set canvas manager for debug rendering
 		battleScene.SetCanvasManager(e.canvasManager)
-		
+
 		// Initialize debug console (after canvas manager is set)
 		err := battleScene.InitializeDebugConsole()
 		if err != nil {
 			logger.Logger.Warnf("Failed to initialize debug console: %s", err)
 		}
-		
+
 		return battleScene
 	default:
 		logger.Logger.Warnf("No scene defined for game state: %s", state.String())
@@ -216,19 +216,19 @@ func (e *Engine) Render() {
 			if err != nil {
 				logger.Logger.Tracef("Failed to render battle menu: %s", err.Error())
 			}
-			
+
 			// Render damage effects
 			err = battleScene.RenderDamageEffects()
 			if err != nil {
 				logger.Logger.Tracef("Failed to render damage effects: %s", err.Error())
 			}
-			
+
 			// Render action timer bars
 			err = battleScene.RenderActionTimerBars()
 			if err != nil {
 				logger.Logger.Tracef("Failed to render action timer bars: %s", err.Error())
 			}
-			
+
 			// Render debug console
 			err = battleScene.RenderDebugConsole()
 			if err != nil {

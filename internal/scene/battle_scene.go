@@ -44,7 +44,7 @@ type BattleScene struct {
 	// Menu text rendering
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
-	
+
 	// Debug console toggle state
 	f2PressedLastFrame bool
 }
@@ -139,8 +139,8 @@ func (s *BattleScene) Initialize() error {
 	logger.Logger.Debugf("Created Player on left side in %s scene", s.name)
 
 	// Create enemy on the right side (ENTITIES layer)
-	enemyX := s.screenWidth * 0.8   // 80% from left (right side)
-	enemyY := s.screenHeight * 0.5  // Center vertically
+	enemyX := s.screenWidth * 0.8  // 80% from left (right side)
+	enemyY := s.screenHeight * 0.5 // Center vertically
 	s.enemy = gameobject.NewEnemy(
 		types.Vector2{X: enemyX, Y: enemyY},
 		types.Vector2{X: 32.0, Y: 64.0}, // Ghost sprite dimensions (96x128 total, 3x2 grid = 32x64 per frame)
@@ -151,26 +151,26 @@ func (s *BattleScene) Initialize() error {
 	// Initialize battle menu system
 	s.menuSystem = NewBattleMenuSystem(s.screenWidth, s.screenHeight)
 	s.menuSystem.Initialize()
-	
+
 	// Set up action callback
 	s.menuSystem.SetActionCallback(s.EnqueuePlayerAction)
-	
+
 	// Set player reference for timer checking
 	s.menuSystem.SetPlayer(s.player)
 
 	// Initialize battle system
 	s.battleManager = battle.NewBattleManager()
-	
+
 	// Add entities to battle manager
 	s.battleManager.AddEntity(s.player)
 	s.battleManager.AddEntity(s.enemy)
-	
+
 	// Get effect manager from battle manager
 	s.effectManager = s.battleManager.GetEffectManager()
-	
+
 	// Start battle processing
 	s.battleManager.StartProcessing()
-	
+
 	// Initialize menu text rendering
 	err := s.InitializeMenuText()
 	if err != nil {
@@ -186,7 +186,7 @@ func (s *BattleScene) Update(deltaTime float64) {
 	if s.battleManager != nil {
 		s.battleManager.Update(deltaTime)
 	}
-	
+
 	// Update effect manager
 	if s.effectManager != nil {
 		s.effectManager.Update(deltaTime)
@@ -265,13 +265,13 @@ func (s *BattleScene) RenderDamageEffects() error {
 	if s.effectManager == nil || s.menuFont == nil || s.menuTextRenderer == nil {
 		return nil
 	}
-	
+
 	effects := s.effectManager.GetActiveEffects()
 	for _, effect := range effects {
 		pos := effect.GetPosition()
 		value := effect.GetValue()
 		alpha := effect.GetAlpha()
-		
+
 		// Determine color based on effect type
 		var color [4]float32
 		if effect.IsHealingEffect() {
@@ -279,7 +279,7 @@ func (s *BattleScene) RenderDamageEffects() error {
 		} else {
 			color = [4]float32{1.0, 0.0, 0.0, alpha} // Red for damage
 		}
-		
+
 		// Format the damage/healing text
 		var text string
 		if effect.IsHealingEffect() {
@@ -287,7 +287,7 @@ func (s *BattleScene) RenderDamageEffects() error {
 		} else {
 			text = fmt.Sprintf("-%d", value)
 		}
-		
+
 		// Render the text
 		err := s.menuTextRenderer.RenderText(
 			text,
@@ -299,7 +299,7 @@ func (s *BattleScene) RenderDamageEffects() error {
 			logger.Logger.Tracef("Failed to render damage effect: %s", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -308,17 +308,17 @@ func (s *BattleScene) RenderActionTimerBars() error {
 	if s.menuFont == nil || s.menuTextRenderer == nil {
 		return nil
 	}
-	
+
 	// Render player timer bar
 	if s.player != nil {
 		s.renderEntityTimerBar(s.player, types.Vector2{X: 20, Y: 500}, "Player")
 	}
-	
+
 	// Render enemy timer bar
 	if s.enemy != nil {
 		s.renderEntityTimerBar(s.enemy, types.Vector2{X: 20, Y: 520}, "Enemy")
 	}
-	
+
 	return nil
 }
 
@@ -326,10 +326,10 @@ func (s *BattleScene) RenderActionTimerBars() error {
 func (s *BattleScene) renderEntityTimerBar(entity types.BattleEntity, position types.Vector2, label string) {
 	timer := entity.GetActionTimer()
 	current := timer.Current
-	
+
 	// Create timer bar: [=====] format
 	bar := "["
-	
+
 	// Add = characters based on timer progress
 	if current >= 0.2 {
 		bar += "="
@@ -346,18 +346,18 @@ func (s *BattleScene) renderEntityTimerBar(entity types.BattleEntity, position t
 	if current >= 1.0 {
 		bar += "="
 	}
-	
+
 	// Add spaces for remaining segments
 	segments := int(current / 0.2)
 	for i := segments; i < 5; i++ {
 		bar += " "
 	}
-	
+
 	bar += "]"
-	
+
 	// Add label
 	fullText := fmt.Sprintf("%s: %s", label, bar)
-	
+
 	// Determine color based on readiness
 	var color [4]float32
 	if current >= 1.0 {
@@ -365,7 +365,7 @@ func (s *BattleScene) renderEntityTimerBar(entity types.BattleEntity, position t
 	} else {
 		color = [4]float32{1.0, 1.0, 1.0, 1.0} // White when charging
 	}
-	
+
 	// Render the timer bar
 	err := s.menuTextRenderer.RenderText(
 		fullText,
@@ -409,7 +409,7 @@ func (s *BattleScene) RenderBattleMenu() error {
 	characterStatus := s.menuSystem.characterStatus
 	if characterStatus != nil {
 		pos := characterStatus.GetPosition()
-		
+
 		// Player status
 		playerText := fmt.Sprintf("Player: %d/%d HP", characterStatus.GetPlayerHP(), characterStatus.GetPlayerMaxHP())
 		err := s.menuTextRenderer.RenderText(
@@ -504,7 +504,7 @@ func (s *BattleScene) Cleanup() {
 		s.battleManager.StopProcessing()
 		s.battleManager = nil
 	}
-	
+
 	// Clear effect manager
 	s.effectManager = nil
 
@@ -573,7 +573,7 @@ func (s *BattleScene) EnqueuePlayerAction(actionType types.ActionType) {
 	if s.battleManager == nil || s.player == nil || s.enemy == nil {
 		return
 	}
-	
+
 	// Create the action using the battle system
 	action := battle.CreatePlayerAction(actionType, s.player, s.enemy)
 	if action != nil {
