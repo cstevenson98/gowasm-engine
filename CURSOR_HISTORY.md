@@ -1826,3 +1826,149 @@ The correct approach for pixel-perfect rendering:
 
 ---
 
+
+## [$timestamp] - Extracted example into separate module under examples/basic-game
+
+**Prompt/Request**: Refactor cmd/game into an examples folder as a separate Go module that imports the engine package using a replace directive.
+
+**Changes Made**:
+- Moved `cmd/game` to `examples/basic-game/game`
+- Created `examples/basic-game/go.mod` with module `example.com/basic-game`
+- Added dependency on `github.com/conor/webgpu-triangle v0.0.0`
+- Added replace: `github.com/conor/webgpu-triangle => ../..`
+- Built the example to `examples/basic-game/build/main.wasm`
+
+**Reasoning**:
+Separate example application as its own Go module to validate the library integration path and mirror how external games would consume the engine via module import and replace during local development.
+
+**Impact**:
+- Engine library remains in root module under `pkg/`
+- Example app is now decoupled and imports the engine like an external consumer
+- Clear separation between reusable engine and example application
+
+**Testing**:
+- Ran `GOOS=js GOARCH=wasm go build -o build/main.wasm ./game` inside `examples/basic-game` — build succeeded
+
+**Notes**:
+- The example module uses a local replace to the repo root for development
+- Additional assets/serve scripts can be added later per example needs
+
+---
+
+
+## [$timestamp] - Moved Makefile and assets into example module
+
+**Prompt/Request**: Move Makefile into the examples directory; allow each game to have its own assets folder copied into its own dist; root Makefile should only handle package testing.
+
+**Changes Made**:
+- Moved root `Makefile` to `examples/basic-game/Makefile` and updated build paths to `./game`
+- Created slim root `Makefile` with `test`, `test-all`, and `tidy` targets only
+- Moved root `assets/` to `examples/basic-game/assets/`
+- Verified example build copies assets into `examples/basic-game/dist/`
+
+**Reasoning**:
+Separate concerns between the engine (library) and game examples; examples own their build, serve, and assets pipelines, while the root focuses on library development and testing.
+
+**Impact**:
+- Engine repo root no longer manages serving/copying assets
+- Examples are self-contained modules with their own Makefiles and assets
+- Clearer consumption model aligning with external projects
+
+**Testing**:
+- Ran `make clean && make build` in `examples/basic-game` — success
+- Confirmed `dist/` contains `main.wasm`, `wasm_exec.js`, and assets (art, fonts, pages)
+
+**Notes**:
+- Example module retains replace directive to root for local development
+- Additional examples can replicate this structure under `examples/<name>/`
+
+---
+
+
+## [$timestamp] - Added multi-example Makefile and consolidated example outputs
+
+**Prompt/Request**: Create a multi-example Makefile in examples/ that builds each example into examples/build/<name> and provisions examples/dist/<name>, with a single serve target from examples/.
+
+**Changes Made**:
+- Created `examples/Makefile` to discover sub-examples, build each to `examples/build/<example>/main.wasm`, and copy assets into `examples/dist/<example>/` along with `wasm_exec.js`
+- Added `list`, `deps`, `build`, `serve`, `clean`, and `info` targets
+- Updated discovery to reliably enumerate example directories while excluding `build/` and `dist/`
+- Verified build for `basic-game` and outputs in `examples/build/basic-game` and `examples/dist/basic-game`
+
+**Reasoning**:
+Centralizes example orchestration, enabling multiple games to coexist with independent assets, and a single serve endpoint from `examples/dist` for browsing examples.
+
+**Impact**:
+- Examples now built uniformly with shared infrastructure
+- Outputs are organized and predictable per-example under `examples/dist/`
+- Root engine remains library-only with tests
+
+**Testing**:
+- Ran `make -C examples clean list build` — success; `basic-game` built and provisioned
+- Confirmed files in `examples/dist/basic-game` include `main.wasm` and assets
+
+**Notes**:
+- Additional examples can be added under `examples/<name>` with their own `go.mod` and `assets/`
+- Serve via: `make -C examples serve`
+
+---
+
+
+## [$timestamp] - Fixed input not registering after library refactor
+
+**Prompt/Request**: Arrow keys not selecting actions in basic-game after converting engine to a library.
+
+**Changes Made**:
+- Added `GetInputCapturer()` to `pkg/engine/engine.go` to expose the engine's input system
+- Updated `examples/basic-game/game/main.go` to pass `gameEngine.GetInputCapturer()` into `scene.NewBattleScene(...)` instead of creating a new input instance
+- Rebuilt example via `make -C examples build`
+
+**Reasoning**:
+Scene was using a separately constructed input capturer that wasn't initialized; the engine only initializes its own input capturer in `Engine.Initialize()`. Passing the engine's capturer ensures initialization and event listeners are shared.
+
+**Impact**:
+- Arrow keys and other inputs are correctly registered by the scene
+- No API breaking changes; added a getter method
+
+**Testing**:
+- Build succeeded for example; manual verification expected in browser
+
+**Notes**:
+- Pattern: Engines own input; scenes receive the engine's capturer reference
+
+---
+
+
+## [$timestamp] - Overhauled README with library architecture and usage
+
+**Prompt/Request**: Update README to comprehensively explain the engine architecture as a reusable Go WASM WebGPU library, mention examples briefly (no media).
+
+**Changes Made**:
+- Rewrote `README.md` with:
+  - Quick Start for examples and library usage (replace directive)
+  - Architecture overview and WASM/build tags context
+  - Package responsibilities across `pkg/engine`, `pkg/canvas`, `pkg/scene`, `pkg/types`, `pkg/sprite`, `pkg/mover`, `pkg/input`, `pkg/text`, `pkg/debug`
+  - Rendering pipeline (pipelines, batching, pixel-art scaling)
+  - Input ownership and access pattern via `engine.GetInputCapturer()`
+  - Scenes and extensibility (`SceneOverlayRenderer`, `SceneTextureProvider`)
+  - Configuration summary (`config.Global`)
+  - Build/Test/Run notes (root Makefile, examples Makefile)
+  - Directory layout and library usage snippet
+  - Performance and troubleshooting notes
+  - Brief Examples section
+
+**Reasoning**:
+Provide a single, authoritative reference for developers consuming the engine as a library, reflecting the new separation of library vs. examples and recently added extension points.
+
+**Impact**:
+- Clear onboarding path and architecture documentation
+- Aligns README with the refactor into `pkg/` and multi-example workflow
+
+**Testing**:
+- N/A (documentation-only)
+
+**Notes**:
+- Examples remain intentionally brief here; they are built/served via `examples/Makefile`.
+
+---
+

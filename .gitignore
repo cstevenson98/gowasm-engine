@@ -59,6 +59,7 @@ __debug_bin
 .env
 .env.local
 .env.*.local
+.cursor
 
 # Python scripts (using system python3, no venv needed due to Cursor issues)
 # Python cache

@@ -1,4 +1,207 @@
-# WebGPU Triangle - Go WASM Game Engine
+# Go WASM WebGPU 2D Game Engine (Library)
+
+A component-based 2D game engine written in Go, compiled to WebAssembly, and rendered with WebGPU via the `cogentcore/webgpu` wrapper. It is designed as a reusable library with clear interfaces for scenes, sprites, movers, input, and rendering. Example games live under `examples/` and consume the engine as a module.
+
+## Quick Start
+
+Prerequisites:
+- Go 1.24+
+- A WebGPU-capable browser (recent Chromium-based browser with WebGPU enabled)
+
+Build and serve the examples:
+
+```bash
+make -C examples list
+make -C examples build
+make -C examples serve
+# open the printed example URL(s)
+```
+
+Use as a library in your own project (local dev with replace):
+
+```go
+// go.mod (in your game)
+require github.com/conor/webgpu-triangle v0.0.0
+replace github.com/conor/webgpu-triangle => ../path/to/engine/repo
+```
+
+```go
+// main.go (WASM entrypoint with //go:build js)
+eng := engine.NewEngine()
+myScene := NewMyScene(eng.GetInputCapturer())
+eng.RegisterScene(types.GAMEPLAY, myScene)
+_ = eng.Initialize("canvas-id")
+_ = eng.SetGameState(types.GAMEPLAY)
+eng.Start()
+```
+
+## Architecture Overview
+
+High-level flow: Input → Scene.Update → Scene.GetRenderables → Canvas batching → WebGPU
+
+- WASM boundary: Files with `//go:build js` can access browser APIs (DOM, timing). All WebGPU calls go through the `cogentcore/webgpu` wrapper, minimizing direct `syscall/js` usage.
+- Engine owns the main loop, input, and scene orchestration; scenes own game state; canvas owns GPU details and batching.
+
+## Core Packages and Responsibilities
+
+- `pkg/engine`
+  - Game loop (requestAnimationFrame), delta time, render loop
+  - Engine state: current scene and pipelines by `types.GameState`
+  - Scene registration (`RegisterScene`) and state switching (`SetGameState`)
+  - Owns and initializes input; exposes `GetInputCapturer()`
+  - Loads textures required by current scene
+
+- `pkg/canvas`
+  - WebGPU abstraction (via `cogentcore/webgpu`)
+  - Pipeline setup (e.g., textured pipeline)
+  - Texture management and batched sprite rendering (batch per texture)
+  - Helpers to draw textured quads and begin/end batches
+
+- `pkg/scene`
+  - Scene interfaces and render layers (`SceneLayer`: BACKGROUND, ENTITIES, UI)
+  - Scenes implement: `Initialize()`, `Update(dt)`, `GetRenderables()`, `Cleanup()`, `GetName()`
+
+- `pkg/types`
+  - Shared interfaces and types: `GameObject`, `Sprite`, `Mover`, `InputCapturer`, `Vector2`, `UVRect`, `Pipeline`, `GameState`, etc.
+  - Optional scene extension interfaces:
+    - `SceneOverlayRenderer` with `RenderOverlays()` (HUD/menus/debug rendered inside batch)
+    - `SceneTextureProvider` with `GetExtraTexturePaths() []string` (extra textures to preload)
+
+- `pkg/sprite`
+  - Sprite sheet representation, UV calculations, animation frame management
+  - Produce `SpriteRenderData` (texture path, position, size, UV, visibility)
+
+- `pkg/mover`
+  - Movement integration (velocity, update per frame), screen bounds, wrapping
+
+- `pkg/input`
+  - Unified input for keyboard and gamepad
+  - Thread-safe state read via `GetInputState()`
+
+- `pkg/text`, `pkg/debug`
+  - Text rendering from sprite fonts and optional debug console overlay
+
+## Rendering Pipeline
+
+- Pipelines: the engine configures pipelines per `types.GameState` (e.g., `TexturedPipeline`).
+- Batching: draw calls are batched by texture to minimize bind group switches. When the texture changes, a new batch begins.
+- Vertex generation: positions/sizes are converted to NDC; for pixel art, integer snapping and scaling are applied in the canvas layer.
+- Texture loading: engine preloads textures used by renderables and any extra paths provided by the scene via `SceneTextureProvider`.
+
+## Input System
+
+- Engine owns the `InputCapturer` and initializes it during `Initialize()`.
+- Scenes should receive the engine’s capturer (via `engine.GetInputCapturer()`) rather than constructing their own, ensuring listeners are registered once and state is shared.
+
+## Scenes and Extensibility
+
+- Implement the `Scene` interface to define your game state. Typical lifecycle:
+  - `Initialize()`: create objects, layers, and resources
+  - `Update(dt)`: update movers, sprites, and gameplay logic; read input from `InputCapturer`
+  - `GetRenderables()`: return objects in render order (layered)
+  - `Cleanup()`: release references/resources
+- Register scenes with `engine.RegisterScene(state, scene)` and set the state with `engine.SetGameState(state)`.
+- Optional: implement `SceneOverlayRenderer` for batched HUD/menus, and `SceneTextureProvider` for extra preloads (e.g., font textures).
+
+## Configuration
+
+The global configuration lives in `pkg/config` as `config.Global` with:
+- `Screen`: virtual width/height, canvas width/height
+- `Player`: spawn, size, speed, texture, sprite grid
+- `Animation`: default frame times
+- `Rendering`: `PixelArtMode`, `TextureFiltering`, `PixelPerfectScaling`, `PixelScale`, `UILineSpacing`, `TextLineSpacing`
+- `Debug`: console toggle, font path/scale, colors, message settings
+- `Battle`: example game parameters (used in examples)
+
+Canvas creation: examples create the canvas element at runtime and pass its `id` to `engine.Initialize(canvasID)`.
+
+## Build, Test, and Run
+
+Library (root):
+
+```bash
+make test       # pkg/...
+make test-all   # ./...
+make tidy
+```
+
+Examples (multi-example orchestrator):
+
+```bash
+make -C examples list
+make -C examples build
+make -C examples serve   # serves examples/dist on an available port
+```
+
+Notes:
+- WASM builds require `GOOS=js GOARCH=wasm` (handled by the examples Makefile).
+- Use a WebGPU-capable browser; ensure WebGPU is enabled.
+
+## Directory Layout
+
+```
+pkg/
+  battle/         # Battle system primitives (used by examples)
+  canvas/         # WebGPU wrapper integration, pipelines, batching
+  config/         # Global configuration (config.Global)
+  debug/          # Optional debug console
+  engine/         # Engine loop, scene orchestration, input ownership
+  gameobject/     # Example game objects (shareable components)
+  input/          # Unified input system
+  mover/          # Movement/physics helpers
+  scene/          # Scene interfaces and layers
+  sprite/         # Sprite sheet and animation
+  text/           # Text rendering
+  types/          # Shared types and interfaces
+
+examples/
+  Makefile        # Builds all examples to examples/build, provisions examples/dist
+  basic-game/
+    assets/       # Example-specific assets
+    game/         # WASM entrypoint
+    scenes/       # Game-specific scenes (moved out of the library)
+    go.mod        # Separate module importing the engine
+```
+
+## Using as a Library
+
+Minimal pattern:
+
+```go
+eng := engine.NewEngine()
+scene := NewMyScene(eng.GetInputCapturer())
+eng.RegisterScene(types.GAMEPLAY, scene)
+_ = eng.Initialize("canvas-id")
+_ = eng.SetGameState(types.GAMEPLAY)
+eng.Start()
+```
+
+Local development with replace in your game’s `go.mod`:
+
+```go
+require github.com/conor/webgpu-triangle v0.0.0
+replace github.com/conor/webgpu-triangle => ../path/to/engine/repo
+```
+
+## Performance Notes
+
+- Batch by texture to minimize pipeline/bind group switches
+- Prefer texture atlases to increase batch sizes
+- Minimize per-frame allocations; consider object pooling
+- Use browser performance tools for profiling
+
+## Troubleshooting / FAQ
+
+- WebGPU not available: ensure you’re using a supported browser and WebGPU is enabled
+- Port in use: `make -C examples serve` auto-picks a free port
+- Assets missing in dist: ensure your example has `assets/` and the Makefile copied them
+- Input not registering: use the engine’s input capturer via `eng.GetInputCapturer()`
+- Build tags: WASM files must include `//go:build js`
+
+## Examples
+
+Examples live under `examples/` and can be built and served with the examples Makefile. They are intentionally separate modules and are not explained in detail here.
+
 
 A 2D game engine built with Go and WebGPU, compiled to WebAssembly for browser execution.
 
