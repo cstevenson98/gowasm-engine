@@ -49,3 +49,18 @@ type SceneAssetProvider interface {
 	// This is called before Initialize() to preload everything synchronously.
 	GetRequiredAssets() SceneAssets
 }
+
+// SceneStateful is an optional interface a Scene can implement
+// to persist state between scene changes. When a scene implements this interface,
+// the engine will call SaveState() before Cleanup() and RestoreState() after Initialize()
+// to maintain scene state across switches.
+type SceneStateful interface {
+	// SaveState saves the current scene state before cleanup.
+	// This is called by the engine before Cleanup() when switching away from the scene.
+	SaveState()
+
+	// RestoreState restores the previously saved scene state after initialization.
+	// This is called by the engine after Initialize() when switching back to the scene.
+	// If no state was previously saved, this should restore to default values.
+	RestoreState()
+}

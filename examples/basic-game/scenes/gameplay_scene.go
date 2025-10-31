@@ -37,6 +37,10 @@ type GameplayScene struct {
 	// Key press state tracking
 	key1PressedLastFrame bool
 	key2PressedLastFrame bool
+
+	// Saved state for persistence (optional, used when scene implements SceneStateful)
+	savedPlayerPosition *types.Vector2     // Player position to restore
+	savedPlayerState    *types.ObjectState // Full player state to restore
 }
 
 // NewGameplayScene creates a new gameplay scene
@@ -121,15 +125,25 @@ func (s *GameplayScene) Initialize() error {
 	s.AddGameObject(pkscene.BACKGROUND, background)
 	logger.Logger.Debugf("Created Background in %s scene", s.name)
 
-	// Create player in the center of the screen (ENTITIES layer)
-	spawnX, spawnY := config.GetPlayerSpawnPosition()
+	// Create player - use saved position if available, otherwise spawn position
+	var playerPos types.Vector2
+	if s.savedPlayerPosition != nil {
+		playerPos = *s.savedPlayerPosition
+		logger.Logger.Debugf("Creating Player at saved position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+	} else {
+		spawnX, spawnY := config.GetPlayerSpawnPosition()
+		playerPos = types.Vector2{X: spawnX, Y: spawnY}
+		logger.Logger.Debugf("Creating Player at spawn position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+	}
+
 	s.player = gameobject.NewPlayer(
-		types.Vector2{X: spawnX, Y: spawnY},
+		playerPos,
 		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
 		config.Global.Player.Speed,
 	)
 
-	logger.Logger.Debugf("Created Player at center of screen in %s scene", s.name)
+	// Note: Full state restoration happens in RestoreState() after Initialize() completes
+	// This ensures the player is fully created before we restore state
 
 	return nil
 }
@@ -264,6 +278,48 @@ func (s *GameplayScene) RemoveGameObject(layer pkscene.SceneLayer, obj types.Gam
 // GetPlayer returns the player object (for special access if needed)
 func (s *GameplayScene) GetPlayer() *gameobject.Player {
 	return s.player
+}
+
+// SaveState implements types.SceneStateful
+// Saves the current player position and state before cleanup
+func (s *GameplayScene) SaveState() {
+	if s.player != nil {
+		// Save player position
+		if mover := s.player.GetMover(); mover != nil {
+			pos := mover.GetPosition()
+			s.savedPlayerPosition = &pos
+			logger.Logger.Debugf("Saved player position: (%.2f, %.2f)", pos.X, pos.Y)
+		}
+
+		// Save full player state
+		playerState := s.player.GetState()
+		if playerState != nil {
+			savedState := types.CopyObjectState(*playerState)
+			s.savedPlayerState = &savedState
+			logger.Logger.Debugf("Saved player state for %s scene", s.name)
+		}
+	}
+}
+
+// RestoreState implements types.SceneStateful
+// Restores the previously saved player position and state after initialization
+func (s *GameplayScene) RestoreState() {
+	if s.player == nil {
+		return
+	}
+
+	// Player position is restored during Initialize() using savedPlayerPosition
+	// Here we restore the full state if it was saved
+	if s.savedPlayerState != nil {
+		s.player.SetState(*s.savedPlayerState)
+		logger.Logger.Debugf("Restored player state in %s scene", s.name)
+	} else if s.savedPlayerPosition != nil {
+		// If we have position but no full state, at least restore position
+		if mover := s.player.GetMover(); mover != nil {
+			mover.SetPosition(*s.savedPlayerPosition)
+			logger.Logger.Debugf("Restored player position to: (%.2f, %.2f)", s.savedPlayerPosition.X, s.savedPlayerPosition.Y)
+		}
+	}
 }
 
 // GetDebugFont returns the debug font (for texture loading)

@@ -285,8 +285,12 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		return err
 	}
 
-	// Cleanup old scene
+	// Save state of old scene before cleanup if it's stateful
 	if e.currentScene != nil {
+		if stateful, ok := e.currentScene.(types.SceneStateful); ok {
+			stateful.SaveState()
+			logger.Logger.Debugf("Saved state for scene: %s", e.currentScene.GetName())
+		}
 		e.currentScene.Cleanup()
 		e.currentScene = nil
 	}
@@ -322,6 +326,13 @@ func (e *Engine) SetGameState(state types.GameState) error {
 	if err != nil {
 		return &EngineError{Message: "Failed to initialize scene: " + err.Error()}
 	}
+
+	// Restore state if scene is stateful (after initialization so objects exist)
+	if stateful, ok := registeredScene.(types.SceneStateful); ok {
+		stateful.RestoreState()
+		logger.Logger.Debugf("Restored state for scene: %s", registeredScene.GetName())
+	}
+
 	e.currentScene = registeredScene
 	logger.Logger.Debugf("Initialized scene: %s for game state: %s", registeredScene.GetName(), state.String())
 
