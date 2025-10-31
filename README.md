@@ -35,6 +35,167 @@ _ = eng.SetGameState(types.GAMEPLAY)  // Input injected here if scene implements
 eng.Start()
 ```
 
+## Using from a Private GitHub Repository
+
+Since this repository is private, using it as a Go module requires authentication configuration. Here are the options:
+
+### Option 1: Local Development with `replace` (Recommended for Development)
+
+For local development, use a `replace` directive in your project's `go.mod`:
+
+```go
+module your-game
+
+go 1.24
+
+require github.com/cstevenson98/gowasm-engine v0.0.0
+
+replace github.com/cstevenson98/gowasm-engine => ../path/to/gowasm-engine
+```
+
+This allows you to:
+- Work with local changes without committing
+- Test modifications immediately
+- Avoid authentication setup during development
+
+### Option 2: Authenticated Access (For CI/CD or Remote Use)
+
+For using the module from the actual GitHub repository (CI/CD, deployment, or when working from different machines):
+
+#### Step 1: Configure Go to Skip Public Proxy
+
+Set `GOPRIVATE` to tell Go not to use the public module proxy for this module:
+
+```bash
+# For this module only
+go env -w GOPRIVATE=github.com/cstevenson98/gowasm-engine
+
+# Or for all modules under your GitHub organization
+go env -w GOPRIVATE=github.com/cstevenson98/*
+```
+
+#### Step 2: Configure Git Authentication
+
+Choose one of the following authentication methods:
+
+**A. SSH Keys (Recommended)**
+
+1. Ensure you have an SSH key set up with GitHub:
+   ```bash
+   ssh -T git@github.com  # Test connection
+   ```
+
+2. Configure git to use SSH for GitHub:
+   ```bash
+   git config --global url."git@github.com:".insteadOf "https://github.com/"
+   ```
+
+3. Your `go.mod` will use the module normally:
+   ```go
+   require github.com/cstevenson98/gowasm-engine v0.1.0
+   ```
+
+**B. Personal Access Token (PAT)**
+
+1. Create a GitHub Personal Access Token with `repo` scope:
+   - Go to GitHub Settings → Developer settings → Personal access tokens
+   - Generate a token with `repo` permissions
+
+2. Configure git credentials:
+   ```bash
+   # Option 1: Store in netrc file (~/.netrc)
+   machine github.com
+   login your-username
+   password your-token
+   
+   # Option 2: Use git credential helper
+   git config --global credential.helper store
+   # Then on first clone/pull, enter username and token as password
+   ```
+
+3. Use HTTPS URLs in your `go.mod`:
+   ```go
+   require github.com/cstevenson98/gowasm-engine v0.1.0
+   ```
+
+**C. GitHub CLI Authentication**
+
+If you use GitHub CLI (`gh`):
+
+```bash
+gh auth login
+# This sets up authentication that Go will use
+```
+
+#### Step 3: Version Your Module
+
+To use specific versions, tag your repository:
+
+```bash
+# In the engine repository
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Then in your game project:
+
+```go
+require github.com/cstevenson98/gowasm-engine v0.1.0
+```
+
+### Option 3: GONOPROXY and GONOSUMDB (Advanced)
+
+For complete control over module fetching:
+
+```bash
+# Don't use proxy for private modules
+go env -w GONOPROXY=github.com/cstevenson98/*
+
+# Don't verify checksums from public sumdb for private modules
+go env -w GONOSUMDB=github.com/cstevenson98/*
+```
+
+### Quick Setup Script
+
+For a quick setup, create a `.envrc` file (if using direnv) or a setup script:
+
+```bash
+#!/bin/bash
+# setup-private-module.sh
+
+# Configure Go for private module
+go env -w GOPRIVATE=github.com/cstevenson98/gowasm-engine
+
+# Ensure SSH is configured for GitHub
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+
+echo "Private module configured! Run: go get github.com/cstevenson98/gowasm-engine@latest"
+```
+
+### Troubleshooting
+
+**Error: `go get` fails with authentication error**
+- Verify `GOPRIVATE` is set correctly: `go env GOPRIVATE`
+- Test git access: `git ls-remote git@github.com:cstevenson98/gowasm-engine.git`
+- For HTTPS, verify credentials: `git config --global credential.helper`
+
+**Error: `go mod tidy` fails**
+- Ensure you're authenticated with GitHub (test with `gh auth status`)
+- Verify the repository exists and you have access
+- Check that `GOPRIVATE` includes your module path
+
+**CI/CD Setup**
+- For GitHub Actions: Use the built-in `GITHUB_TOKEN` (automatically configured)
+- For other CI: Set up SSH keys or use PAT as secrets
+- Don't forget to set `GOPRIVATE` in your CI environment
+
+### Recommended Workflow
+
+1. **Development**: Use `replace` directive for fast iteration
+2. **Version control**: Commit `go.mod` with version pin (remove `replace` for releases)
+3. **CI/CD**: Use authenticated access with version tags
+4. **Teams**: Share SSH key setup or use GitHub PATs with team members
+
 ## Architecture Overview
 
 High-level flow: Input → Scene.Update → Scene.GetRenderables → Canvas batching → WebGPU

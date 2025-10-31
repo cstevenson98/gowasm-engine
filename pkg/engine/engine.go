@@ -3,6 +3,7 @@
 package engine
 
 import (
+	"fmt"
 	"sync"
 	"syscall/js"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/input"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/scene"
+	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
@@ -51,8 +53,12 @@ func NewEngine() *Engine {
 
 // initializeGameStates sets up the pipeline configurations for each game state
 func (e *Engine) initializeGameStates() {
-	// SPRITE state uses textured pipeline for sprite rendering
+	// GAMEPLAY state uses textured pipeline for sprite rendering
 	e.gameStatePipelines[types.GAMEPLAY] = []types.PipelineType{
+		types.TexturedPipeline,
+	}
+	// BATTLE state also uses textured pipeline for sprite rendering
+	e.gameStatePipelines[types.BATTLE] = []types.PipelineType{
 		types.TexturedPipeline,
 	}
 }
@@ -291,13 +297,27 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		return &EngineError{Message: "No scene registered for game state: " + state.String()}
 	}
 
+	// Preload all scene assets BEFORE initialization to avoid deadlocks
+	// This ensures all blocking I/O (fonts, textures) happens before the game loop
+	err = e.preloadSceneAssets(registeredScene)
+	if err != nil {
+		logger.Logger.Warnf("Some assets failed to preload for scene %s: %s", registeredScene.GetName(), err.Error())
+		// Continue anyway - assets might load lazily later
+	}
+
 	// Inject input capturer if scene implements SceneInputProvider
 	if inputProvider, ok := registeredScene.(types.SceneInputProvider); ok {
 		inputProvider.SetInputCapturer(e.inputCapturer)
 		logger.Logger.Debugf("Injected input capturer into scene: %s", registeredScene.GetName())
 	}
 
-	// Initialize the registered scene
+	// Inject state change callback if scene implements SceneStateChangeRequester
+	if stateRequester, ok := registeredScene.(types.SceneStateChangeRequester); ok {
+		stateRequester.SetStateChangeCallback(e.SetGameState)
+		logger.Logger.Debugf("Injected state change callback into scene: %s", registeredScene.GetName())
+	}
+
+	// Initialize the registered scene (assets are already loaded, so this should be fast)
 	err = registeredScene.Initialize()
 	if err != nil {
 		return &EngineError{Message: "Failed to initialize scene: " + err.Error()}
@@ -307,6 +327,65 @@ func (e *Engine) SetGameState(state types.GameState) error {
 
 	e.currentGameState = state
 	logger.Logger.Debugf("Game state changed to: %s", state.String())
+	return nil
+}
+
+// preloadSceneAssets loads all assets required by a scene before initialization
+// This prevents deadlocks by doing all blocking I/O upfront, before the game loop
+func (e *Engine) preloadSceneAssets(s scene.Scene) error {
+	logger.Logger.Debugf("Preloading assets for scene: %s", s.GetName())
+
+	var errors []error
+
+	// Check if scene implements SceneAssetProvider to get asset list
+	if assetProvider, ok := s.(types.SceneAssetProvider); ok {
+		assets := assetProvider.GetRequiredAssets()
+
+		// Preload all textures
+		for _, texturePath := range assets.TexturePaths {
+			if texturePath != "" {
+				e.canvasManager.LoadTexture(texturePath)
+				logger.Logger.Debugf("Preloaded texture: %s", texturePath)
+			}
+		}
+
+		// Preload all fonts (blocking operations - this is where deadlocks used to occur)
+		// Font cache will prevent duplicate loads across scenes
+		for _, fontPath := range assets.FontPaths {
+			if fontPath != "" {
+				// Create a temporary font and load it to ensure it's ready
+				// The scene will reuse this font instance via cache
+				tempFont := text.NewSpriteFont()
+				err := tempFont.LoadFont(fontPath)
+				if err != nil {
+					errMsg := fmt.Errorf("failed to preload font %s: %w", fontPath, err)
+					logger.Logger.Warnf("%s", errMsg.Error())
+					errors = append(errors, errMsg)
+					// Continue loading other assets
+				} else {
+					logger.Logger.Debugf("Preloaded font: %s (cached for reuse)", fontPath)
+				}
+			}
+		}
+	} else {
+		// Fallback: try to discover assets from SceneTextureProvider
+		if textureProvider, ok := s.(types.SceneTextureProvider); ok {
+			for _, path := range textureProvider.GetExtraTexturePaths() {
+				if path != "" {
+					e.canvasManager.LoadTexture(path)
+					logger.Logger.Debugf("Preloaded texture (fallback): %s", path)
+				}
+			}
+		}
+	}
+
+	// Log summary
+	if len(errors) > 0 {
+		logger.Logger.Warnf("Preloaded assets for scene %s with %d error(s)", s.GetName(), len(errors))
+		return fmt.Errorf("preload completed with %d error(s)", len(errors))
+	}
+
+	logger.Logger.Debugf("Successfully preloaded all assets for scene: %s", s.GetName())
 	return nil
 }
 

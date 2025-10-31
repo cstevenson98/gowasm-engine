@@ -75,22 +75,34 @@ func initializeEngine() {
 
 	// Create and register scenes (demonstrating library usage)
 	// Input capturer will be injected by the engine during scene initialization
+
+	// Create gameplay scene
+	gameplayScene := exts.NewGameplayScene(
+		config.Global.Screen.Width,
+		config.Global.Screen.Height,
+	)
+	gameplayScene.SetCanvasManager(gameEngine.GetCanvasManager())
+	err := gameplayScene.InitializeDebugConsole()
+	if err != nil {
+		logger.Logger.Warnf("Failed to initialize debug console for gameplay: %s", err)
+	}
+
+	// Create battle scene
 	battleScene := exts.NewBattleScene(
 		config.Global.Screen.Width,
 		config.Global.Screen.Height,
 	)
-
-	// Set canvas manager for debug rendering
 	battleScene.SetCanvasManager(gameEngine.GetCanvasManager())
-
-	// Initialize debug console (after canvas manager is set)
-	err := battleScene.InitializeDebugConsole()
+	err = battleScene.InitializeDebugConsole()
 	if err != nil {
-		logger.Logger.Warnf("Failed to initialize debug console: %s", err)
+		logger.Logger.Warnf("Failed to initialize debug console for battle: %s", err)
 	}
 
-	// Register the scene with the engine
-	gameEngine.RegisterScene(types.GAMEPLAY, battleScene)
+	// Register both scenes with the engine
+	gameEngine.RegisterScene(types.GAMEPLAY, gameplayScene)
+	gameEngine.RegisterScene(types.BATTLE, battleScene)
+
+	logger.Logger.Info("Scenes registered: Press 1 to switch to gameplay, 2 to switch to battle")
 
 	// Initialize the engine
 	err = gameEngine.Initialize(canvasID)

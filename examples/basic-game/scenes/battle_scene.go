@@ -23,6 +23,9 @@ type BattleScene struct {
 	screenHeight  float64
 	inputCapturer types.InputCapturer
 
+	// State change callback (injected by engine)
+	stateChangeCallback func(state types.GameState) error
+
 	// Battle participants
 	player *gameobject.Player
 	enemy  *gameobject.Enemy
@@ -48,6 +51,10 @@ type BattleScene struct {
 
 	// Debug console toggle state
 	f2PressedLastFrame bool
+
+	// Key press state tracking
+	key1PressedLastFrame bool
+	key2PressedLastFrame bool
 }
 
 // NewBattleScene creates a new battle scene
@@ -63,6 +70,11 @@ func NewBattleScene(screenWidth, screenHeight float64) *BattleScene {
 // SetInputCapturer implements types.SceneInputProvider
 func (s *BattleScene) SetInputCapturer(inputCapturer types.InputCapturer) {
 	s.inputCapturer = inputCapturer
+}
+
+// SetStateChangeCallback implements types.SceneStateChangeRequester
+func (s *BattleScene) SetStateChangeCallback(callback func(state types.GameState) error) {
+	s.stateChangeCallback = callback
 }
 
 // SetCanvasManager sets the canvas manager for debug rendering
@@ -123,6 +135,20 @@ func (s *BattleScene) GetExtraTexturePaths() []string {
 		paths = append(paths, s.menuFont.GetTexturePath())
 	}
 	return paths
+}
+
+// GetRequiredAssets implements types.SceneAssetProvider
+func (s *BattleScene) GetRequiredAssets() types.SceneAssets {
+	return types.SceneAssets{
+		TexturePaths: []string{
+			"art/test-background.png",
+			config.Global.Player.TexturePath,
+			config.Global.Battle.EnemyTexture,
+		},
+		FontPaths: []string{
+			config.Global.Debug.FontPath, // Same font used for debug and menu, cached once
+		},
+	}
 }
 
 // InitializeMenuText initializes the menu text rendering system
@@ -263,7 +289,7 @@ func (s *BattleScene) Update(deltaTime float64) {
 		s.menuSystem.Update(deltaTime, s.inputCapturer)
 	}
 
-	// Handle debug console toggle (F2)
+	// Handle debug console toggle (F2) and scene switching (Key 1)
 	if s.inputCapturer != nil {
 		inputState := s.inputCapturer.GetInputState()
 		// Debug logging to see what keys are being pressed
@@ -277,6 +303,21 @@ func (s *BattleScene) Update(deltaTime float64) {
 		}
 		// Update local state
 		s.f2PressedLastFrame = inputState.F2Pressed
+
+		// Handle scene switching: Key 1 switches to gameplay scene, Key 2 to battle (no-op, already in battle)
+		if inputState.Key1Pressed && !s.key1PressedLastFrame && s.stateChangeCallback != nil {
+			logger.Logger.Debugf("Key 1 pressed: switching to gameplay scene")
+			err := s.stateChangeCallback(types.GAMEPLAY)
+			if err != nil {
+				logger.Logger.Errorf("Failed to switch to gameplay scene: %s", err.Error())
+			}
+			// Return early - scene may have been cleaned up during state change
+			s.key1PressedLastFrame = inputState.Key1Pressed
+			s.key2PressedLastFrame = inputState.Key2Pressed
+			return
+		}
+		s.key1PressedLastFrame = inputState.Key1Pressed
+		s.key2PressedLastFrame = inputState.Key2Pressed
 	}
 
 	// Update debug console

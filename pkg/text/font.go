@@ -5,10 +5,17 @@ package text
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 	"syscall/js"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
+)
+
+var (
+	// fontCache stores loaded font metadata by base path to avoid reloading
+	fontCache     = make(map[string]*FontMetadata)
+	fontCacheLock sync.Mutex
 )
 
 // CharacterData represents metadata for a single character in the font sprite sheet
@@ -52,22 +59,41 @@ func NewSpriteFont() *SpriteFont {
 
 // LoadFont loads a font sprite sheet from the given base path
 // It expects both a .sheet.png and .sheet.json file
+// Uses a global cache to avoid reloading the same font metadata multiple times
 func (f *SpriteFont) LoadFont(basePath string) error {
-	logger.Logger.Debugf("Loading font from: %s", basePath)
-
 	// Store the texture path (PNG)
 	f.texturePath = basePath + ".sheet.png"
 	metadataPath := basePath + ".sheet.json"
 
-	// Load the JSON metadata
+	// Check cache first
+	fontCacheLock.Lock()
+	cachedMetadata, exists := fontCache[basePath]
+	fontCacheLock.Unlock()
+
+	if exists {
+		// Reuse cached metadata
+		f.metadata = cachedMetadata
+		f.loaded = true
+		logger.Logger.Debugf("Using cached font: %s (%dx%d cells, %d characters)",
+			f.metadata.FontName, f.metadata.CellWidth, f.metadata.CellHeight, f.metadata.CharacterCount)
+		return nil
+	}
+
+	// Not in cache, load it
+	logger.Logger.Debugf("Loading font from: %s", basePath)
 	err := f.loadMetadata(metadataPath)
 	if err != nil {
 		logger.Logger.Errorf("Failed to load font metadata: %s", err)
 		return fmt.Errorf("failed to load font metadata: %w", err)
 	}
 
+	// Store in cache for future use
+	fontCacheLock.Lock()
+	fontCache[basePath] = f.metadata
+	fontCacheLock.Unlock()
+
 	f.loaded = true
-	logger.Logger.Debugf("Font loaded successfully: %s (%dx%d cells, %d characters)",
+	logger.Logger.Debugf("Font loaded and cached: %s (%dx%d cells, %d characters)",
 		f.metadata.FontName, f.metadata.CellWidth, f.metadata.CellHeight, f.metadata.CharacterCount)
 
 	return nil

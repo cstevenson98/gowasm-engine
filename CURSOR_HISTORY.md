@@ -1999,3 +1999,49 @@ Provide actionable, low-risk improvements that fit the existing architecture and
 
 ---
 
+
+## [2025-10-31 22:11:35 GMT] - Added Documentation for Using Private GitHub Repository as Go Module
+
+**Prompt/Request**: How would using my engine work in terms of a go module, if my github repository is private
+
+**Changes Made**:
+- Added comprehensive "Using from a Private GitHub Repository" section to README.md covering:
+  - Option 1: Local development with `replace` directive (recommended for development)
+  - Option 2: Authenticated access for CI/CD or remote use:
+    - Step 1: Configure GOPRIVATE environment variable
+    - Step 2: Configure git authentication (SSH keys, Personal Access Tokens, GitHub CLI)
+    - Step 3: Version tagging instructions
+  - Option 3: Advanced configuration with GONOPROXY and GONOSUMDB
+  - Quick setup script template
+  - Troubleshooting section for common authentication issues
+  - Recommended workflow for development vs production
+
+**Reasoning**:
+When using a private GitHub repository as a Go module, users need to:
+1. Configure Go to skip public proxies (GOPRIVATE)
+2. Set up authentication (SSH or PAT)
+3. Understand versioning with git tags
+4. Know the difference between local development (replace) and remote access
+
+This documentation helps users understand all available options and choose the best approach for their use case.
+
+**Impact**:
+- Users can now properly configure their environment to use the private module
+- Clear guidance for both development and production scenarios
+- Troubleshooting section helps resolve common authentication issues
+- CI/CD setup guidance included
+
+**Testing**:
+- Documentation only (no code changes)
+- Verified markdown formatting
+- No linter errors
+
+**Notes**:
+The documentation covers the three main approaches:
+- Local replace directive (fastest for development)
+- Authenticated remote access (for CI/CD and distributed teams)
+- Advanced configuration for complete control
+
+Users should choose based on their workflow: replace for local dev, authenticated access for CI/CD.
+
+---

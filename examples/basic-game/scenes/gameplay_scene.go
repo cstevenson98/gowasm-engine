@@ -20,6 +20,9 @@ type GameplayScene struct {
 	screenHeight  float64
 	inputCapturer types.InputCapturer
 
+	// State change callback (injected by engine)
+	stateChangeCallback func(state types.GameState) error
+
 	// Player (managed separately for input handling)
 	player *gameobject.Player
 
@@ -30,6 +33,10 @@ type GameplayScene struct {
 	debugFont         text.Font
 	debugTextRenderer text.TextRenderer
 	canvasManager     canvas.CanvasManager
+
+	// Key press state tracking
+	key1PressedLastFrame bool
+	key2PressedLastFrame bool
 }
 
 // NewGameplayScene creates a new gameplay scene
@@ -47,9 +54,27 @@ func (s *GameplayScene) SetInputCapturer(inputCapturer types.InputCapturer) {
 	s.inputCapturer = inputCapturer
 }
 
+// SetStateChangeCallback implements types.SceneStateChangeRequester
+func (s *GameplayScene) SetStateChangeCallback(callback func(state types.GameState) error) {
+	s.stateChangeCallback = callback
+}
+
 // SetCanvasManager sets the canvas manager for debug rendering
 func (s *GameplayScene) SetCanvasManager(cm canvas.CanvasManager) {
 	s.canvasManager = cm
+}
+
+// GetRequiredAssets implements types.SceneAssetProvider
+func (s *GameplayScene) GetRequiredAssets() types.SceneAssets {
+	return types.SceneAssets{
+		TexturePaths: []string{
+			"art/test-background.png",
+			config.Global.Player.TexturePath,
+		},
+		FontPaths: []string{
+			config.Global.Debug.FontPath,
+		},
+	}
 }
 
 // InitializeDebugConsole initializes the debug console font and text renderer
@@ -116,6 +141,26 @@ func (s *GameplayScene) Update(deltaTime float64) {
 		// Get input state and apply to player
 		inputState := s.inputCapturer.GetInputState()
 		s.player.HandleInput(inputState)
+
+		// Handle scene switching: Key 1 switches to gameplay (no-op, already in gameplay), Key 2 switches to battle scene
+		if inputState.Key2Pressed && !s.key2PressedLastFrame && s.stateChangeCallback != nil {
+			logger.Logger.Debugf("Key 2 pressed: switching to battle scene")
+			err := s.stateChangeCallback(types.BATTLE)
+			if err != nil {
+				logger.Logger.Errorf("Failed to switch to battle scene: %s", err.Error())
+			}
+			// Return early - scene may have been cleaned up during state change
+			s.key1PressedLastFrame = inputState.Key1Pressed
+			s.key2PressedLastFrame = inputState.Key2Pressed
+			return
+		}
+		s.key1PressedLastFrame = inputState.Key1Pressed
+		s.key2PressedLastFrame = inputState.Key2Pressed
+
+		// Re-check player exists (may have been cleaned up during state change)
+		if s.player == nil {
+			return
+		}
 
 		// Update player mover (position)
 		if mover := s.player.GetMover(); mover != nil {

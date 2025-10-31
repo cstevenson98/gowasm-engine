@@ -23,3 +23,29 @@ type SceneInputProvider interface {
 	// Called by the engine during scene initialization.
 	SetInputCapturer(inputCapturer InputCapturer)
 }
+
+// SceneStateChangeRequester is an optional interface a Scene can implement
+// to request game state changes back to the engine.
+// The engine automatically injects a state change callback when scenes implement this interface.
+type SceneStateChangeRequester interface {
+	// SetStateChangeCallback sets a callback function that the scene can call
+	// to request a state change. Called by the engine during scene initialization.
+	SetStateChangeCallback(callback func(state GameState) error)
+}
+
+// SceneAssets represents all assets required by a scene
+type SceneAssets struct {
+	// TexturePaths are paths to texture files (.png, etc.) that need to be loaded
+	TexturePaths []string
+	// FontPaths are paths to font sprite sheets (base path, engine will append .sheet.json)
+	FontPaths []string
+}
+
+// SceneAssetProvider is an optional interface a Scene can implement
+// to declare all assets it requires. The engine will preload these assets
+// BEFORE calling Initialize() to prevent deadlocks from blocking I/O operations.
+type SceneAssetProvider interface {
+	// GetRequiredAssets returns all assets that must be loaded before the scene initializes.
+	// This is called before Initialize() to preload everything synchronously.
+	GetRequiredAssets() SceneAssets
+}
