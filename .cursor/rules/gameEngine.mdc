@@ -129,7 +129,7 @@ package main
 
 import (
     "syscall/js"
-    "github.com/conor/webgpu-triangle/internal/engine"
+    "github.com/cstevenson98/gowasm-engine/internal/engine"
 )
 
 var gameEngine *engine.Engine

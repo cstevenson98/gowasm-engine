@@ -21,17 +21,17 @@ Use as a library in your own project (local dev with replace):
 
 ```go
 // go.mod (in your game)
-require github.com/conor/webgpu-triangle v0.0.0
-replace github.com/conor/webgpu-triangle => ../path/to/engine/repo
+require github.com/cstevenson98/gowasm-engine v0.0.0
+replace github.com/cstevenson98/gowasm-engine => ../path/to/engine/repo
 ```
 
 ```go
 // main.go (WASM entrypoint with //go:build js)
 eng := engine.NewEngine()
-myScene := NewMyScene(eng.GetInputCapturer())
+myScene := NewMyScene()  // Input will be injected automatically
 eng.RegisterScene(types.GAMEPLAY, myScene)
 _ = eng.Initialize("canvas-id")
-_ = eng.SetGameState(types.GAMEPLAY)
+_ = eng.SetGameState(types.GAMEPLAY)  // Input injected here if scene implements SceneInputProvider
 eng.Start()
 ```
 
@@ -48,7 +48,7 @@ High-level flow: Input → Scene.Update → Scene.GetRenderables → Canvas batc
   - Game loop (requestAnimationFrame), delta time, render loop
   - Engine state: current scene and pipelines by `types.GameState`
   - Scene registration (`RegisterScene`) and state switching (`SetGameState`)
-  - Owns and initializes input; exposes `GetInputCapturer()`
+  - Owns and initializes input; injects input into scenes via `SceneInputProvider` interface
   - Loads textures required by current scene
 
 - `pkg/canvas`
@@ -64,6 +64,7 @@ High-level flow: Input → Scene.Update → Scene.GetRenderables → Canvas batc
 - `pkg/types`
   - Shared interfaces and types: `GameObject`, `Sprite`, `Mover`, `InputCapturer`, `Vector2`, `UVRect`, `Pipeline`, `GameState`, etc.
   - Optional scene extension interfaces:
+    - `SceneInputProvider` with `SetInputCapturer(inputCapturer)` (receive engine's input capturer)
     - `SceneOverlayRenderer` with `RenderOverlays()` (HUD/menus/debug rendered inside batch)
     - `SceneTextureProvider` with `GetExtraTexturePaths() []string` (extra textures to preload)
 
@@ -91,7 +92,8 @@ High-level flow: Input → Scene.Update → Scene.GetRenderables → Canvas batc
 ## Input System
 
 - Engine owns the `InputCapturer` and initializes it during `Initialize()`.
-- Scenes should receive the engine’s capturer (via `engine.GetInputCapturer()`) rather than constructing their own, ensuring listeners are registered once and state is shared.
+- Scenes receive the engine's input capturer automatically if they implement the `SceneInputProvider` interface. The engine injects it during scene initialization when `SetGameState()` is called.
+- This ensures listeners are registered once and input state is shared across scenes.
 
 ## Scenes and Extensibility
 
@@ -101,7 +103,7 @@ High-level flow: Input → Scene.Update → Scene.GetRenderables → Canvas batc
   - `GetRenderables()`: return objects in render order (layered)
   - `Cleanup()`: release references/resources
 - Register scenes with `engine.RegisterScene(state, scene)` and set the state with `engine.SetGameState(state)`.
-- Optional: implement `SceneOverlayRenderer` for batched HUD/menus, and `SceneTextureProvider` for extra preloads (e.g., font textures).
+- Optional: implement `SceneInputProvider` to receive input from the engine, `SceneOverlayRenderer` for batched HUD/menus, and `SceneTextureProvider` for extra preloads (e.g., font textures).
 
 ## Configuration
 
@@ -169,18 +171,18 @@ Minimal pattern:
 
 ```go
 eng := engine.NewEngine()
-scene := NewMyScene(eng.GetInputCapturer())
+scene := NewMyScene()  // Input injected automatically if scene implements SceneInputProvider
 eng.RegisterScene(types.GAMEPLAY, scene)
 _ = eng.Initialize("canvas-id")
-_ = eng.SetGameState(types.GAMEPLAY)
+_ = eng.SetGameState(types.GAMEPLAY)  // Input injected here
 eng.Start()
 ```
 
 Local development with replace in your game’s `go.mod`:
 
 ```go
-require github.com/conor/webgpu-triangle v0.0.0
-replace github.com/conor/webgpu-triangle => ../path/to/engine/repo
+require github.com/cstevenson98/gowasm-engine v0.0.0
+replace github.com/cstevenson98/gowasm-engine => ../path/to/engine/repo
 ```
 
 ## Performance Notes
@@ -195,7 +197,7 @@ replace github.com/conor/webgpu-triangle => ../path/to/engine/repo
 - WebGPU not available: ensure you’re using a supported browser and WebGPU is enabled
 - Port in use: `make -C examples serve` auto-picks a free port
 - Assets missing in dist: ensure your example has `assets/` and the Makefile copied them
-- Input not registering: use the engine’s input capturer via `eng.GetInputCapturer()`
+- Input not registering: ensure your scene implements `SceneInputProvider` interface to receive input from the engine
 - Build tags: WASM files must include `//go:build js`
 
 ## Examples

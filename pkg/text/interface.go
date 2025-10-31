@@ -1,7 +1,7 @@
 package text
 
 import (
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // Font represents a font sprite sheet with character mapping

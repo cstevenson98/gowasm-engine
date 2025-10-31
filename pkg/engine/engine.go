@@ -6,13 +6,13 @@ import (
 	"sync"
 	"syscall/js"
 
-	"github.com/conor/webgpu-triangle/pkg/canvas"
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/debug"
-	"github.com/conor/webgpu-triangle/pkg/input"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/scene"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/debug"
+	"github.com/cstevenson98/gowasm-engine/pkg/input"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/scene"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // Engine represents the game engine that manages the canvas and game loop
@@ -264,11 +264,6 @@ func (e *Engine) GetCanvasManager() canvas.CanvasManager {
 	return e.canvasManager
 }
 
-// GetInputCapturer returns the engine's input capturer
-func (e *Engine) GetInputCapturer() types.InputCapturer {
-	return e.inputCapturer
-}
-
 // SetGameState changes the current game state and updates the active pipelines
 func (e *Engine) SetGameState(state types.GameState) error {
 	e.stateLock.Lock()
@@ -294,6 +289,12 @@ func (e *Engine) SetGameState(state types.GameState) error {
 	registeredScene, exists := e.registeredScenes[state]
 	if !exists {
 		return &EngineError{Message: "No scene registered for game state: " + state.String()}
+	}
+
+	// Inject input capturer if scene implements SceneInputProvider
+	if inputProvider, ok := registeredScene.(types.SceneInputProvider); ok {
+		inputProvider.SetInputCapturer(e.inputCapturer)
+		logger.Logger.Debugf("Injected input capturer into scene: %s", registeredScene.GetName())
 	}
 
 	// Initialize the registered scene

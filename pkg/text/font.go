@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // CharacterData represents metadata for a single character in the font sprite sheet

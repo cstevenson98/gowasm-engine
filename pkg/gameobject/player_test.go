@@ -5,9 +5,9 @@ package gameobject
 import (
 	"testing"
 
-	"github.com/conor/webgpu-triangle/pkg/mover"
-	"github.com/conor/webgpu-triangle/pkg/sprite"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/mover"
+	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 func TestNewPlayer(t *testing.T) {

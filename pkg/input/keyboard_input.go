@@ -6,7 +6,7 @@ import (
 	"sync"
 	"syscall/js"
 
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // KeyboardInput captures keyboard input from the browser

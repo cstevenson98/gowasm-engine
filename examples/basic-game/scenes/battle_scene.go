@@ -5,15 +5,15 @@ package scenes
 import (
 	"fmt"
 
-	"github.com/conor/webgpu-triangle/pkg/battle"
-	"github.com/conor/webgpu-triangle/pkg/canvas"
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/debug"
-	"github.com/conor/webgpu-triangle/pkg/gameobject"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	pkscene "github.com/conor/webgpu-triangle/pkg/scene"
-	"github.com/conor/webgpu-triangle/pkg/text"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/battle"
+	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/debug"
+	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
+	"github.com/cstevenson98/gowasm-engine/pkg/text"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // BattleScene represents a turn-based battle scene with player, enemy, and menu
@@ -51,14 +51,18 @@ type BattleScene struct {
 }
 
 // NewBattleScene creates a new battle scene
-func NewBattleScene(screenWidth, screenHeight float64, inputCapturer types.InputCapturer) *BattleScene {
+func NewBattleScene(screenWidth, screenHeight float64) *BattleScene {
 	return &BattleScene{
-		name:          "Battle",
-		screenWidth:   screenWidth,
-		screenHeight:  screenHeight,
-		inputCapturer: inputCapturer,
-		layers:        make(map[pkscene.SceneLayer][]types.GameObject),
+		name:         "Battle",
+		screenWidth:  screenWidth,
+		screenHeight: screenHeight,
+		layers:       make(map[pkscene.SceneLayer][]types.GameObject),
 	}
+}
+
+// SetInputCapturer implements types.SceneInputProvider
+func (s *BattleScene) SetInputCapturer(inputCapturer types.InputCapturer) {
+	s.inputCapturer = inputCapturer
 }
 
 // SetCanvasManager sets the canvas manager for debug rendering

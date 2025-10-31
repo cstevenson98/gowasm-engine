@@ -5,7 +5,7 @@ package input
 import (
 	"sync"
 
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // UnifiedInput combines keyboard and gamepad input into a single input capturer

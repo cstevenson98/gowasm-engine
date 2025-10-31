@@ -3,7 +3,7 @@ package input
 import (
 	"sync"
 
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // MockInput is a mock implementation of InputCapturer for testing

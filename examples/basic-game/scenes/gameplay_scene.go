@@ -3,14 +3,14 @@
 package scenes
 
 import (
-	"github.com/conor/webgpu-triangle/pkg/canvas"
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/debug"
-	"github.com/conor/webgpu-triangle/pkg/gameobject"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	pkscene "github.com/conor/webgpu-triangle/pkg/scene"
-	"github.com/conor/webgpu-triangle/pkg/text"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/debug"
+	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
+	"github.com/cstevenson98/gowasm-engine/pkg/text"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // GameplayScene represents the main gameplay scene with player and game objects
@@ -33,14 +33,18 @@ type GameplayScene struct {
 }
 
 // NewGameplayScene creates a new gameplay scene
-func NewGameplayScene(screenWidth, screenHeight float64, inputCapturer types.InputCapturer) *GameplayScene {
+func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 	return &GameplayScene{
-		name:          "Gameplay",
-		screenWidth:   screenWidth,
-		screenHeight:  screenHeight,
-		inputCapturer: inputCapturer,
-		layers:        make(map[pkscene.SceneLayer][]types.GameObject),
+		name:         "Gameplay",
+		screenWidth:  screenWidth,
+		screenHeight: screenHeight,
+		layers:       make(map[pkscene.SceneLayer][]types.GameObject),
 	}
+}
+
+// SetInputCapturer implements types.SceneInputProvider
+func (s *GameplayScene) SetInputCapturer(inputCapturer types.InputCapturer) {
+	s.inputCapturer = inputCapturer
 }
 
 // SetCanvasManager sets the canvas manager for debug rendering

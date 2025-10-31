@@ -1,7 +1,7 @@
 package mover
 
 import (
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // MockMover is a mock implementation of Mover for testing

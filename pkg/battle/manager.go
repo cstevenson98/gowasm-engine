@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // BattleManager manages the battle system including action queue processing

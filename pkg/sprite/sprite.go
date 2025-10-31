@@ -1,7 +1,7 @@
 package sprite
 
 import (
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // SpriteSheet represents an animated sprite sheet with n x m frames

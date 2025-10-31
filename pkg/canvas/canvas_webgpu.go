@@ -8,9 +8,9 @@ import (
 	"unsafe"
 
 	"github.com/cogentcore/webgpu/wgpu"
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // textureBatch represents a batch of vertices for a single texture

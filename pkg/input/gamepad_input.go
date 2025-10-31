@@ -6,8 +6,8 @@ import (
 	"sync"
 	"syscall/js"
 
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // GamepadInput captures gamepad/controller input from the browser

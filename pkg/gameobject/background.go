@@ -5,8 +5,8 @@ package gameobject
 import (
 	"sync"
 
-	"github.com/conor/webgpu-triangle/pkg/sprite"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 	"github.com/google/uuid"
 )
 
@@ -60,7 +60,7 @@ func NewBackground(position types.Vector2, size types.Vector2, texturePath strin
 		1, // 1 column
 		1, // 1 row = 1 frame (static image)
 	)
-	
+
 	// Prevent any animation
 	backgroundSprite.SetCurrentFrame(0)
 	backgroundSprite.SetFrameTime(999999.0) // Extremely long frame time
@@ -113,4 +113,3 @@ func (b *Background) GetID() string {
 	defer b.mu.Unlock()
 	return b.state.ID
 }
-

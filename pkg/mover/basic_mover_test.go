@@ -3,7 +3,7 @@ package mover
 import (
 	"testing"
 
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 func TestNewBasicMover(t *testing.T) {

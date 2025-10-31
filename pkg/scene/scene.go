@@ -3,7 +3,7 @@
 package scene
 
 import (
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // SceneLayer represents the fixed rendering layers for 2D sprites

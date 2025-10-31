@@ -1,4 +1,4 @@
-module github.com/conor/webgpu-triangle
+module github.com/cstevenson98/gowasm-engine
 
 go 1.24.3
 

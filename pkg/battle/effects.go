@@ -3,7 +3,7 @@ package battle
 import (
 	"sync"
 
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // DamageEffect represents a visual damage/healing effect

@@ -3,11 +3,11 @@
 package scenes
 
 import (
-	"github.com/conor/webgpu-triangle/pkg/canvas"
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/text"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/text"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // BattleMenuSystem manages the battle UI including battle log, character status, and action menu

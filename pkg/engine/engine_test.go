@@ -5,9 +5,9 @@ package engine
 import (
 	"testing"
 
-	"github.com/conor/webgpu-triangle/pkg/canvas"
-	"github.com/conor/webgpu-triangle/pkg/input"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
+	"github.com/cstevenson98/gowasm-engine/pkg/input"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // Helper to create an engine with mocks

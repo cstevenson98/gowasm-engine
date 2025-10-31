@@ -6,10 +6,10 @@ import (
 	"syscall/js"
 
 	exts "example.com/basic-game/scenes"
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/engine"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/engine"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // Global engine instance
@@ -74,10 +74,10 @@ func initializeEngine() {
 	}
 
 	// Create and register scenes (demonstrating library usage)
+	// Input capturer will be injected by the engine during scene initialization
 	battleScene := exts.NewBattleScene(
 		config.Global.Screen.Width,
 		config.Global.Screen.Height,
-		gameEngine.GetInputCapturer(),
 	)
 
 	// Set canvas manager for debug rendering

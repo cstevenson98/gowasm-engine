@@ -1834,8 +1834,8 @@ The correct approach for pixel-perfect rendering:
 **Changes Made**:
 - Moved `cmd/game` to `examples/basic-game/game`
 - Created `examples/basic-game/go.mod` with module `example.com/basic-game`
-- Added dependency on `github.com/conor/webgpu-triangle v0.0.0`
-- Added replace: `github.com/conor/webgpu-triangle => ../..`
+- Added dependency on `github.com/cstevenson98/gowasm-engine v0.0.0`
+- Added replace: `github.com/cstevenson98/gowasm-engine => ../..`
 - Built the example to `examples/basic-game/build/main.wasm`
 
 **Reasoning**:
@@ -1969,6 +1969,33 @@ Provide a single, authoritative reference for developers consuming the engine as
 
 **Notes**:
 - Examples remain intentionally brief here; they are built/served via `examples/Makefile`.
+
+---
+
+
+## [$timestamp] - Added ring buffer rendering optimizations guide
+
+**Prompt/Request**: Write a document outlining rendering “easy wins” using a ring buffer, with example code changes.
+
+**Changes Made**:
+- Created `docs/RENDERING_OPTIMIZATIONS_RING_BUFFER.md` with:
+  - Goals, terminology, and summary of current batching
+  - Ring buffer allocation and usage with pseudocode
+  - Per-texture batch upload/playback flow
+  - Optional static index buffer example
+  - Triple buffering guidance, texture preloading, stats, and checklist
+  - FAQ and minimal API impacts
+  - Integration steps
+
+**Reasoning**:
+Provide actionable, low-risk improvements that fit the existing architecture and can be adopted incrementally without API changes.
+
+**Impact**:
+- Clear path to reduce per-frame allocations and stalls
+- Documentation for future refactors of the canvas layer internals
+
+**Testing**:
+- Documentation only
 
 ---
 

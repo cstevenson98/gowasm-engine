@@ -14,3 +14,12 @@ type SceneTextureProvider interface {
 	// GetExtraTexturePaths returns additional texture paths to preload.
 	GetExtraTexturePaths() []string
 }
+
+// SceneInputProvider is an optional interface a Scene can implement
+// to receive the engine's input capturer during initialization.
+// The engine automatically injects the input capturer when scenes implement this interface.
+type SceneInputProvider interface {
+	// SetInputCapturer sets the input capturer for the scene.
+	// Called by the engine during scene initialization.
+	SetInputCapturer(inputCapturer InputCapturer)
+}

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // MockCanvasManager implements CanvasManager for testing

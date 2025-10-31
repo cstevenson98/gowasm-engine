@@ -5,11 +5,11 @@ package gameobject
 import (
 	"sync"
 
-	"github.com/conor/webgpu-triangle/pkg/config"
-	"github.com/conor/webgpu-triangle/pkg/logger"
-	"github.com/conor/webgpu-triangle/pkg/mover"
-	"github.com/conor/webgpu-triangle/pkg/sprite"
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/mover"
+	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // Enemy represents an enemy character in battle

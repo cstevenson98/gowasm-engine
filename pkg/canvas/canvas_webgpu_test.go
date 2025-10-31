@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/conor/webgpu-triangle/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // setupTestCanvas creates a test canvas element in the DOM
