@@ -5,6 +5,7 @@ package main
 import (
 	"syscall/js"
 
+	"example.com/basic-game/game/gamestate"
 	exts "example.com/basic-game/scenes"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/engine"
@@ -73,8 +74,25 @@ func initializeEngine() {
 		return
 	}
 
+	// Create game state manager
+	stateManager := gamestate.NewGameStateManager()
+
+	// Register game state manager with engine (for dependency injection)
+	gameEngine.RegisterGameStateProvider(stateManager)
+
 	// Create and register scenes (demonstrating library usage)
 	// Input capturer will be injected by the engine during scene initialization
+
+	// Create menu scene
+	menuScene := exts.NewMenuScene(
+		config.Global.Screen.Width,
+		config.Global.Screen.Height,
+	)
+	menuScene.SetCanvasManager(gameEngine.GetCanvasManager())
+	err := menuScene.InitializeDebugConsole()
+	if err != nil {
+		logger.Logger.Warnf("Failed to initialize debug console for menu: %s", err)
+	}
 
 	// Create gameplay scene
 	gameplayScene := exts.NewGameplayScene(
@@ -82,7 +100,7 @@ func initializeEngine() {
 		config.Global.Screen.Height,
 	)
 	gameplayScene.SetCanvasManager(gameEngine.GetCanvasManager())
-	err := gameplayScene.InitializeDebugConsole()
+	err = gameplayScene.InitializeDebugConsole()
 	if err != nil {
 		logger.Logger.Warnf("Failed to initialize debug console for gameplay: %s", err)
 	}
@@ -98,11 +116,24 @@ func initializeEngine() {
 		logger.Logger.Warnf("Failed to initialize debug console for battle: %s", err)
 	}
 
-	// Register both scenes with the engine
+	// Create player menu scene
+	playerMenuScene := exts.NewPlayerMenuScene(
+		config.Global.Screen.Width,
+		config.Global.Screen.Height,
+	)
+	playerMenuScene.SetCanvasManager(gameEngine.GetCanvasManager())
+	err = playerMenuScene.InitializeDebugConsole()
+	if err != nil {
+		logger.Logger.Warnf("Failed to initialize debug console for player menu: %s", err)
+	}
+
+	// Register all scenes with the engine
+	gameEngine.RegisterScene(types.MENU, menuScene)
 	gameEngine.RegisterScene(types.GAMEPLAY, gameplayScene)
+	gameEngine.RegisterScene(types.PLAYER_MENU, playerMenuScene)
 	gameEngine.RegisterScene(types.BATTLE, battleScene)
 
-	logger.Logger.Info("Scenes registered: Press 1 to switch to gameplay, 2 to switch to battle")
+	logger.Logger.Info("Scenes registered: Menu, Gameplay, PlayerMenu, Battle")
 
 	// Initialize the engine
 	err = gameEngine.Initialize(canvasID)
@@ -111,8 +142,8 @@ func initializeEngine() {
 		return
 	}
 
-	// Set the initial game state
-	err = gameEngine.SetGameState(types.GAMEPLAY)
+	// Set the initial game state to menu
+	err = gameEngine.SetGameState(types.MENU)
 	if err != nil {
 		logger.Logger.Errorf("Failed to set initial game state: %s", err.Error())
 		return

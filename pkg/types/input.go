@@ -20,9 +20,11 @@ type InputState struct {
 	F2Pressed    bool // F2 key for debug console toggle
 	Key1Pressed  bool // Key 1 for scene switching
 	Key2Pressed  bool // Key 2 for scene switching
+	MPressed     bool // M key for player menu
 
 	// Modifier keys
 	ShiftPressed bool
+	CtrlPressed  bool // Ctrl key for save shortcuts (Ctrl+S)
 
 	// Previous frame state for detecting key presses
 	UpPressedLastFrame    bool
@@ -34,7 +36,9 @@ type InputState struct {
 	F2PressedLastFrame    bool
 	Key1PressedLastFrame  bool
 	Key2PressedLastFrame  bool
+	MPressedLastFrame     bool
 	ShiftPressedLastFrame bool
+	CtrlPressedLastFrame  bool
 }
 
 // InputCapturer is the interface for capturing user input

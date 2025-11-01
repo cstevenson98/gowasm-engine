@@ -64,3 +64,15 @@ type SceneStateful interface {
 	// If no state was previously saved, this should restore to default values.
 	RestoreState()
 }
+
+// SceneGameStateUser is an optional interface a Scene can implement
+// to receive access to the game's global state manager during initialization.
+// The engine will inject the game state provider (registered by the game) into scenes
+// that implement this interface. The engine does not know or care about the specific
+// type of the game state - it just passes through whatever the game registers.
+type SceneGameStateUser interface {
+	// SetGameState sets the game state provider (manager).
+	// Called by the engine during scene initialization.
+	// The provider type is defined by the game, not the engine.
+	SetGameState(gameState interface{})
+}

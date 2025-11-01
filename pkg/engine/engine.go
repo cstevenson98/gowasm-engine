@@ -31,6 +31,7 @@ type Engine struct {
 	stateLock          sync.Mutex                      // Lock to prevent concurrent state changes
 	screenWidth        float64
 	screenHeight       float64
+	gameStateProvider  interface{} // Generic game state provider (type defined by game, not engine)
 }
 
 // NewEngine creates a new game engine instance
@@ -53,8 +54,16 @@ func NewEngine() *Engine {
 
 // initializeGameStates sets up the pipeline configurations for each game state
 func (e *Engine) initializeGameStates() {
+	// MENU state uses textured pipeline for text rendering
+	e.gameStatePipelines[types.MENU] = []types.PipelineType{
+		types.TexturedPipeline,
+	}
 	// GAMEPLAY state uses textured pipeline for sprite rendering
 	e.gameStatePipelines[types.GAMEPLAY] = []types.PipelineType{
+		types.TexturedPipeline,
+	}
+	// PLAYER_MENU state uses textured pipeline for text rendering
+	e.gameStatePipelines[types.PLAYER_MENU] = []types.PipelineType{
 		types.TexturedPipeline,
 	}
 	// BATTLE state also uses textured pipeline for sprite rendering
@@ -166,8 +175,13 @@ func (e *Engine) Render() {
 		renderables = currentScene.GetRenderables()
 	}
 
-	// Check if we have anything to render
-	if len(renderables) > 0 {
+	// Check if we have anything to render OR if scene has overlays to render
+	hasOverlays := false
+	if currentScene != nil {
+		_, hasOverlays = currentScene.(types.SceneOverlayRenderer)
+	}
+
+	if len(renderables) > 0 || hasOverlays {
 		err := e.canvasManager.BeginBatch()
 		if err != nil {
 			logger.Logger.Errorf("Failed to begin batch: %s", err.Error())
@@ -270,6 +284,16 @@ func (e *Engine) GetCanvasManager() canvas.CanvasManager {
 	return e.canvasManager
 }
 
+// RegisterGameStateProvider registers a game state provider that will be injected
+// into scenes that implement SceneGameStateUser. The provider type is defined by
+// the game, not the engine - the engine just passes it through.
+func (e *Engine) RegisterGameStateProvider(provider interface{}) {
+	e.stateLock.Lock()
+	defer e.stateLock.Unlock()
+	e.gameStateProvider = provider
+	logger.Logger.Debugf("Registered game state provider with engine")
+}
+
 // SetGameState changes the current game state and updates the active pipelines
 func (e *Engine) SetGameState(state types.GameState) error {
 	e.stateLock.Lock()
@@ -319,6 +343,14 @@ func (e *Engine) SetGameState(state types.GameState) error {
 	if stateRequester, ok := registeredScene.(types.SceneStateChangeRequester); ok {
 		stateRequester.SetStateChangeCallback(e.SetGameState)
 		logger.Logger.Debugf("Injected state change callback into scene: %s", registeredScene.GetName())
+	}
+
+	// Inject game state provider if scene implements SceneGameStateUser
+	if gameStateUser, ok := registeredScene.(types.SceneGameStateUser); ok {
+		if e.gameStateProvider != nil {
+			gameStateUser.SetGameState(e.gameStateProvider)
+			logger.Logger.Debugf("Injected game state provider into scene: %s", registeredScene.GetName())
+		}
 	}
 
 	// Initialize the registered scene (assets are already loaded, so this should be fast)

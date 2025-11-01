@@ -2045,3 +2045,48 @@ The documentation covers the three main approaches:
 Users should choose based on their workflow: replace for local dev, authenticated access for CI/CD.
 
 ---
+
+## [2025-10-31T23:39:26Z] - Game State Persistence with Save/Load Menu
+
+**Prompt/Request**: Implement a dependency injection pattern for game state management, add localStorage persistence with multiple saves indexed by timestamp, create a main menu scene with new/load game options, and add Ctrl+S save functionality in gameplay scene.
+
+**Changes Made**:
+- Added `SceneGameStateUser` interface in `pkg/types/scene_extras.go` for dependency injection of game state manager
+- Added `RegisterGameStateProvider()` method to Engine in `pkg/engine/engine.go` to register game state provider
+- Added Ctrl key tracking to input system (`pkg/types/input.go`, `pkg/input/keyboard_input.go`, `pkg/input/unified_input.go`)
+- Added `MENU` game state to `pkg/types/gamestate.go` and configured pipeline in `pkg/engine/engine.go`
+- Created game state structure in `examples/basic-game/game/gamestate/state.go` with PlayerStats, PlayerPosition, StoryState, and SaveInfo
+- Created localStorage wrapper in `examples/basic-game/game/gamestate/storage.go` using syscall/js for WASM compatibility
+- Created GameStateManager in `examples/basic-game/game/gamestate/state_manager.go` with save/load/list/delete methods
+- Created MenuScene in `examples/basic-game/scenes/menu_scene.go` with black background, centered text menu (New Game/Load Game), and navigation
+- Added menu system with main menu and load game submenu showing saves with timestamps
+- Added `SceneGameStateUser` implementation to GameplayScene and MenuScene
+- Added Ctrl+S save functionality to GameplayScene in `examples/basic-game/scenes/gameplay_scene.go`
+- Integrated menu scene and game state manager in `examples/basic-game/game/main.go`, setting initial state to MENU
+
+**Reasoning**:
+The engine provides generic dependency injection infrastructure (accepts `interface{}` and passes through), while the game defines its own state structure. This separation allows the engine to remain game-agnostic while enabling game-specific state management. localStorage was chosen for persistence as it's the standard browser storage mechanism available in WASM. The menu scene follows the same pattern as BattleScene for consistency.
+
+**Impact**:
+- Engine now supports dependency injection for game state providers (generic mechanism)
+- Games can define their own state structure and manager while using engine infrastructure
+- Multiple saves can be stored in localStorage indexed by timestamp
+- Menu scene provides entry point for new/load game flow
+- Ctrl+S allows quick saving during gameplay
+- Initial game state is now MENU instead of GAMEPLAY
+
+**Testing**:
+- Code compiles (pending final build verification)
+- Menu scene implements all required interfaces (SceneInputProvider, SceneStateChangeRequester, SceneOverlayRenderer, SceneGameStateUser, SceneAssetProvider)
+- GameplayScene implements SceneGameStateUser and handles save functionality
+- Game state manager uses mutex for thread safety
+- localStorage operations use base64 encoding for binary data storage
+
+**Notes**:
+- Game state files are in `examples/basic-game/game/gamestate/` subdirectory to avoid package conflicts with main.go
+- Save format uses JSON serialization with version field for future migration support
+- Ctrl+S detection uses Ctrl key + MoveDown (S key) - could be improved to explicitly track S key separately
+- Menu scene uses simple black background (no texture) - could be enhanced with background texture later
+- Load game submenu shows save list with timestamps, level, and HP - could add deletion functionality later
+
+---

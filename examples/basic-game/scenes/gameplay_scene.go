@@ -3,6 +3,9 @@
 package scenes
 
 import (
+	"fmt"
+
+	"example.com/basic-game/game/gamestate"
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
@@ -23,6 +26,9 @@ type GameplayScene struct {
 	// State change callback (injected by engine)
 	stateChangeCallback func(state types.GameState) error
 
+	// Game state manager (injected by engine)
+	gameStateManager interface{} // Cast to *gamestate.GameStateManager
+
 	// Player (managed separately for input handling)
 	player *gameobject.Player
 
@@ -37,6 +43,7 @@ type GameplayScene struct {
 	// Key press state tracking
 	key1PressedLastFrame bool
 	key2PressedLastFrame bool
+	mPressedLastFrame    bool // M key for player menu
 
 	// Saved state for persistence (optional, used when scene implements SceneStateful)
 	savedPlayerPosition *types.Vector2     // Player position to restore
@@ -61,6 +68,13 @@ func (s *GameplayScene) SetInputCapturer(inputCapturer types.InputCapturer) {
 // SetStateChangeCallback implements types.SceneStateChangeRequester
 func (s *GameplayScene) SetStateChangeCallback(callback func(state types.GameState) error) {
 	s.stateChangeCallback = callback
+}
+
+// SetGameState implements types.SceneGameStateUser
+func (s *GameplayScene) SetGameState(gameState interface{}) {
+	// Cast to the game's state manager type
+	s.gameStateManager = gameState
+	logger.Logger.Debugf("Gameplay scene received game state manager")
 }
 
 // SetCanvasManager sets the canvas manager for debug rendering
@@ -125,12 +139,46 @@ func (s *GameplayScene) Initialize() error {
 	s.AddGameObject(pkscene.BACKGROUND, background)
 	logger.Logger.Debugf("Created Background in %s scene", s.name)
 
-	// Create player - use saved position if available, otherwise spawn position
+	// Create player - use saved position from global game state if available,
+	// otherwise use scene-level saved position (for scene switching),
+	// otherwise use spawn position
 	var playerPos types.Vector2
-	if s.savedPlayerPosition != nil {
+
+	// First, check if we have a global game state with saved position (from load game)
+	// The game state will have a non-zero Timestamp if it was loaded from a save
+	if s.gameStateManager != nil {
+		if manager, ok := s.gameStateManager.(*gamestate.GameStateManager); ok {
+			globalState := manager.GetState()
+			if globalState != nil && globalState.Timestamp > 0 {
+				// Use position from loaded game state (Timestamp > 0 means it was loaded from a save)
+				playerPos = globalState.PlayerPosition
+				logger.Logger.Debugf("Creating Player at loaded position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+			} else if s.savedPlayerPosition != nil {
+				// Fallback to scene-level saved position (for scene switching)
+				playerPos = *s.savedPlayerPosition
+				logger.Logger.Debugf("Creating Player at saved scene position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+			} else {
+				// Default to spawn position
+				spawnX, spawnY := config.GetPlayerSpawnPosition()
+				playerPos = types.Vector2{X: spawnX, Y: spawnY}
+				logger.Logger.Debugf("Creating Player at spawn position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+			}
+		} else if s.savedPlayerPosition != nil {
+			// Fallback: scene-level saved position
+			playerPos = *s.savedPlayerPosition
+			logger.Logger.Debugf("Creating Player at saved scene position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+		} else {
+			// Default to spawn position
+			spawnX, spawnY := config.GetPlayerSpawnPosition()
+			playerPos = types.Vector2{X: spawnX, Y: spawnY}
+			logger.Logger.Debugf("Creating Player at spawn position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+		}
+	} else if s.savedPlayerPosition != nil {
+		// Fallback: scene-level saved position
 		playerPos = *s.savedPlayerPosition
-		logger.Logger.Debugf("Creating Player at saved position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
+		logger.Logger.Debugf("Creating Player at saved scene position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
 	} else {
+		// Default to spawn position
 		spawnX, spawnY := config.GetPlayerSpawnPosition()
 		playerPos = types.Vector2{X: spawnX, Y: spawnY}
 		logger.Logger.Debugf("Creating Player at spawn position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.name)
@@ -141,6 +189,14 @@ func (s *GameplayScene) Initialize() error {
 		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
 		config.Global.Player.Speed,
 	)
+
+	// Update game state manager with player reference (player is part of game state)
+	if s.gameStateManager != nil {
+		if manager, ok := s.gameStateManager.(*gamestate.GameStateManager); ok {
+			manager.SetPlayer(s.player)
+			logger.Logger.Debugf("Updated game state manager with player reference")
+		}
+	}
 
 	// Note: Full state restoration happens in RestoreState() after Initialize() completes
 	// This ensures the player is fully created before we restore state
@@ -170,6 +226,19 @@ func (s *GameplayScene) Update(deltaTime float64) {
 		}
 		s.key1PressedLastFrame = inputState.Key1Pressed
 		s.key2PressedLastFrame = inputState.Key2Pressed
+
+		// Handle player menu (M key)
+		if inputState.MPressed && !s.mPressedLastFrame && s.stateChangeCallback != nil {
+			logger.Logger.Debugf("M key pressed: opening player menu")
+			err := s.stateChangeCallback(types.PLAYER_MENU)
+			if err != nil {
+				logger.Logger.Errorf("Failed to switch to player menu: %s", err.Error())
+			}
+			// Return early - scene may have been cleaned up during state change
+			s.mPressedLastFrame = inputState.MPressed
+			return
+		}
+		s.mPressedLastFrame = inputState.MPressed
 
 		// Re-check player exists (may have been cleaned up during state change)
 		if s.player == nil {
@@ -275,11 +344,6 @@ func (s *GameplayScene) RemoveGameObject(layer pkscene.SceneLayer, obj types.Gam
 	}
 }
 
-// GetPlayer returns the player object (for special access if needed)
-func (s *GameplayScene) GetPlayer() *gameobject.Player {
-	return s.player
-}
-
 // SaveState implements types.SceneStateful
 // Saves the current player position and state before cleanup
 func (s *GameplayScene) SaveState() {
@@ -319,6 +383,73 @@ func (s *GameplayScene) RestoreState() {
 			mover.SetPosition(*s.savedPlayerPosition)
 			logger.Logger.Debugf("Restored player position to: (%.2f, %.2f)", s.savedPlayerPosition.X, s.savedPlayerPosition.Y)
 		}
+	}
+}
+
+// handleSaveGame handles saving the current game state
+func (s *GameplayScene) handleSaveGame() {
+	if s.gameStateManager == nil {
+		logger.Logger.Warnf("Cannot save: game state manager not available")
+		return
+	}
+
+	// Cast to the game's state manager type
+	manager, ok := s.gameStateManager.(*gamestate.GameStateManager)
+	if !ok {
+		logger.Logger.Warnf("Cannot save: invalid game state manager type")
+		return
+	}
+
+	if s.player == nil {
+		logger.Logger.Warnf("Cannot save: player not available")
+		return
+	}
+
+	// Get current game state
+	currentState := manager.GetState()
+	if currentState == nil {
+		logger.Logger.Warnf("Cannot save: no game state exists (create a new game first)")
+		return
+	}
+
+	// Collect player position
+	var playerPos types.Vector2
+	if mover := s.player.GetMover(); mover != nil {
+		playerPos = mover.GetPosition()
+	}
+
+	// Collect player stats
+	var playerStats gamestate.PlayerStats
+	if stats := s.player.GetStats(); stats != nil {
+		playerStats = gamestate.PlayerStats{
+			Level:      1, // TODO: get from player when leveling is implemented
+			HP:         stats.HP,
+			MaxHP:      stats.MaxHP,
+			Experience: 0, // TODO: get from player when XP is implemented
+		}
+	} else {
+		// Default stats if player doesn't have stats component
+		playerStats = gamestate.PlayerStats{
+			Level:      1,
+			HP:         config.Global.Battle.PlayerHP,
+			MaxHP:      config.Global.Battle.PlayerMaxHP,
+			Experience: 0,
+		}
+	}
+
+	// Update game state
+	currentState.PlayerPosition = playerPos
+	currentState.PlayerStats = playerStats
+	// StoryState can be updated separately if needed
+
+	// Save to localStorage
+	saveKey, err := manager.SaveCurrentGame()
+	if err != nil {
+		logger.Logger.Errorf("Failed to save game: %s", err.Error())
+		debug.Console.PostMessage("System", fmt.Sprintf("Save failed: %s", err.Error()))
+	} else {
+		logger.Logger.Infof("Game saved successfully: %s", saveKey)
+		debug.Console.PostMessage("System", "Game saved successfully")
 	}
 }
 
