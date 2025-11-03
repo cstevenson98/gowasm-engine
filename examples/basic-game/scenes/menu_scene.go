@@ -23,7 +23,7 @@ type MenuScene struct {
 	inputCapturer types.InputCapturer
 
 	// State change callback (injected by engine)
-	stateChangeCallback func(state types.GameState) error
+	stateChangeCallback func(state types.PipelineState) error
 
 	// Game state manager (injected by engine)
 	gameStateManager *gamestate.GameStateManager
@@ -76,8 +76,8 @@ func (s *MenuScene) SetInputCapturer(inputCapturer types.InputCapturer) {
 	s.inputCapturer = inputCapturer
 }
 
-// SetStateChangeCallback implements types.SceneStateChangeRequester
-func (s *MenuScene) SetStateChangeCallback(callback func(state types.GameState) error) {
+// SetStateChangeCallback implements types.SceneChangeRequester
+func (s *MenuScene) SetStateChangeCallback(callback func(state types.PipelineState) error) {
 	s.stateChangeCallback = callback
 }
 

@@ -24,7 +24,7 @@ type BattleScene struct {
 	inputCapturer types.InputCapturer
 
 	// State change callback (injected by engine)
-	stateChangeCallback func(state types.GameState) error
+	stateChangeCallback func(state types.PipelineState) error
 
 	// Battle participants
 	player *gameobject.Player
@@ -72,8 +72,8 @@ func (s *BattleScene) SetInputCapturer(inputCapturer types.InputCapturer) {
 	s.inputCapturer = inputCapturer
 }
 
-// SetStateChangeCallback implements types.SceneStateChangeRequester
-func (s *BattleScene) SetStateChangeCallback(callback func(state types.GameState) error) {
+// SetStateChangeCallback implements types.SceneChangeRequester
+func (s *BattleScene) SetStateChangeCallback(callback func(state types.PipelineState) error) {
 	s.stateChangeCallback = callback
 }
 
