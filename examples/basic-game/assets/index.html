@@ -44,6 +44,17 @@
     </div>
 
     <script>
+        // Check for WebGPU support before loading WASM
+        if (!navigator.gpu) {
+            document.body.innerHTML = '<div style="color: white; text-align: center; padding: 50px;">' +
+                '<h1>WebGPU Not Supported</h1>' +
+                '<p>This browser does not support WebGPU.</p>' +
+                '<p>Please use Chrome 113+, Edge 113+, or Safari 18+</p>' +
+                '<p>For Chrome/Edge, you may need to enable: <code>chrome://flags/#enable-unsafe-webgpu</code></p>' +
+                '</div>';
+            throw new Error('WebGPU not supported');
+        }
+
         const go = new Go();
 
         // Expose wasm instance globally for jsx.BytesToJS
@@ -57,6 +68,12 @@
             // Expose the instance to global scope for cogentcore/webgpu jsx.BytesToJS
             window.wasm.instance = result.instance;
             go.run(result.instance);
+        }).catch((err) => {
+            console.error('Failed to load WASM:', err);
+            document.body.innerHTML = '<div style="color: white; text-align: center; padding: 50px;">' +
+                '<h1>Failed to Load Game</h1>' +
+                '<p>Error: ' + err.message + '</p>' +
+                '</div>';
         });
     </script>
 </body>

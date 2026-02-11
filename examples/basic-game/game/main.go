@@ -142,10 +142,10 @@ func initializeEngine() {
 		return
 	}
 
-	// Set the initial pipeline state to menu
-	err = gameEngine.SetPipelineState(types.MENU)
+	// Set the initial game state to menu
+	err = gameEngine.SetGameState(types.MENU)
 	if err != nil {
-		logger.Logger.Errorf("Failed to set initial pipeline state: %s", err.Error())
+		logger.Logger.Errorf("Failed to set initial game state: %s", err.Error())
 		return
 	}
 

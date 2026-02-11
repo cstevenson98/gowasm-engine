@@ -1,0 +1,4 @@
+# Ignore everything except the Dockerfile context
+*
+!Dockerfile
+!post-create.sh

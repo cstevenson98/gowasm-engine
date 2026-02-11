@@ -7,8 +7,33 @@ A component-based 2D game engine written in Go, compiled to WebAssembly, and ren
 Prerequisites:
 - Go 1.24+
 - A WebGPU-capable browser (recent Chromium-based browser with WebGPU enabled)
+- Git LFS (for image assets)
 
-Build and serve the examples:
+### Setting Up Git LFS
+
+This repository uses Git LFS (Large File Storage) for PNG images and other binary assets. You must install and configure Git LFS before building the examples:
+
+```bash
+# Install Git LFS (if not already installed)
+# Ubuntu/Debian:
+sudo apt-get install git-lfs
+
+# macOS:
+brew install git-lfs
+
+# Windows:
+# Download from https://git-lfs.github.com/
+
+# Initialize Git LFS in your repository
+git lfs install
+
+# Pull the actual asset files (required after cloning)
+git lfs pull
+```
+
+**Important:** After cloning this repository for the first time, you must run `git lfs pull` to download the actual image files. Without this step, you'll only have LFS pointer files (small ~130 byte text files) instead of the actual PNG images, and the examples will fail to load assets.
+
+### Build and Run Examples
 
 ```bash
 make -C examples list
@@ -627,6 +652,60 @@ MIT License - See LICENSE file for details
 - Inspired by modern 2D game engines
 
 ## Troubleshooting
+
+### Images fail to load / Infinite "Failed to load image" errors
+This means Git LFS assets weren't pulled. The PNG files are LFS pointer files (~130 bytes) instead of actual images.
+
+**Solution:**
+```bash
+# Install Git LFS if not already installed
+sudo apt-get install git-lfs  # Ubuntu/Debian
+# brew install git-lfs        # macOS
+
+# Initialize and pull LFS files
+git lfs install
+git lfs pull
+
+# Rebuild examples to copy real images
+make -C examples build
+```
+
+**Verify fix:**
+```bash
+# Check file sizes - should be KB, not bytes
+ls -lah examples/basic-game/assets/*.png
+# llama.png should be ~2.7KB, not 129 bytes
+```
+
+### Font textures fail to load
+If font sprite sheets are missing or corrupt, regenerate them:
+
+**Prerequisites:**
+```bash
+# Install Pillow for Python
+sudo apt-get install python3-pil  # Ubuntu/Debian
+# pip3 install --user Pillow      # Alternative
+```
+
+**Generate fonts:**
+```bash
+cd scripts
+python3 font_spritesheet_generator.py --font Mono --size 10 --output ../examples/basic-game/assets/fonts/
+
+# Rebuild to copy to dist
+cd ../examples
+make build
+```
+
+The font generator creates `.sheet.png` (sprite texture) and `.sheet.json` (metadata) files. Proper font files are ~5KB, not ~130 bytes.
+
+### WebGPU not supported error
+Ensure you're using a compatible browser and accessing via `localhost`:
+
+1. **Browser:** Chrome 113+, Edge 113+, or Safari 18+
+2. **URL:** Use `http://localhost:8080` not `http://0.0.0.0:8080`
+3. **Enable WebGPU:** In Chrome, visit `chrome://flags/#enable-unsafe-webgpu` and enable it
+4. **Verify:** Check `chrome://gpu` to confirm "WebGPU: Hardware accelerated"
 
 ### WASM tests fail with "chrome not found"
 Install Chrome or Chromium:
