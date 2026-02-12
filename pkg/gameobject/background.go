@@ -3,8 +3,6 @@
 package gameobject
 
 import (
-	"sync"
-
 	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 	"github.com/google/uuid"
@@ -39,13 +37,10 @@ func (sm *StaticMover) SetScreenBounds(width, height float64) {
 	// Static - no wrapping needed
 }
 
-// Background is a GameObject that represents a static background image
+// Background is a GameObject that represents a static background image.
+// It embeds BaseGameObject to inherit common GameObject functionality.
 type Background struct {
-	sprite types.Sprite
-	mover  types.Mover
-	state  types.ObjectState
-
-	mu sync.Mutex
+	*BaseGameObject
 }
 
 // NewBackground creates a new Background GameObject
@@ -68,48 +63,18 @@ func NewBackground(position types.Vector2, size types.Vector2, texturePath strin
 	// Create a simple mover to provide position (but with zero velocity)
 	backgroundMover := &StaticMover{position: position}
 
-	return &Background{
-		sprite: backgroundSprite,
-		mover:  backgroundMover,
-		state: types.ObjectState{
-			ID:       uuid.New().String(),
-			Position: position,
-			Visible:  true,
-			Frame:    0,
-		},
+	// Create state
+	backgroundState := types.ObjectState{
+		ID:       uuid.New().String(),
+		Position: position,
+		Visible:  true,
+		Frame:    0,
 	}
-}
 
-// GetSprite returns the sprite associated with this Background
-func (b *Background) GetSprite() types.Sprite {
-	return b.sprite
-}
+	// Initialize BaseGameObject
+	baseGameObject := NewBaseGameObject(backgroundSprite, backgroundMover, backgroundState)
 
-// GetMover returns the static mover that provides position
-func (b *Background) GetMover() types.Mover {
-	return b.mover
-}
-
-// GetState returns the Background's current state
-func (b *Background) GetState() *types.ObjectState {
-	return &b.state
-}
-
-// SetState sets the Background's state
-func (b *Background) SetState(state types.ObjectState) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.state = types.CopyObjectState(state)
-}
-
-// Update updates the Background's state (backgrounds are static, so this is a no-op)
-func (b *Background) Update(deltaTime float64) {
-	// Backgrounds don't update
-}
-
-// GetID returns the Background's unique identifier
-func (b *Background) GetID() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.state.ID
+	return &Background{
+		BaseGameObject: baseGameObject,
+	}
 }

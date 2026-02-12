@@ -3,8 +3,6 @@
 package gameobject
 
 import (
-	"sync"
-
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/mover"
 	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
@@ -12,13 +10,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// Llama is a GameObject that represents a llama character
+// Llama is a GameObject that represents a llama character.
+// It embeds BaseGameObject to inherit common GameObject functionality.
 type Llama struct {
-	sprite types.Sprite
-	mover  types.Mover
-	state  types.ObjectState
-
-	mu sync.Mutex
+	*BaseGameObject
 }
 
 // NewLlama creates a new Llama GameObject
@@ -45,47 +40,18 @@ func NewLlama(position types.Vector2, size types.Vector2, speed float64) *Llama 
 	// Set screen bounds for wrapping from config
 	llamaMover.SetScreenBounds(config.Global.Screen.Width, config.Global.Screen.Height)
 
-	return &Llama{
-		sprite: llamaSprite,
-		mover:  llamaMover,
-		state: types.ObjectState{
-			ID:       uuid.New().String(),
-			Position: position,
-			Visible:  true,
-			Frame:    0,
-		},
+	// Create state
+	llamaState := types.ObjectState{
+		ID:       uuid.New().String(),
+		Position: position,
+		Visible:  true,
+		Frame:    0,
 	}
-}
 
-// GetSprite returns the sprite associated with this Llama
-func (l *Llama) GetSprite() types.Sprite {
-	return l.sprite
-}
+	// Initialize BaseGameObject
+	baseGameObject := NewBaseGameObject(llamaSprite, llamaMover, llamaState)
 
-// GetMover returns the mover component for this Llama
-func (l *Llama) GetMover() types.Mover {
-	return l.mover
-}
-
-// GetState returns the Llama's current state
-func (l *Llama) GetState() *types.ObjectState {
-	return &l.state
-}
-
-// SetState sets the Llama's state
-func (l *Llama) SetState(state types.ObjectState) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.state = types.CopyObjectState(state)
-}
-
-// Update updates the Llama's state
-func (l *Llama) Update(deltaTime float64) {
-}
-
-// GetID returns the Llama's unique identifier
-func (l *Llama) GetID() string {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.state.ID
+	return &Llama{
+		BaseGameObject: baseGameObject,
+	}
 }
