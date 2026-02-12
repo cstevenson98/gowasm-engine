@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/battle"
-	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
@@ -16,15 +15,10 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// BattleScene represents a turn-based battle scene with player, enemy, and menu
+// BattleScene represents a turn-based battle scene with player, enemy, and menu.
+// It embeds BaseScene to inherit all common scene functionality.
 type BattleScene struct {
-	name          string
-	screenWidth   float64
-	screenHeight  float64
-	inputCapturer types.InputCapturer
-
-	// State change callback (injected by engine)
-	stateChangeCallback func(state types.GameState) error
+	*pkscene.BaseScene
 
 	// Battle participants
 	player *gameobject.Player
@@ -37,13 +31,9 @@ type BattleScene struct {
 	battleManager *battle.BattleManager
 	effectManager *battle.EffectManager
 
-	// Game objects organized by layer
-	layers map[pkscene.SceneLayer][]types.GameObject
-
 	// Debug rendering
 	debugFont         text.Font
 	debugTextRenderer text.TextRenderer
-	canvasManager     canvas.CanvasManager
 
 	// Menu text rendering
 	menuFont         text.Font
@@ -59,28 +49,29 @@ type BattleScene struct {
 
 // NewBattleScene creates a new battle scene
 func NewBattleScene(screenWidth, screenHeight float64) *BattleScene {
+	baseScene := pkscene.NewBaseScene("Battle", screenWidth, screenHeight)
+	
+	// Set required assets
+	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
+	baseScene.SetRequiredAssets(types.SceneAssets{
+		TexturePaths: []string{
+			"art/test-background.png",
+			config.Global.Player.TexturePath,
+			config.Global.Battle.EnemyTexture,
+			fontTexturePath,
+		},
+		FontPaths: []string{
+			config.Global.Debug.FontPath,
+		},
+	})
+	
 	return &BattleScene{
-		name:         "Battle",
-		screenWidth:  screenWidth,
-		screenHeight: screenHeight,
-		layers:       make(map[pkscene.SceneLayer][]types.GameObject),
+		BaseScene: baseScene,
 	}
 }
 
-// SetInputCapturer implements types.SceneInputProvider
-func (s *BattleScene) SetInputCapturer(inputCapturer types.InputCapturer) {
-	s.inputCapturer = inputCapturer
-}
-
-// SetStateChangeCallback implements types.SceneChangeRequester
-func (s *BattleScene) SetStateChangeCallback(callback func(state types.GameState) error) {
-	s.stateChangeCallback = callback
-}
-
-// SetCanvasManager sets the canvas manager for debug rendering
-func (s *BattleScene) SetCanvasManager(cm canvas.CanvasManager) {
-	s.canvasManager = cm
-}
+// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetCanvasManager)
+// are inherited from BaseScene
 
 // InitializeDebugConsole initializes the debug console font and text renderer
 func (s *BattleScene) InitializeDebugConsole() error {
@@ -88,7 +79,7 @@ func (s *BattleScene) InitializeDebugConsole() error {
 		return nil
 	}
 
-	logger.Logger.Debugf("Initializing debug console for %s scene", s.name)
+	logger.Logger.Debugf("Initializing debug console for %s scene", s.GetName())
 
 	// Create and load font metadata
 	s.debugFont = text.NewSpriteFont()
@@ -99,7 +90,7 @@ func (s *BattleScene) InitializeDebugConsole() error {
 	}
 
 	// Create text renderer (texture will be loaded by engine's loadSpriteTextures)
-	s.debugTextRenderer = text.NewTextRenderer(s.canvasManager)
+	s.debugTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
 
 	logger.Logger.Debugf("Debug console initialized successfully")
 	// Post a welcome message after a short delay to allow texture loading
@@ -137,23 +128,11 @@ func (s *BattleScene) GetExtraTexturePaths() []string {
 	return paths
 }
 
-// GetRequiredAssets implements types.SceneAssetProvider
-func (s *BattleScene) GetRequiredAssets() types.SceneAssets {
-	return types.SceneAssets{
-		TexturePaths: []string{
-			"art/test-background.png",
-			config.Global.Player.TexturePath,
-			config.Global.Battle.EnemyTexture,
-		},
-		FontPaths: []string{
-			config.Global.Debug.FontPath, // Same font used for debug and menu, cached once
-		},
-	}
-}
+// GetRequiredAssets is inherited from BaseScene (set in constructor)
 
 // InitializeMenuText initializes the menu text rendering system
 func (s *BattleScene) InitializeMenuText() error {
-	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.name)
+	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.GetName())
 
 	// Create and load font metadata for menu text
 	s.menuFont = text.NewSpriteFont()
@@ -164,52 +143,52 @@ func (s *BattleScene) InitializeMenuText() error {
 	}
 
 	// Create text renderer for menu
-	s.menuTextRenderer = text.NewTextRenderer(s.canvasManager)
+	s.menuTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
 
 	logger.Logger.Debugf("Menu text rendering initialized successfully")
 	return nil
 }
 
-// Initialize sets up the battle scene and creates game objects
+// Initialize sets up the battle scene and creates game objects (overrides BaseScene.Initialize)
 func (s *BattleScene) Initialize() error {
-	logger.Logger.Debugf("Initializing %s scene", s.name)
+	logger.Logger.Debugf("Initializing %s scene", s.GetName())
 
-	// Initialize layer slices
-	s.layers[pkscene.BACKGROUND] = []types.GameObject{}
-	s.layers[pkscene.ENTITIES] = []types.GameObject{}
-	s.layers[pkscene.UI] = []types.GameObject{}
+	// Call base initialization
+	if err := s.BaseScene.Initialize(); err != nil {
+		return err
+	}
 
 	// Create background (BACKGROUND layer)
 	background := gameobject.NewBackground(
 		types.Vector2{X: 0, Y: 0}, // Top-left corner
-		types.Vector2{X: s.screenWidth, Y: s.screenHeight},
+		types.Vector2{X: s.GetScreenWidth(), Y: s.GetScreenHeight()},
 		"art/test-background.png",
 	)
 	s.AddGameObject(pkscene.BACKGROUND, background)
-	logger.Logger.Debugf("Created Background in %s scene", s.name)
+	logger.Logger.Debugf("Created Background in %s scene", s.GetName())
 
 	// Create player on the left side (ENTITIES layer)
-	playerX := s.screenWidth * 0.2  // 20% from left
-	playerY := s.screenHeight * 0.5 // Center vertically
+	playerX := s.GetScreenWidth() * 0.2  // 20% from left
+	playerY := s.GetScreenHeight() * 0.5 // Center vertically
 	s.player = gameobject.NewPlayer(
 		types.Vector2{X: playerX, Y: playerY},
 		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
 		config.Global.Player.Speed,
 	)
-	logger.Logger.Debugf("Created Player on left side in %s scene", s.name)
+	logger.Logger.Debugf("Created Player on left side in %s scene", s.GetName())
 
 	// Create enemy on the right side (ENTITIES layer)
-	enemyX := s.screenWidth * 0.8  // 80% from left (right side)
-	enemyY := s.screenHeight * 0.5 // Center vertically
+	enemyX := s.GetScreenWidth() * 0.8  // 80% from left (right side)
+	enemyY := s.GetScreenHeight() * 0.5 // Center vertically
 	s.enemy = gameobject.NewEnemy(
 		types.Vector2{X: enemyX, Y: enemyY},
 		types.Vector2{X: 32.0, Y: 64.0}, // Ghost sprite dimensions (96x128 total, 3x2 grid = 32x64 per frame)
 		config.Global.Battle.EnemyTexture,
 	)
-	logger.Logger.Debugf("Created Enemy on right side in %s scene", s.name)
+	logger.Logger.Debugf("Created Enemy on right side in %s scene", s.GetName())
 
 	// Initialize battle menu system
-	s.menuSystem = NewBattleMenuSystem(s.screenWidth, s.screenHeight)
+	s.menuSystem = NewBattleMenuSystem(s.GetScreenWidth(), s.GetScreenHeight())
 	s.menuSystem.Initialize()
 
 	// Set up action callback
@@ -271,7 +250,7 @@ func (s *BattleScene) Update(deltaTime float64) {
 
 	// Update all game objects in all layers
 	for _, layer := range []pkscene.SceneLayer{pkscene.BACKGROUND, pkscene.ENTITIES, pkscene.UI} {
-		for _, gameObject := range s.layers[layer] {
+		for _, gameObject := range s.GetLayer(layer) {
 			if mover := gameObject.GetMover(); mover != nil {
 				mover.Update(deltaTime)
 			}
@@ -286,39 +265,37 @@ func (s *BattleScene) Update(deltaTime float64) {
 
 	// Update battle menu system
 	if s.menuSystem != nil {
-		s.menuSystem.Update(deltaTime, s.inputCapturer)
+		s.menuSystem.Update(deltaTime, s.GetInputCapturer())
 	}
 
 	// Handle debug console toggle (F2) and scene switching (Key 1)
-	if s.inputCapturer != nil {
-		inputState := s.inputCapturer.GetInputState()
-		// Debug logging to see what keys are being pressed
-		if inputState.F2Pressed {
-			logger.Logger.Debugf("F2 key detected: %t, LastFrame: %t", inputState.F2Pressed, s.f2PressedLastFrame)
-		}
-		// Check for F2 key press using local state
-		if inputState.F2Pressed && !s.f2PressedLastFrame {
-			debug.Console.ToggleVisibility()
-			logger.Logger.Debugf("Debug console toggled via F2")
-		}
-		// Update local state
-		s.f2PressedLastFrame = inputState.F2Pressed
+	inputState := s.GetInputState()
+	// Debug logging to see what keys are being pressed
+	if inputState.F2Pressed {
+		logger.Logger.Debugf("F2 key detected: %t, LastFrame: %t", inputState.F2Pressed, s.f2PressedLastFrame)
+	}
+	// Check for F2 key press using local state
+	if inputState.F2Pressed && !s.f2PressedLastFrame {
+		debug.Console.ToggleVisibility()
+		logger.Logger.Debugf("Debug console toggled via F2")
+	}
+	// Update local state
+	s.f2PressedLastFrame = inputState.F2Pressed
 
-		// Handle scene switching: Key 1 switches to gameplay scene, Key 2 to battle (no-op, already in battle)
-		if inputState.Key1Pressed && !s.key1PressedLastFrame && s.stateChangeCallback != nil {
-			logger.Logger.Debugf("Key 1 pressed: switching to gameplay scene")
-			err := s.stateChangeCallback(types.GAMEPLAY)
-			if err != nil {
-				logger.Logger.Errorf("Failed to switch to gameplay scene: %s", err.Error())
-			}
-			// Return early - scene may have been cleaned up during state change
-			s.key1PressedLastFrame = inputState.Key1Pressed
-			s.key2PressedLastFrame = inputState.Key2Pressed
-			return
+	// Handle scene switching: Key 1 switches to gameplay scene, Key 2 to battle (no-op, already in battle)
+	if inputState.Key1Pressed && !s.key1PressedLastFrame {
+		logger.Logger.Debugf("Key 1 pressed: switching to gameplay scene")
+		err := s.RequestStateChange(types.GAMEPLAY)
+		if err != nil {
+			logger.Logger.Errorf("Failed to switch to gameplay scene: %s", err.Error())
 		}
+		// Return early - scene may have been cleaned up during state change
 		s.key1PressedLastFrame = inputState.Key1Pressed
 		s.key2PressedLastFrame = inputState.Key2Pressed
+		return
 	}
+	s.key1PressedLastFrame = inputState.Key1Pressed
+	s.key2PressedLastFrame = inputState.Key2Pressed
 
 	// Update debug console
 	if config.Global.Debug.Enabled {
@@ -332,7 +309,7 @@ func (s *BattleScene) RenderDebugConsole() error {
 		return nil
 	}
 
-	return debug.Console.Render(s.canvasManager, s.debugTextRenderer, s.debugFont)
+	return debug.Console.Render(s.GetCanvasManager(), s.debugTextRenderer, s.debugFont)
 }
 
 // RenderDamageEffects renders damage/healing numbers
@@ -590,7 +567,7 @@ func (s *BattleScene) GetRenderables() []types.GameObject {
 		}
 
 		// Add other game objects in this layer
-		result = append(result, s.layers[layer]...)
+		result = append(result, s.GetLayer(layer)...)
 	}
 
 	// Add battle menu UI elements
@@ -602,9 +579,9 @@ func (s *BattleScene) GetRenderables() []types.GameObject {
 	return result
 }
 
-// Cleanup releases scene resources
+// Cleanup releases scene resources (overrides BaseScene.Cleanup)
 func (s *BattleScene) Cleanup() {
-	logger.Logger.Debugf("Cleaning up %s scene", s.name)
+	logger.Logger.Debugf("Cleaning up %s scene", s.GetName())
 
 	// Stop battle system
 	if s.battleManager != nil {
@@ -625,35 +602,11 @@ func (s *BattleScene) Cleanup() {
 		s.menuSystem = nil
 	}
 
-	// Clear all layers
-	for layer := range s.layers {
-		s.layers[layer] = nil
-	}
-	s.layers = make(map[pkscene.SceneLayer][]types.GameObject)
+	// Call base cleanup (clears layers)
+	s.BaseScene.Cleanup()
 }
 
-// GetName returns the scene identifier
-func (s *BattleScene) GetName() string {
-	return s.name
-}
-
-// AddGameObject adds a game object to the specified layer
-func (s *BattleScene) AddGameObject(layer pkscene.SceneLayer, obj types.GameObject) {
-	s.layers[layer] = append(s.layers[layer], obj)
-	logger.Logger.Debugf("Added GameObject to %s layer in %s scene", layer.String(), s.name)
-}
-
-// RemoveGameObject removes a game object from the specified layer
-func (s *BattleScene) RemoveGameObject(layer pkscene.SceneLayer, obj types.GameObject) {
-	objects := s.layers[layer]
-	for i, o := range objects {
-		if o == obj {
-			s.layers[layer] = append(objects[:i], objects[i+1:]...)
-			logger.Logger.Debugf("Removed GameObject from %s layer in %s scene", layer.String(), s.name)
-			return
-		}
-	}
-}
+// GetName, AddGameObject, RemoveGameObject are inherited from BaseScene
 
 // GetPlayer returns the player object
 func (s *BattleScene) GetPlayer() *gameobject.Player {
@@ -698,3 +651,4 @@ func (s *BattleScene) GetBattleManager() *battle.BattleManager {
 func (s *BattleScene) GetEffectManager() *battle.EffectManager {
 	return s.effectManager
 }
+

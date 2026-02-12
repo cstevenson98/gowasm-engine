@@ -418,3 +418,18 @@ func (b *BaseScene) InjectDependencies(deps types.DependencyProvider) {
 	}
 }
 
+// GetLayer returns the game objects in the specified layer (thread-safe read).
+// Returns a copy to prevent external modification.
+func (b *BaseScene) GetLayer(layer SceneLayer) []types.GameObject {
+	b.layerMutex.RLock()
+	defer b.layerMutex.RUnlock()
+	// Return a copy to prevent external modification
+	result := make([]types.GameObject, len(b.layers[layer]))
+	copy(result, b.layers[layer])
+	return result
+}
+
+// GetInputCapturer returns the input capturer (for backwards compatibility with scenes that need direct access).
+func (b *BaseScene) GetInputCapturer() types.InputCapturer {
+	return b.inputCapturer
+}

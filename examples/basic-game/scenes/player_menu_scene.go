@@ -7,7 +7,6 @@ import (
 	"syscall/js"
 
 	"example.com/basic-game/game/gamestate"
-	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
@@ -17,18 +16,10 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// PlayerMenuScene represents the player menu scene accessible from gameplay
+// PlayerMenuScene represents the player menu scene accessible from gameplay.
+// It embeds BaseScene to inherit all common scene functionality.
 type PlayerMenuScene struct {
-	name          string
-	screenWidth   float64
-	screenHeight  float64
-	inputCapturer types.InputCapturer
-
-	// State change callback (injected by engine)
-	stateChangeCallback func(state types.GameState) error
-
-	// Game state manager (injected by engine)
-	gameStateManager *gamestate.GameStateManager
+	*pkscene.BaseScene
 
 	// Player reference (passed from gameplay scene)
 	player *gameobject.Player
@@ -36,13 +27,9 @@ type PlayerMenuScene struct {
 	// Menu system
 	menuSystem *PlayerMenuSystem
 
-	// Game objects organized by layer
-	layers map[pkscene.SceneLayer][]types.GameObject
-
 	// Text rendering
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
-	canvasManager    canvas.CanvasManager
 
 	// Debug rendering
 	debugFont         text.Font
@@ -57,42 +44,32 @@ type PlayerMenuScene struct {
 
 // NewPlayerMenuScene creates a new player menu scene
 func NewPlayerMenuScene(screenWidth, screenHeight float64) *PlayerMenuScene {
+	baseScene := pkscene.NewBaseScene("PlayerMenu", screenWidth, screenHeight)
+	
+	// Set required assets
+	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
+	baseScene.SetRequiredAssets(types.SceneAssets{
+		TexturePaths: []string{
+			fontTexturePath,
+		},
+		FontPaths: []string{
+			config.Global.Debug.FontPath,
+		},
+	})
+	
 	return &PlayerMenuScene{
-		name:         "PlayerMenu",
-		screenWidth:  screenWidth,
-		screenHeight: screenHeight,
-		layers:       make(map[pkscene.SceneLayer][]types.GameObject),
+		BaseScene: baseScene,
 	}
 }
 
-// SetInputCapturer implements types.SceneInputProvider
-func (s *PlayerMenuScene) SetInputCapturer(inputCapturer types.InputCapturer) {
-	s.inputCapturer = inputCapturer
-}
-
-// SetStateChangeCallback implements types.SceneChangeRequester
-func (s *PlayerMenuScene) SetStateChangeCallback(callback func(state types.GameState) error) {
-	s.stateChangeCallback = callback
-}
-
-// SetGameState implements types.SceneGameStateUser
-func (s *PlayerMenuScene) SetGameState(gameState interface{}) {
-	// Cast to the game's state manager type
-	if manager, ok := gameState.(*gamestate.GameStateManager); ok {
-		s.gameStateManager = manager
-		logger.Logger.Debugf("Player menu scene received game state manager")
-	}
-}
-
-// SetCanvasManager sets the canvas manager for rendering
-func (s *PlayerMenuScene) SetCanvasManager(cm canvas.CanvasManager) {
-	s.canvasManager = cm
-}
+// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, SetCanvasManager)
+// are inherited from BaseScene
 
 // updatePlayerReference updates the player reference from the game state manager
 // Only updates if the player reference has changed to avoid excessive logging
 func (s *PlayerMenuScene) updatePlayerReference() {
-	if s.gameStateManager == nil {
+	gameState := s.GetGameState()
+	if gameState == nil {
 		if s.player != nil {
 			s.player = nil
 		}
@@ -100,7 +77,11 @@ func (s *PlayerMenuScene) updatePlayerReference() {
 	}
 
 	// Get player from game state manager
-	player := s.gameStateManager.GetPlayer()
+	manager, ok := gameState.(*gamestate.GameStateManager)
+	if !ok {
+		return
+	}
+	player := manager.GetPlayer()
 	if player == nil {
 		if s.player != nil {
 			s.player = nil
@@ -129,7 +110,7 @@ func (s *PlayerMenuScene) InitializeDebugConsole() error {
 		return nil
 	}
 
-	logger.Logger.Debugf("Initializing debug console for %s scene", s.name)
+	logger.Logger.Debugf("Initializing debug console for %s scene", s.GetName())
 
 	// Create and load font metadata
 	s.debugFont = text.NewSpriteFont()
@@ -140,7 +121,7 @@ func (s *PlayerMenuScene) InitializeDebugConsole() error {
 	}
 
 	// Create text renderer
-	s.debugTextRenderer = text.NewTextRenderer(s.canvasManager)
+	s.debugTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
 
 	logger.Logger.Debugf("Debug console initialized successfully")
 	debug.Console.PostMessage("System", "Player menu ready")
@@ -150,7 +131,7 @@ func (s *PlayerMenuScene) InitializeDebugConsole() error {
 
 // InitializeMenuText initializes the menu text rendering system
 func (s *PlayerMenuScene) InitializeMenuText() error {
-	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.name)
+	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.GetName())
 
 	// Create and load font metadata for menu text
 	s.menuFont = text.NewSpriteFont()
@@ -161,7 +142,7 @@ func (s *PlayerMenuScene) InitializeMenuText() error {
 	}
 
 	// Create text renderer for menu
-	s.menuTextRenderer = text.NewTextRenderer(s.canvasManager)
+	s.menuTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
 
 	logger.Logger.Debugf("Menu text rendering initialized successfully")
 	return nil
@@ -181,17 +162,17 @@ func (s *PlayerMenuScene) GetRequiredAssets() types.SceneAssets {
 	}
 }
 
-// Initialize sets up the player menu scene
+// Initialize sets up the player menu scene (overrides BaseScene.Initialize)
 func (s *PlayerMenuScene) Initialize() error {
-	logger.Logger.Debugf("Initializing %s scene", s.name)
+	logger.Logger.Debugf("Initializing %s scene", s.GetName())
 
-	// Initialize layer slices
-	s.layers[pkscene.BACKGROUND] = []types.GameObject{}
-	s.layers[pkscene.ENTITIES] = []types.GameObject{}
-	s.layers[pkscene.UI] = []types.GameObject{}
+	// Call base initialization (sets up layers)
+	if err := s.BaseScene.Initialize(); err != nil {
+		return err
+	}
 
 	// Initialize menu system
-	s.menuSystem = NewPlayerMenuSystem(s.screenWidth, s.screenHeight)
+	s.menuSystem = NewPlayerMenuSystem(s.GetScreenWidth(), s.GetScreenHeight())
 	s.menuSystem.Initialize()
 
 	// Initialize menu text rendering
@@ -208,16 +189,16 @@ func (s *PlayerMenuScene) Update(deltaTime float64) {
 	// Update player reference from game state (player is part of game state)
 	s.updatePlayerReference()
 
-	if s.inputCapturer == nil {
+	if s.GetInputState().UpPressed == false && s.GetInputState().DownPressed == false {
 		return
 	}
 
-	inputState := s.inputCapturer.GetInputState()
+	inputState := s.GetInputState()
 
 	// Handle menu close (M key)
-	if inputState.MPressed && !s.mPressedLastFrame && s.stateChangeCallback != nil {
+	if inputState.MPressed && !s.mPressedLastFrame {
 		logger.Logger.Debugf("M key pressed: closing player menu")
-		err := s.stateChangeCallback(types.GAMEPLAY)
+		err := s.RequestStateChange(types.GAMEPLAY)
 		if err != nil {
 			logger.Logger.Errorf("Failed to switch back to gameplay: %s", err.Error())
 		}
@@ -262,8 +243,15 @@ func (s *PlayerMenuScene) Update(deltaTime float64) {
 
 // handleSaveGame handles saving the current game state and shows browser alert
 func (s *PlayerMenuScene) handleSaveGame() {
-	if s.gameStateManager == nil {
+	gameState := s.GetGameState()
+	if gameState == nil {
 		s.showAlert("Save failed: Game state manager not available")
+		return
+	}
+
+	manager, ok := gameState.(*gamestate.GameStateManager)
+	if !ok {
+		s.showAlert("Save failed: Invalid game state manager")
 		return
 	}
 
@@ -273,7 +261,7 @@ func (s *PlayerMenuScene) handleSaveGame() {
 	}
 
 	// Get current game state
-	currentState := s.gameStateManager.GetState()
+	currentState := manager.GetState()
 	if currentState == nil {
 		s.showAlert("Save failed: No game state exists (create a new game first)")
 		return
@@ -305,11 +293,11 @@ func (s *PlayerMenuScene) handleSaveGame() {
 	}
 
 	// Update game state with current player data (thread-safe, holds lock)
-	s.gameStateManager.UpdateStateFromPlayer(playerPos, playerStats)
+	manager.UpdateStateFromPlayer(playerPos, playerStats)
 	logger.Logger.Debugf("Updated game state before save - Position: (%.2f, %.2f)", playerPos.X, playerPos.Y)
 
 	// Save to localStorage
-	saveKey, err := s.gameStateManager.SaveCurrentGame()
+	saveKey, err := gameState.(*gamestate.GameStateManager).SaveCurrentGame()
 	if err != nil {
 		logger.Logger.Errorf("Failed to save game: %s", err.Error())
 		s.showAlert(fmt.Sprintf("Save failed: %s", err.Error()))
@@ -415,7 +403,7 @@ func (s *PlayerMenuScene) renderMenu() error {
 	lineHeight *= config.Global.Rendering.UILineSpacing
 
 	// Right side position
-	startX := s.screenWidth - 250.0
+	startX := s.GetScreenWidth() - 250.0
 	startY := 100.0
 
 	for i, option := range menu.options {
@@ -447,22 +435,19 @@ func (s *PlayerMenuScene) GetRenderables() []types.GameObject {
 	return []types.GameObject{}
 }
 
-// Cleanup releases scene resources
+// Cleanup releases scene resources (overrides BaseScene.Cleanup)
 func (s *PlayerMenuScene) Cleanup() {
-	logger.Logger.Debugf("Cleaning up %s scene", s.name)
+	logger.Logger.Debugf("Cleaning up %s scene", s.GetName())
 
-	// Clear all layers
-	for layer := range s.layers {
-		s.layers[layer] = nil
-	}
-	s.layers = make(map[pkscene.SceneLayer][]types.GameObject)
+	// Clear menu-specific state
 	s.menuSystem = nil
+	s.player = nil
+	
+	// Call base cleanup (clears layers)
+	s.BaseScene.Cleanup()
 }
 
-// GetName returns the scene identifier
-func (s *PlayerMenuScene) GetName() string {
-	return s.name
-}
+// GetName is inherited from BaseScene
 
 // PlayerMenuSystem manages the player menu UI
 type PlayerMenuSystem struct {

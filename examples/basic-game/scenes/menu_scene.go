@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"example.com/basic-game/game/gamestate"
-	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
@@ -15,29 +14,17 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// MenuScene represents the main menu scene with New Game and Load Game options
+// MenuScene represents the main menu scene with New Game and Load Game options.
+// It embeds BaseScene to inherit all common scene functionality.
 type MenuScene struct {
-	name          string
-	screenWidth   float64
-	screenHeight  float64
-	inputCapturer types.InputCapturer
+	*pkscene.BaseScene
 
-	// State change callback (injected by engine)
-	stateChangeCallback func(state types.GameState) error
-
-	// Game state manager (injected by engine)
-	gameStateManager *gamestate.GameStateManager
-
-	// Menu system
+	// Menu-specific fields
 	menuSystem *MainMenuSystem
-
-	// Game objects organized by layer
-	layers map[pkscene.SceneLayer][]types.GameObject
 
 	// Text rendering
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
-	canvasManager    canvas.CanvasManager
 
 	// Debug rendering
 	debugFont         text.Font
@@ -61,39 +48,28 @@ type MenuScene struct {
 
 // NewMenuScene creates a new menu scene
 func NewMenuScene(screenWidth, screenHeight float64) *MenuScene {
+	baseScene := pkscene.NewBaseScene("Menu", screenWidth, screenHeight)
+	
+	// Set required assets
+	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
+	baseScene.SetRequiredAssets(types.SceneAssets{
+		TexturePaths: []string{
+			fontTexturePath, // Font texture needed for menu text rendering
+		},
+		FontPaths: []string{
+			config.Global.Debug.FontPath,
+		},
+	})
+	
 	return &MenuScene{
-		name:          "Menu",
-		screenWidth:   screenWidth,
-		screenHeight:  screenHeight,
-		layers:        make(map[pkscene.SceneLayer][]types.GameObject),
+		BaseScene:     baseScene,
 		menuMode:      "main",
 		loadGameIndex: 0,
 	}
 }
 
-// SetInputCapturer implements types.SceneInputProvider
-func (s *MenuScene) SetInputCapturer(inputCapturer types.InputCapturer) {
-	s.inputCapturer = inputCapturer
-}
-
-// SetStateChangeCallback implements types.SceneChangeRequester
-func (s *MenuScene) SetStateChangeCallback(callback func(state types.GameState) error) {
-	s.stateChangeCallback = callback
-}
-
-// SetGameState implements types.SceneGameStateUser
-func (s *MenuScene) SetGameState(gameState interface{}) {
-	// Cast to the game's state manager type
-	if manager, ok := gameState.(*gamestate.GameStateManager); ok {
-		s.gameStateManager = manager
-		logger.Logger.Debugf("Menu scene received game state manager")
-	}
-}
-
-// SetCanvasManager sets the canvas manager for rendering
-func (s *MenuScene) SetCanvasManager(cm canvas.CanvasManager) {
-	s.canvasManager = cm
-}
+// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, SetCanvasManager)
+// are inherited from BaseScene
 
 // InitializeDebugConsole initializes the debug console font and text renderer
 func (s *MenuScene) InitializeDebugConsole() error {
@@ -101,7 +77,7 @@ func (s *MenuScene) InitializeDebugConsole() error {
 		return nil
 	}
 
-	logger.Logger.Debugf("Initializing debug console for %s scene", s.name)
+	logger.Logger.Debugf("Initializing debug console for %s scene", s.GetName())
 
 	// Create and load font metadata
 	s.debugFont = text.NewSpriteFont()
@@ -111,8 +87,8 @@ func (s *MenuScene) InitializeDebugConsole() error {
 		return err
 	}
 
-	// Create text renderer
-	s.debugTextRenderer = text.NewTextRenderer(s.canvasManager)
+	// Create text renderer using inherited canvasManager
+	s.debugTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
 
 	logger.Logger.Debugf("Debug console initialized successfully")
 	debug.Console.PostMessage("System", "Main menu ready")
@@ -122,7 +98,7 @@ func (s *MenuScene) InitializeDebugConsole() error {
 
 // InitializeMenuText initializes the menu text rendering system
 func (s *MenuScene) InitializeMenuText() error {
-	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.name)
+	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.GetName())
 
 	// Create and load font metadata for menu text
 	s.menuFont = text.NewSpriteFont()
@@ -132,60 +108,45 @@ func (s *MenuScene) InitializeMenuText() error {
 		return err
 	}
 
-	// Create text renderer for menu
-	s.menuTextRenderer = text.NewTextRenderer(s.canvasManager)
+	// Create text renderer for menu using inherited canvasManager
+	s.menuTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
 
 	logger.Logger.Debugf("Menu text rendering initialized successfully")
 	return nil
 }
 
-// GetRequiredAssets implements types.SceneAssetProvider
-func (s *MenuScene) GetRequiredAssets() types.SceneAssets {
-	// Font texture path is basePath + ".sheet.png"
-	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
-	return types.SceneAssets{
-		TexturePaths: []string{
-			fontTexturePath, // Font texture needed for menu text rendering
-		},
-		FontPaths: []string{
-			config.Global.Debug.FontPath,
-		},
-	}
-}
+// GetRequiredAssets is inherited from BaseScene (set in constructor)
 
-// Initialize sets up the menu scene
+// Initialize sets up the menu scene (overrides BaseScene.Initialize)
 func (s *MenuScene) Initialize() error {
-	logger.Logger.Debugf("Initializing %s scene", s.name)
+	logger.Logger.Debugf("Initializing %s scene", s.GetName())
 
-	// Initialize layer slices
-	s.layers[pkscene.BACKGROUND] = []types.GameObject{}
-	s.layers[pkscene.ENTITIES] = []types.GameObject{}
-	s.layers[pkscene.UI] = []types.GameObject{}
-
-	// Create black background (BACKGROUND layer)
-	// We'll render it as a solid color in RenderOverlays instead of using a texture
-	// For now, just ensure layers are initialized
+	// Call base initialization (sets up layers)
+	if err := s.BaseScene.Initialize(); err != nil {
+		return err
+	}
 
 	// Initialize menu system
-	s.menuSystem = NewMainMenuSystem(s.screenWidth, s.screenHeight)
+	s.menuSystem = NewMainMenuSystem(s.GetScreenWidth(), s.GetScreenHeight())
 	s.menuSystem.Initialize()
 
 	// Initialize menu text rendering
-	err := s.InitializeMenuText()
-	if err != nil {
+	if err := s.InitializeMenuText(); err != nil {
 		logger.Logger.Warnf("Failed to initialize menu text: %s", err)
+	}
+
+	// Initialize debug console
+	if err := s.InitializeDebugConsole(); err != nil {
+		return fmt.Errorf("failed to initialize debug console: %w", err)
 	}
 
 	return nil
 }
 
-// Update updates the menu scene
+// Update updates the menu scene (overrides BaseScene.Update)
 func (s *MenuScene) Update(deltaTime float64) {
-	if s.inputCapturer == nil {
-		return
-	}
-
-	inputState := s.inputCapturer.GetInputState()
+	// Get input state using inherited method
+	inputState := s.GetInputState()
 
 	// Handle debug console toggle (F2)
 	if inputState.F2Pressed && !s.f2PressedLastFrame {
@@ -231,14 +192,15 @@ func (s *MenuScene) updateMainMenu(inputState types.InputState) {
 	if inputState.EnterPressed && !s.enterPressedLastFrame {
 		selected := menu.options[menu.selectedIndex]
 		if selected == "New Game" {
-			if s.gameStateManager != nil {
-				err := s.gameStateManager.CreateNewGame()
-				if err != nil {
-					logger.Logger.Errorf("Failed to create new game: %s", err.Error())
-				} else {
-					logger.Logger.Debugf("Created new game, switching to gameplay")
-					if s.stateChangeCallback != nil {
-						err := s.stateChangeCallback(types.GAMEPLAY)
+			gameState := s.GetGameState()
+			if gameState != nil {
+				if manager, ok := gameState.(*gamestate.GameStateManager); ok {
+					err := manager.CreateNewGame()
+					if err != nil {
+						logger.Logger.Errorf("Failed to create new game: %s", err.Error())
+					} else {
+						logger.Logger.Debugf("Created new game, switching to gameplay")
+						err := s.RequestStateChange(types.GAMEPLAY)
 						if err != nil {
 							logger.Logger.Errorf("Failed to switch to gameplay: %s", err.Error())
 						}
@@ -248,15 +210,18 @@ func (s *MenuScene) updateMainMenu(inputState types.InputState) {
 			}
 		} else if selected == "Load Game" {
 			// Load save list
-			if s.gameStateManager != nil {
-				saves, err := s.gameStateManager.ListSaves()
-				if err != nil {
-					logger.Logger.Errorf("Failed to list saves: %s", err.Error())
-				} else {
-					s.loadGameSaves = saves
-					s.loadGameIndex = 0
-					s.menuMode = "load"
-					logger.Logger.Debugf("Entered load game menu with %d saves", len(saves))
+			gameState := s.GetGameState()
+			if gameState != nil {
+				if manager, ok := gameState.(*gamestate.GameStateManager); ok {
+					saves, err := manager.ListSaves()
+					if err != nil {
+						logger.Logger.Errorf("Failed to list saves: %s", err.Error())
+					} else {
+						s.loadGameSaves = saves
+						s.loadGameIndex = 0
+						s.menuMode = "load"
+						logger.Logger.Debugf("Entered load game menu with %d saves", len(saves))
+					}
 				}
 			}
 		}
@@ -287,14 +252,15 @@ func (s *MenuScene) updateLoadMenu(inputState types.InputState) {
 		if s.loadGameIndex < len(s.loadGameSaves) {
 			// Load selected save
 			save := s.loadGameSaves[s.loadGameIndex]
-			if s.gameStateManager != nil {
-				err := s.gameStateManager.LoadSave(save.Key)
-				if err != nil {
-					logger.Logger.Errorf("Failed to load save: %s", err.Error())
-				} else {
-					logger.Logger.Debugf("Loaded save: %s, switching to gameplay", save.Key)
-					if s.stateChangeCallback != nil {
-						err := s.stateChangeCallback(types.GAMEPLAY)
+			gameState := s.GetGameState()
+			if gameState != nil {
+				if manager, ok := gameState.(*gamestate.GameStateManager); ok {
+					err := manager.LoadSave(save.Key)
+					if err != nil {
+						logger.Logger.Errorf("Failed to load save: %s", err.Error())
+					} else {
+						logger.Logger.Debugf("Loaded save: %s, switching to gameplay", save.Key)
+						err := s.RequestStateChange(types.GAMEPLAY)
 						if err != nil {
 							logger.Logger.Errorf("Failed to switch to gameplay: %s", err.Error())
 						}
@@ -349,8 +315,8 @@ func (s *MenuScene) renderMainMenu() error {
 	lineHeight *= config.Global.Rendering.UILineSpacing
 
 	totalHeight := float64(len(menu.options)) * lineHeight
-	startY := (s.screenHeight - totalHeight) / 2
-	centerX := s.screenWidth / 2
+	startY := (s.GetScreenHeight() - totalHeight) / 2
+	centerX := s.GetScreenWidth() / 2
 
 	for i, option := range menu.options {
 		// Add selection indicator
@@ -400,8 +366,8 @@ func (s *MenuScene) renderLoadMenu() error {
 	}
 
 	totalHeight := float64(len(s.loadGameSaves)+2) * lineHeight // +2 for title and spacing
-	startY := (s.screenHeight - totalHeight) / 2
-	centerX := s.screenWidth / 2
+	startY := (s.GetScreenHeight() - totalHeight) / 2
+	centerX := s.GetScreenWidth() / 2
 
 	// Render title
 	titleWidth := float64(len(title)) * float64(cellHeight) * 0.6
@@ -457,29 +423,22 @@ func (s *MenuScene) renderLoadMenu() error {
 }
 
 // GetRenderables returns all game objects in the correct render order
-func (s *MenuScene) GetRenderables() []types.GameObject {
-	// Menu scene doesn't render game objects - just overlays
-	return []types.GameObject{}
-}
+// GetRenderables is inherited from BaseScene (menu doesn't render game objects, just overlays)
 
-// Cleanup releases scene resources
+// Cleanup releases scene resources (overrides BaseScene.Cleanup)
 func (s *MenuScene) Cleanup() {
-	logger.Logger.Debugf("Cleaning up %s scene", s.name)
+	logger.Logger.Debugf("Cleaning up %s scene", s.GetName())
 
-	// Clear all layers
-	for layer := range s.layers {
-		s.layers[layer] = nil
-	}
-	s.layers = make(map[pkscene.SceneLayer][]types.GameObject)
+	// Clear menu-specific state
 	s.menuSystem = nil
 	s.menuMode = "main"
 	s.loadGameSaves = nil
+	
+	// Call base cleanup (clears layers)
+	s.BaseScene.Cleanup()
 }
 
-// GetName returns the scene identifier
-func (s *MenuScene) GetName() string {
-	return s.name
-}
+// GetName is inherited from BaseScene
 
 // MainMenuSystem manages the main menu UI
 type MainMenuSystem struct {
