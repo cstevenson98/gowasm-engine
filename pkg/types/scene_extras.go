@@ -76,3 +76,17 @@ type SceneGameStateUser interface {
 	// The provider type is defined by the game, not the engine.
 	SetGameState(gameState interface{})
 }
+
+// SceneInjectable is an optional interface a Scene can implement to receive
+// all engine dependencies in a single call via the EngineDependencies struct.
+// This is the recommended pattern for new scenes as it reduces boilerplate.
+//
+// Scenes that implement this interface will have InjectDependencies() called
+// automatically by the engine during scene initialization, before Initialize().
+//
+// If your scene embeds scene.BaseScene, this interface is automatically implemented.
+type SceneInjectable interface {
+	// InjectDependencies receives all engine dependencies in a single call.
+	// This is called by the engine before Initialize().
+	InjectDependencies(deps interface{})
+}
