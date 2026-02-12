@@ -77,8 +77,20 @@ type SceneGameStateUser interface {
 	SetGameState(gameState interface{})
 }
 
+// DependencyProvider is an interface that provides access to engine dependencies.
+// The engine implements this interface via EngineDependencies.
+// This avoids circular imports while maintaining type safety.
+type DependencyProvider interface {
+	GetInputCapturer() InputCapturer
+	GetCanvasManager() interface{} // Returns canvas.CanvasManager (interface{} to avoid import)
+	GetStateChangeCallback() func(GameState) error
+	GetGameStateProvider() interface{}
+	GetScreenWidth() float64
+	GetScreenHeight() float64
+}
+
 // SceneInjectable is an optional interface a Scene can implement to receive
-// all engine dependencies in a single call via the EngineDependencies struct.
+// all engine dependencies in a single call via the DependencyProvider interface.
 // This is the recommended pattern for new scenes as it reduces boilerplate.
 //
 // Scenes that implement this interface will have InjectDependencies() called
@@ -88,5 +100,5 @@ type SceneGameStateUser interface {
 type SceneInjectable interface {
 	// InjectDependencies receives all engine dependencies in a single call.
 	// This is called by the engine before Initialize().
-	InjectDependencies(deps interface{})
+	InjectDependencies(deps DependencyProvider)
 }

@@ -52,3 +52,35 @@ func (e *Engine) GetDependencies() *EngineDependencies {
 	}
 }
 
+// Implement types.DependencyProvider interface
+
+// GetInputCapturer returns the input capturer
+func (d *EngineDependencies) GetInputCapturer() types.InputCapturer {
+	return d.InputCapturer
+}
+
+// GetCanvasManager returns the canvas manager as interface{}
+func (d *EngineDependencies) GetCanvasManager() interface{} {
+	return d.CanvasManager
+}
+
+// GetStateChangeCallback returns the state change callback
+func (d *EngineDependencies) GetStateChangeCallback() func(types.GameState) error {
+	return d.StateChangeCallback
+}
+
+// GetGameStateProvider returns the game state provider
+func (d *EngineDependencies) GetGameStateProvider() interface{} {
+	return d.GameStateProvider
+}
+
+// GetScreenWidth returns the screen width
+func (d *EngineDependencies) GetScreenWidth() float64 {
+	return d.ScreenWidth
+}
+
+// GetScreenHeight returns the screen height
+func (d *EngineDependencies) GetScreenHeight() float64 {
+	return d.ScreenHeight
+}
+

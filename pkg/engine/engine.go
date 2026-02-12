@@ -333,23 +333,36 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		// Continue anyway - assets might load lazily later
 	}
 
-	// Inject input capturer if scene implements SceneInputProvider
-	if inputProvider, ok := registeredScene.(types.SceneInputProvider); ok {
-		inputProvider.SetInputCapturer(e.inputCapturer)
-		logger.Logger.Debugf("Injected input capturer into scene: %s", registeredScene.GetName())
-	}
+	// Try new dependency injection pattern first (for scenes using BaseScene)
+	if injectable, ok := registeredScene.(types.SceneInjectable); ok {
+		injectable.InjectDependencies(e.GetDependencies())
+		logger.Logger.Debugf("Injected all dependencies into scene via InjectDependencies(): %s", registeredScene.GetName())
+	} else {
+		// Fallback to manual injection for scenes not using BaseScene
+		// This maintains backward compatibility during migration
+		logger.Logger.Debugf("Using manual dependency injection for scene: %s", registeredScene.GetName())
+		
+		if inputProvider, ok := registeredScene.(types.SceneInputProvider); ok {
+			inputProvider.SetInputCapturer(e.inputCapturer)
+		}
 
-	// Inject state change callback if scene implements SceneStateChangeRequester
-	if stateRequester, ok := registeredScene.(types.SceneStateChangeRequester); ok {
-		stateRequester.SetStateChangeCallback(e.SetGameState)
-		logger.Logger.Debugf("Injected state change callback into scene: %s", registeredScene.GetName())
-	}
+		if stateRequester, ok := registeredScene.(types.SceneStateChangeRequester); ok {
+			stateRequester.SetStateChangeCallback(e.SetGameState)
+		}
 
-	// Inject game state provider if scene implements SceneGameStateUser
-	if gameStateUser, ok := registeredScene.(types.SceneGameStateUser); ok {
-		if e.gameStateProvider != nil {
-			gameStateUser.SetGameState(e.gameStateProvider)
-			logger.Logger.Debugf("Injected game state provider into scene: %s", registeredScene.GetName())
+		if gameStateUser, ok := registeredScene.(types.SceneGameStateUser); ok {
+			if e.gameStateProvider != nil {
+				gameStateUser.SetGameState(e.gameStateProvider)
+			}
+		}
+		
+		// Inject canvas manager if scene has SetCanvasManager method
+		// Use a type assertion to check for method existence
+		type canvasManagerSetter interface {
+			SetCanvasManager(canvas.CanvasManager)
+		}
+		if cmSetter, ok := registeredScene.(canvasManagerSetter); ok {
+			cmSetter.SetCanvasManager(e.canvasManager)
 		}
 	}
 

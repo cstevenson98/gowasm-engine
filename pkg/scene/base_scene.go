@@ -401,33 +401,20 @@ func (b *BaseScene) GetScreenHeight() float64 {
 
 // InjectDependencies receives all engine dependencies in a single call.
 // This is called automatically by the engine before Initialize().
-// The deps parameter should be an *engine.EngineDependencies struct.
+// The deps parameter implements types.DependencyProvider interface.
 // Implements SceneInjectable interface.
-//
-// We use a type-agnostic approach with interface{} to avoid circular imports
-// (scene package cannot import engine package). The engine.EngineDependencies
-// struct fields are accessed via reflection-free struct matching.
-func (b *BaseScene) InjectDependencies(deps interface{}) {
-	// Use type assertion to a local struct definition that matches EngineDependencies
-	// This avoids circular imports while being type-safe at compile time
-	type EngineDeps struct {
-		InputCapturer       types.InputCapturer
-		CanvasManager       canvas.CanvasManager
-		StateChangeCallback func(types.GameState) error
-		GameStateProvider   interface{}
-		ScreenWidth         float64
-		ScreenHeight        float64
+func (b *BaseScene) InjectDependencies(deps types.DependencyProvider) {
+	// Use the DependencyProvider interface to access all dependencies
+	// This avoids circular imports while maintaining type safety
+	b.inputCapturer = deps.GetInputCapturer()
+	b.stateChangeCallback = deps.GetStateChangeCallback()
+	b.gameStateManager = deps.GetGameStateProvider()
+	b.screenWidth = deps.GetScreenWidth()
+	b.screenHeight = deps.GetScreenHeight()
+	
+	// Canvas manager needs type assertion from interface{}
+	if cm, ok := deps.GetCanvasManager().(canvas.CanvasManager); ok {
+		b.canvasManager = cm
 	}
-
-	// Type assert and extract fields
-	if d, ok := deps.(*EngineDeps); ok {
-		b.inputCapturer = d.InputCapturer
-		b.canvasManager = d.CanvasManager
-		b.stateChangeCallback = d.StateChangeCallback
-		b.gameStateManager = d.GameStateProvider
-		b.screenWidth = d.ScreenWidth
-		b.screenHeight = d.ScreenHeight
-	}
-	// If type assertion fails, dependencies remain nil (safe default)
 }
 
