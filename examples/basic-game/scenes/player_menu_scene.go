@@ -31,10 +31,6 @@ type PlayerMenuScene struct {
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
 
-	// Debug rendering
-	debugFont         text.Font
-	debugTextRenderer text.TextRenderer
-
 	// Input state tracking
 	upPressedLastFrame    bool
 	downPressedLastFrame  bool
@@ -102,31 +98,6 @@ func (s *PlayerMenuScene) updatePlayerReference() {
 			logger.Logger.Warnf("Player menu scene: invalid player type in game state")
 		}
 	}
-}
-
-// InitializeDebugConsole initializes the debug console font and text renderer
-func (s *PlayerMenuScene) InitializeDebugConsole() error {
-	if !config.Global.Debug.Enabled {
-		return nil
-	}
-
-	logger.Logger.Debugf("Initializing debug console for %s scene", s.GetName())
-
-	// Create and load font metadata
-	s.debugFont = text.NewSpriteFont()
-	err := s.debugFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load debug font: %s", err)
-		return err
-	}
-
-	// Create text renderer
-	s.debugTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
-
-	logger.Logger.Debugf("Debug console initialized successfully")
-	debug.Console.PostMessage("System", "Player menu ready")
-
-	return nil
 }
 
 // InitializeMenuText initializes the menu text rendering system

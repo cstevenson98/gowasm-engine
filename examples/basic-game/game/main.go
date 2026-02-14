@@ -89,10 +89,7 @@ func initializeEngine() {
 		config.Global.Screen.Height,
 	)
 	menuScene.SetCanvasManager(gameEngine.GetCanvasManager())
-	err := menuScene.InitializeDebugConsole()
-	if err != nil {
-		logger.Logger.Warnf("Failed to initialize debug console for menu: %s", err)
-	}
+	// Debug console is now auto-initialized by BaseScene.Initialize()
 
 	// Create gameplay scene
 	gameplayScene := exts.NewGameplayScene(
@@ -100,10 +97,7 @@ func initializeEngine() {
 		config.Global.Screen.Height,
 	)
 	gameplayScene.SetCanvasManager(gameEngine.GetCanvasManager())
-	err = gameplayScene.InitializeDebugConsole()
-	if err != nil {
-		logger.Logger.Warnf("Failed to initialize debug console for gameplay: %s", err)
-	}
+	// Debug console is now auto-initialized by BaseScene.Initialize()
 
 	// Create battle scene
 	battleScene := exts.NewBattleScene(
@@ -111,10 +105,7 @@ func initializeEngine() {
 		config.Global.Screen.Height,
 	)
 	battleScene.SetCanvasManager(gameEngine.GetCanvasManager())
-	err = battleScene.InitializeDebugConsole()
-	if err != nil {
-		logger.Logger.Warnf("Failed to initialize debug console for battle: %s", err)
-	}
+	// Debug console is now auto-initialized by BaseScene.Initialize()
 
 	// Create player menu scene
 	playerMenuScene := exts.NewPlayerMenuScene(
@@ -122,10 +113,7 @@ func initializeEngine() {
 		config.Global.Screen.Height,
 	)
 	playerMenuScene.SetCanvasManager(gameEngine.GetCanvasManager())
-	err = playerMenuScene.InitializeDebugConsole()
-	if err != nil {
-		logger.Logger.Warnf("Failed to initialize debug console for player menu: %s", err)
-	}
+	// Debug console is now auto-initialized by BaseScene.Initialize()
 
 	// Register all scenes with the engine
 	gameEngine.RegisterScene(types.MENU, menuScene)
@@ -136,6 +124,7 @@ func initializeEngine() {
 	logger.Logger.Info("Scenes registered: Menu, Gameplay, PlayerMenu, Battle")
 
 	// Initialize the engine
+	var err error
 	err = gameEngine.Initialize(canvasID)
 	if err != nil {
 		logger.Logger.Errorf("Engine initialization failed: %s", err.Error())

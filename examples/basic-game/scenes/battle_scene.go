@@ -31,10 +31,6 @@ type BattleScene struct {
 	battleManager *battle.BattleManager
 	effectManager *battle.EffectManager
 
-	// Debug rendering
-	debugFont         text.Font
-	debugTextRenderer text.TextRenderer
-
 	// Menu text rendering
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
@@ -73,32 +69,6 @@ func NewBattleScene(screenWidth, screenHeight float64) *BattleScene {
 // All interface implementations (SetInputCapturer, SetStateChangeCallback, SetCanvasManager)
 // are inherited from BaseScene
 
-// InitializeDebugConsole initializes the debug console font and text renderer
-func (s *BattleScene) InitializeDebugConsole() error {
-	if !config.Global.Debug.Enabled {
-		return nil
-	}
-
-	logger.Logger.Debugf("Initializing debug console for %s scene", s.GetName())
-
-	// Create and load font metadata
-	s.debugFont = text.NewSpriteFont()
-	err := s.debugFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load debug font: %s", err)
-		return err
-	}
-
-	// Create text renderer (texture will be loaded by engine's loadSpriteTextures)
-	s.debugTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
-
-	logger.Logger.Debugf("Debug console initialized successfully")
-	// Post a welcome message after a short delay to allow texture loading
-	debug.Console.PostMessage("System", "Battle scene ready")
-
-	return nil
-}
-
 // RenderOverlays implements types.SceneOverlayRenderer by delegating to existing methods
 func (s *BattleScene) RenderOverlays() error {
 	if err := s.RenderBattleMenu(); err != nil {
@@ -110,17 +80,17 @@ func (s *BattleScene) RenderOverlays() error {
 	if err := s.RenderActionTimerBars(); err != nil {
 		return err
 	}
-	if err := s.RenderDebugConsole(); err != nil {
-		return err
-	}
-	return nil
+	// Debug console rendered by BaseScene.RenderOverlays()
+	return s.BaseScene.RenderOverlays()
 }
 
 // GetExtraTexturePaths implements types.SceneTextureProvider
 func (s *BattleScene) GetExtraTexturePaths() []string {
 	var paths []string
-	if s.debugFont != nil && s.debugFont.IsLoaded() {
-		paths = append(paths, s.debugFont.GetTexturePath())
+	// Get debug font from BaseScene
+	debugFont := s.GetDebugFont()
+	if debugFont != nil && debugFont.IsLoaded() {
+		paths = append(paths, debugFont.GetTexturePath())
 	}
 	if s.menuFont != nil && s.menuFont.IsLoaded() {
 		paths = append(paths, s.menuFont.GetTexturePath())
@@ -130,33 +100,23 @@ func (s *BattleScene) GetExtraTexturePaths() []string {
 
 // GetRequiredAssets is inherited from BaseScene (set in constructor)
 
-// InitializeMenuText initializes the menu text rendering system
-func (s *BattleScene) InitializeMenuText() error {
-	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.GetName())
+// Initialize sets up the battle scene and creates game objects (overrides BaseScene.Initialize)
+func (s *BattleScene) Initialize() error {
+	logger.Logger.Debugf("Initializing %s scene", s.GetName())
 
-	// Create and load font metadata for menu text
+	// Call base initialization (sets up layers + debug console)
+	if err := s.BaseScene.Initialize(); err != nil {
+		return err
+	}
+
+	// Initialize menu text rendering (battle-specific)
 	s.menuFont = text.NewSpriteFont()
 	err := s.menuFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
 	if err != nil {
 		logger.Logger.Errorf("Failed to load menu font: %s", err)
 		return err
 	}
-
-	// Create text renderer for menu
 	s.menuTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
-
-	logger.Logger.Debugf("Menu text rendering initialized successfully")
-	return nil
-}
-
-// Initialize sets up the battle scene and creates game objects (overrides BaseScene.Initialize)
-func (s *BattleScene) Initialize() error {
-	logger.Logger.Debugf("Initializing %s scene", s.GetName())
-
-	// Call base initialization
-	if err := s.BaseScene.Initialize(); err != nil {
-		return err
-	}
 
 	// Create background (BACKGROUND layer)
 	background := gameobject.NewBackground(
@@ -209,12 +169,6 @@ func (s *BattleScene) Initialize() error {
 
 	// Start battle processing
 	s.battleManager.StartProcessing()
-
-	// Initialize menu text rendering
-	err := s.InitializeMenuText()
-	if err != nil {
-		logger.Logger.Warnf("Failed to initialize menu text: %s", err)
-	}
 
 	return nil
 }
@@ -301,15 +255,6 @@ func (s *BattleScene) Update(deltaTime float64) {
 	if config.Global.Debug.Enabled {
 		debug.Console.Update(deltaTime)
 	}
-}
-
-// RenderDebugConsole renders the debug console UI
-func (s *BattleScene) RenderDebugConsole() error {
-	if !config.Global.Debug.Enabled || s.debugFont == nil || s.debugTextRenderer == nil {
-		return nil
-	}
-
-	return debug.Console.Render(s.GetCanvasManager(), s.debugTextRenderer, s.debugFont)
 }
 
 // RenderDamageEffects renders damage/healing numbers
@@ -618,12 +563,7 @@ func (s *BattleScene) GetEnemy() *gameobject.Enemy {
 	return s.enemy
 }
 
-// GetDebugFont returns the debug font (for texture loading)
-func (s *BattleScene) GetDebugFont() text.Font {
-	return s.debugFont
-}
-
-// GetMenuFont returns the menu font (for texture loading)
+// GetDebugFont and GetMenuFont return fonts for rendering (for texture loading)
 func (s *BattleScene) GetMenuFont() text.Font {
 	return s.menuFont
 }

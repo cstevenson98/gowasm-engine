@@ -11,7 +11,6 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
-	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
@@ -22,10 +21,6 @@ type GameplayScene struct {
 
 	// Gameplay-specific fields
 	player *gameobject.Player
-
-	// Debug rendering
-	debugFont         text.Font
-	debugTextRenderer text.TextRenderer
 
 	// Key press state tracking
 	key1PressedLastFrame bool
@@ -55,32 +50,6 @@ func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 
 // All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, 
 // SetCanvasManager, GetRequiredAssets) are inherited from BaseScene
-
-// InitializeDebugConsole initializes the debug console font and text renderer
-func (s *GameplayScene) InitializeDebugConsole() error {
-	if !config.Global.Debug.Enabled {
-		return nil
-	}
-
-	logger.Logger.Debugf("Initializing debug console for %s scene", s.GetName())
-
-	// Create and load font metadata
-	s.debugFont = text.NewSpriteFont()
-	err := s.debugFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load debug font: %s", err)
-		return err
-	}
-
-	// Create text renderer using inherited canvasManager
-	s.debugTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
-
-	logger.Logger.Debugf("Debug console initialized successfully")
-	// Post a welcome message after a short delay to allow texture loading
-	debug.Console.PostMessage("System", "Debug console ready")
-
-	return nil
-}
 
 // Initialize sets up the gameplay scene and creates game objects (overrides BaseScene.Initialize)
 func (s *GameplayScene) Initialize() error {
@@ -161,11 +130,6 @@ func (s *GameplayScene) Initialize() error {
 		}
 	}
 
-	// Initialize debug console
-	if err := s.InitializeDebugConsole(); err != nil {
-		return fmt.Errorf("failed to initialize debug console: %w", err)
-	}
-
 	// Note: Full state restoration happens in RestoreState() after Initialize() completes
 	// This ensures the player is fully created before we restore state
 
@@ -236,17 +200,14 @@ func (s *GameplayScene) Update(deltaTime float64) {
 	}
 }
 
-// RenderDebugConsole renders the debug console UI
-func (s *GameplayScene) RenderDebugConsole() error {
-	if !config.Global.Debug.Enabled || s.debugFont == nil || s.debugTextRenderer == nil {
-		return nil
-	}
-
-	return debug.Console.Render(s.GetCanvasManager(), s.debugTextRenderer, s.debugFont)
-}
-
 // GetRenderables, Cleanup, GetName, AddGameObject, RemoveGameObject are inherited from BaseScene
 // Player is now added to ENTITIES layer in Initialize(), so it's automatically included in renderables
+
+// RenderOverlays renders debug console and other overlays (overrides BaseScene.RenderOverlays)
+func (s *GameplayScene) RenderOverlays() error {
+	// Render debug console (inherited from BaseScene)
+	return s.BaseScene.RenderOverlays()
+}
 
 // Cleanup overrides BaseScene.Cleanup to also clear player reference
 func (s *GameplayScene) Cleanup() {
@@ -369,7 +330,4 @@ func (s *GameplayScene) handleSaveGame() {
 	}
 }
 
-// GetDebugFont returns the debug font (for texture loading)
-func (s *GameplayScene) GetDebugFont() text.Font {
-	return s.debugFont
-}
+// GetDebugFont is inherited from BaseScene

@@ -26,10 +26,6 @@ type MenuScene struct {
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
 
-	// Debug rendering
-	debugFont         text.Font
-	debugTextRenderer text.TextRenderer
-
 	// Debug console toggle state
 	f2PressedLastFrame bool
 
@@ -49,7 +45,7 @@ type MenuScene struct {
 // NewMenuScene creates a new menu scene
 func NewMenuScene(screenWidth, screenHeight float64) *MenuScene {
 	baseScene := pkscene.NewBaseScene("Menu", screenWidth, screenHeight)
-	
+
 	// Set required assets
 	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
 	baseScene.SetRequiredAssets(types.SceneAssets{
@@ -60,7 +56,7 @@ func NewMenuScene(screenWidth, screenHeight float64) *MenuScene {
 			config.Global.Debug.FontPath,
 		},
 	})
-	
+
 	return &MenuScene{
 		BaseScene:     baseScene,
 		menuMode:      "main",
@@ -70,31 +66,6 @@ func NewMenuScene(screenWidth, screenHeight float64) *MenuScene {
 
 // All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, SetCanvasManager)
 // are inherited from BaseScene
-
-// InitializeDebugConsole initializes the debug console font and text renderer
-func (s *MenuScene) InitializeDebugConsole() error {
-	if !config.Global.Debug.Enabled {
-		return nil
-	}
-
-	logger.Logger.Debugf("Initializing debug console for %s scene", s.GetName())
-
-	// Create and load font metadata
-	s.debugFont = text.NewSpriteFont()
-	err := s.debugFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load debug font: %s", err)
-		return err
-	}
-
-	// Create text renderer using inherited canvasManager
-	s.debugTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
-
-	logger.Logger.Debugf("Debug console initialized successfully")
-	debug.Console.PostMessage("System", "Main menu ready")
-
-	return nil
-}
 
 // InitializeMenuText initializes the menu text rendering system
 func (s *MenuScene) InitializeMenuText() error {
@@ -133,11 +104,6 @@ func (s *MenuScene) Initialize() error {
 	// Initialize menu text rendering
 	if err := s.InitializeMenuText(); err != nil {
 		logger.Logger.Warnf("Failed to initialize menu text: %s", err)
-	}
-
-	// Initialize debug console
-	if err := s.InitializeDebugConsole(); err != nil {
-		return fmt.Errorf("failed to initialize debug console: %w", err)
 	}
 
 	return nil
@@ -283,16 +249,19 @@ func (s *MenuScene) updateLoadMenu(inputState types.InputState) {
 
 // RenderOverlays implements types.SceneOverlayRenderer
 func (s *MenuScene) RenderOverlays() error {
-	// Render black background (solid color - we'll use a simple filled rect approach)
-	// For now, just render the menu text
-
+	// Render menu first
 	if s.menuMode == "main" {
-		return s.renderMainMenu()
+		if err := s.renderMainMenu(); err != nil {
+			return err
+		}
 	} else if s.menuMode == "load" {
-		return s.renderLoadMenu()
+		if err := s.renderLoadMenu(); err != nil {
+			return err
+		}
 	}
 
-	return nil
+	// Then render debug console (inherited from BaseScene)
+	return s.BaseScene.RenderOverlays()
 }
 
 // renderMainMenu renders the main menu
@@ -433,7 +402,7 @@ func (s *MenuScene) Cleanup() {
 	s.menuSystem = nil
 	s.menuMode = "main"
 	s.loadGameSaves = nil
-	
+
 	// Call base cleanup (clears layers)
 	s.BaseScene.Cleanup()
 }
