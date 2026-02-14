@@ -200,9 +200,6 @@ func (s *GameplayScene) Update(deltaTime float64) {
 	}
 }
 
-// GetRenderables, Cleanup, GetName, AddGameObject, RemoveGameObject are inherited from BaseScene
-// Player is now added to ENTITIES layer in Initialize(), so it's automatically included in renderables
-
 // RenderOverlays renders debug console and other overlays (overrides BaseScene.RenderOverlays)
 func (s *GameplayScene) RenderOverlays() error {
 	// Render debug console (inherited from BaseScene)
