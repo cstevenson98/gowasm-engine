@@ -71,3 +71,9 @@ scripts/test_output/
 assets/fonts/*.sheet.png
 assets/fonts/*.sheet.json
 
+# Isometric sprite renderer output
+tools/iso-sprite-renderer/output/**/*.png
+tools/iso-sprite-renderer/output/**/*.json
+tools/iso-sprite-renderer/**/*.pyc
+tools/iso-sprite-renderer/**/__pycache__/
+

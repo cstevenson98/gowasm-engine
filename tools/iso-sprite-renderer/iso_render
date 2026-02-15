@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""
+Isometric Sprite Renderer
+Wrapper script for easy CLI access
+"""
+import sys
+import os
+
+# Add the tool directory to Python path
+tool_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, tool_dir)
+
+# Import and run main
+from iso_render import main
+
+if __name__ == '__main__':
+    sys.exit(main())
+
