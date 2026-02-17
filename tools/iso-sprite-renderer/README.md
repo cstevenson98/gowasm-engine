@@ -1,131 +1,177 @@
-# Isometric Sprite Renderer
+# Isometric Sprite Renderer Library
 
-A command-line tool for rendering 3D models as isometric sprites using Blender. Perfect for creating game assets for isometric/tycoon-style games.
+A Python library for rendering 3D models as isometric sprites using Blender. Designed for creating game assets for isometric/tycoon-style games.
+
+## Overview
+
+This is a **library tool** - it provides core rendering capabilities that other tools can use. For complete applications, see:
+- `electrical_sprite_database` - Generate electrical grid component sprites
 
 ## Features
 
 - **8-direction rendering**: Automatically renders models in 8 rotations (N, NE, E, SE, S, SW, W, NW)
 - **Orthographic projection**: True isometric view with no perspective distortion
-- **Batch processing**: Render entire directories of models at once
-- **Sprite sheet generation**: Combines individual sprites into sprite sheets with metadata
 - **Customizable lighting**: Control sun direction, color, and ambient lighting
 - **Flexible configuration**: YAML config files with CLI override support
 - **Transparent backgrounds**: Ready for game engine integration
-- **Extensible**: Interface-based mesh loader system (OBJ support, more formats coming)
+- **Extensible**: Interface-based mesh loader system
 
 ## Requirements
 
 - Python 3.9+
 - Blender 3.0+ (accessible from command line)
 - PyYAML (`pip install pyyaml`)
-- Pillow (`pip install pillow`)
 
 ## Installation
 
-The tool is already set up in this repository. Just ensure dependencies are installed:
+This is a library - add the `tools/` directory to your Python path:
 
-```bash
-pip install pyyaml pillow
+```python
+import sys
+sys.path.insert(0, '/path/to/tools')
+
+from iso_sprite_renderer import config, renderer
 ```
 
-Make sure Blender is accessible from command line:
+Or use it via command line:
 
 ```bash
-blender --version
+python3 tools/iso-sprite-renderer/iso_render.py --input model.obj --output sprites/
 ```
 
-## Quick Start
+## Command Line Usage
 
-### Render a single model
+### Basic Rendering
 
 ```bash
-./iso_render --input examples/teapot.obj
+python3 iso_render.py --input model.obj --output sprites/ --size 64
 ```
 
-This will create 8 PNG files in `./sprites/`:
-- `teapot_angle_0.png`
-- `teapot_angle_45.png`
-- `teapot_angle_90.png`
-- ... and so on
-
-Plus a sprite sheet: `teapot_spritesheet.png` with metadata JSON.
-
-### Custom size and output directory
+### Custom Camera Settings
 
 ```bash
-./iso_render --input examples/teapot.obj --size 64 --output ./my-sprites
+python3 iso_render.py --input model.obj \
+  --ortho-scale 2.828427 \  # sqrt(8) for perfect unit square fit
+  --size 64 \
+  --output sprites/
 ```
 
-### Use a config file
+### Rotation and Positioning
 
 ```bash
-./iso_render --input examples/teapot.obj --config examples/render.yaml
+python3 iso_render.py --input model.obj \
+  --rotate-x 1 \            # Rotate 90° around X axis
+  --camera-focus-x 0 \      # Center camera at X=0
+  --camera-focus-y 0 \      # Center camera at Y=0
+  --no-normalize            # Use absolute coordinates from OBJ
 ```
 
-### Batch render multiple models
+### Debugging Options
 
 ```bash
-./iso_render --batch models/ --output ./sprites
-```
-
-### Customize lighting
-
-```bash
-./iso_render --input examples/teapot.obj \
-  --light-dir 1,-1,1 \
-  --light-color 1.0,0.9,0.8 \
-  --ambient-color 0.2,0.2,0.3
+python3 iso_render.py --input model.obj \
+  --show-ground-plane \     # Show unit square at Z=0
+  --show-axes \             # Show X,Y,Z coordinate axes
+  --render-top-view \       # Also render from directly above
+  --render-side-view        # Also render from the side
 ```
 
 ## Command Line Options
 
-### Input Options
-
-- `--input`, `-i`: Path to single 3D model file
-- `--batch`, `-b`: Directory containing multiple 3D models
+### Input/Output
+- `--input`, `-i`: Path to 3D model file (required)
+- `--output`, `-o`: Output directory (default: `./sprites`)
 - `--config`, `-c`: Path to YAML configuration file
 
-### Output Options
-
-- `--output`, `-o`: Output directory (default: `./sprites`)
-- `--no-individual-pngs`: Don't save individual PNG files
-- `--no-sprite-sheet`: Don't generate sprite sheet
-- `--sprite-layout`: Sprite sheet layout: `horizontal`, `vertical`, or `grid` (default: horizontal)
-
 ### Render Settings
+- `--size`, `-s`: Sprite size in pixels (e.g., `64` or `64,64`)
+- `--ortho-scale`: Orthographic camera scale (lower = more zoomed in)
+- `--rotate-x`: Rotate model 90° increments around X axis (0-3)
+- `--rotate-y`: Rotate model 90° increments around Y axis (0-3)
+- `--rotate-z`: Rotate model 90° increments around Z axis (0-3)
+- `--no-normalize`: Disable automatic scaling/centering
+- `--camera-focus-x`: Camera focus point X coordinate
+- `--camera-focus-y`: Camera focus point Y coordinate
 
-- `--size`, `-s`: Sprite size in pixels (e.g., `50` or `50,50` or `50x50`)
-- `--ortho-scale`: Orthographic camera scale (default: 1.0, lower = more zoomed in)
-- `--rotate-x`: Rotate model 90° increments around X axis (pitch): `0`=0°, `1`=90°, `2`=180°, `3`=270°
-- `--rotate-y`: Rotate model 90° increments around Y axis (yaw): `0`=0°, `1`=90°, `2`=180°, `3`=270°
-- `--rotate-z`: Rotate model 90° increments around Z axis (roll): `0`=0°, `1`=90°, `2`=180°, `3`=270°
-- `--no-transparency`: Disable transparent background
+### Output Options
+- `--no-sprite-sheet`: Don't generate sprite sheet
+- `--no-individual-pngs`: Don't save individual PNG files
 
-**Note:** Many 3D models are exported in different orientations. Use rotation parameters to fix models that appear on their side or facing the wrong way.
+### Debugging
+- `--show-ground-plane`: Show unit square border at Z=0
+- `--show-axes`: Show coordinate axes
+- `--render-top-view`: Render top-down view
+- `--render-side-view`: Render side-on view
 
-### Lighting Options
+### Lighting
+- `--light-dir`: Sun light direction as `X,Y,Z`
+- `--light-color`: Sun light color as `R,G,B`
+- `--light-energy`: Sun light intensity
+- `--ambient-color`: Ambient light color as `R,G,B`
+- `--ambient-energy`: Ambient light intensity
 
-- `--light-dir`: Sun light direction as `X,Y,Z` (default: `1,-1,1`)
-- `--light-color`: Sun light color as `R,G,B` in 0-1 range (default: `1,1,1`)
-- `--light-energy`: Sun light intensity (default: 3.0)
-- `--ambient-color`: Ambient light color as `R,G,B` (default: `0.3,0.3,0.3`)
-- `--ambient-energy`: Ambient light intensity (default: 0.5)
+## Python API Usage
 
-### Other Options
+### Basic Rendering
 
-- `--blender-path`: Path to Blender executable (default: `blender`)
-- `--verbose`, `-v`: Verbose output
-- `--help`, `-h`: Show help message
+```python
+import sys
+import os
+
+# Add to path
+sys.path.insert(0, '/path/to/tools')
+
+# Import renderer
+from iso_sprite_renderer.renderer import BlenderRenderer
+from iso_sprite_renderer.config import RenderConfig
+
+# Create config
+config = RenderConfig()
+config.load_defaults()
+config.render.size = [64, 64]
+config.render.ortho_scale = 2.828427  # sqrt(8)
+
+# Render
+renderer = BlenderRenderer(config)
+renderer.render('model.obj', 'output_dir/')
+```
+
+### Custom Configuration
+
+```python
+from iso_sprite_renderer.config import RenderConfig
+
+config = RenderConfig()
+config.load_yaml('my_config.yaml')
+
+# Override specific settings
+config.render.size = [128, 128]
+config.camera.ortho_scale = 4.0
+config.lighting.sun_energy = 5.0
+
+# Use config...
+```
 
 ## Configuration File Format
 
-See `examples/render.yaml` for a complete example:
-
 ```yaml
 render:
-  size: [50, 50]
-  directions: 8
-  ortho_scale: 6.0
+  size: [64, 64]
+  directions: 8          # Number of rotation angles
+  ortho_scale: 2.828427  # Camera scale
+  transparent_bg: true
+  no_normalize: false    # Set true to use absolute coordinates
+  
+  # Initial model rotation (0-3 = 0°, 90°, 180°, 270°)
+  rotate_x: 0
+  rotate_y: 0
+  rotate_z: 0
+  
+  # Debugging options
+  show_ground_plane: false
+  show_axes: false
+  render_top_view: false
+  render_side_view: false
 
 lighting:
   sun_direction: [1, -1, 1]
@@ -135,153 +181,59 @@ lighting:
   ambient_energy: 0.5
 
 camera:
-  elevation_angle: 35.264  # True isometric
+  elevation_angle: 35.264  # Isometric angle
   rotation_offset: 45
+  focus_x: 0               # Camera focus point
+  focus_y: 0
 
 output:
   directory: "./sprites"
   individual_pngs: true
-  sprite_sheet: true
+  sprite_sheet: false
   transparent_bg: true
 ```
 
-## How Models Are Scaled
+## Coordinate System
 
-The tool automatically normalizes all models to fit the camera view:
+- **Ground Plane**: X-Y plane at Z=0
+- **Unit Square**: X=[-1,1], Y=[-1,1]
+- **Camera Scale**: `ortho_scale = sqrt(8) ≈ 2.828427` fits the unit square perfectly in frame
 
-1. **Scaling**: Based on the **X-Y plane extent** (horizontal footprint), not the height
-   - The widest horizontal dimension (X or Y) is scaled to 2.0 units (-1 to +1)
-   - This ensures models fill the isometric view properly
-   - Height (Z) does not affect scaling
+### Perfect Grid Fit
 
-2. **Positioning**: Models are centered at the origin with their **bottom touching the ground plane (Z=0)**
-   - This ensures consistent baseline for all sprites
-   - Models "sit" on the ground rather than floating
-
-**Example**: A tall thin tower will appear larger than if scaled by overall dimensions (which would shrink it to fit the height).
-
-## Supported File Formats
-
-Currently supported:
-- **OBJ** (`.obj`)
-
-Coming soon:
-- FBX (`.fbx`)
-- GLTF/GLB (`.gltf`, `.glb`)
-- Blender files (`.blend`)
-
-## Output Files
-
-For a model named `teapot`, the tool generates:
-
-### Individual PNGs (if enabled)
-```
-sprites/
-├── teapot_angle_0.png
-├── teapot_angle_45.png
-├── teapot_angle_90.png
-├── teapot_angle_135.png
-├── teapot_angle_180.png
-├── teapot_angle_225.png
-├── teapot_angle_270.png
-└── teapot_angle_315.png
+For grid-based games (e.g., 2×2 unit squares):
+```python
+config.render.ortho_scale = 2.828427  # sqrt(8)
+config.render.no_normalize = True
+config.camera.focus_x = 0
+config.camera.focus_y = 0
 ```
 
-### Sprite Sheet (if enabled)
-```
-sprites/
-├── teapot_spritesheet.png  # Combined sprite sheet
-└── teapot_spritesheet.json # Metadata (dimensions, angles, etc.)
-```
-
-### Metadata JSON Example
-
-```json
-{
-  "sprite_width": 50,
-  "sprite_height": 50,
-  "num_sprites": 8,
-  "layout": "horizontal",
-  "sprites": [
-    {
-      "index": 0,
-      "x": 0,
-      "y": 0,
-      "width": 50,
-      "height": 50,
-      "angle": 0,
-      "source_file": "teapot_angle_0.png"
-    },
-    ...
-  ]
-}
-```
-
-## Integration with Game Engine
-
-The generated sprites can be loaded directly into the gowasm-engine:
-
-1. Copy sprite sheet to `assets/textures/`
-2. Load metadata JSON to get sprite coordinates
-3. Use sprite coordinates for UV mapping in your game
-
-## Examples
-
-### Example 1: Basic Render
-
-```bash
-./iso_render --input examples/teapot.obj
-```
-
-### Example 2: High-Res Sprites
-
-```bash
-./iso_render --input examples/teapot.obj --size 256 --ortho-scale 4.0
-```
-
-### Example 3: Warm Sunset Lighting
-
-```bash
-./iso_render --input examples/teapot.obj \
-  --light-color 1.0,0.7,0.4 \
-  --ambient-color 0.4,0.3,0.2
-```
-
-### Example 4: Batch Process with Config
-
-```bash
-./iso_render --batch models/ --config examples/render.yaml --output ./game-assets
-```
-
-### Example 5: Grid Layout Sprite Sheet
-
-```bash
-./iso_render --input examples/teapot.obj --sprite-layout grid
-```
+This ensures:
+- All sprites use the same world scale
+- Components align perfectly when composited
+- Grid coordinates map 1:1 to game world
 
 ## Architecture
 
-The tool uses a modular architecture:
+```
+iso-sprite-renderer/
+├── config.py           # Configuration management
+├── renderer.py         # Blender orchestration
+├── iso_render.py       # CLI entry point
+├── iso_render          # Shell wrapper
+├── loaders/
+│   ├── base.py        # Abstract mesh loader
+│   └── obj_loader.py  # OBJ file loader
+└── templates/
+    └── render_script.py  # Internal Blender script
+```
 
-- **config.py**: Configuration management (YAML + CLI merging)
-- **loaders/**: Mesh loader interface and implementations
-  - `base.py`: Abstract loader interface
-  - `obj_loader.py`: OBJ file loader
-- **renderer.py**: Blender orchestration and subprocess management
-- **output.py**: Sprite sheet generation with Pillow
-- **templates/render_script.py**: Blender Python script template
-- **iso_render.py**: Main CLI entry point
+## Extending the Library
 
-## Adding New File Format Support
+### Add New File Format
 
-To add support for a new 3D format:
-
-1. Create a new loader in `loaders/` (e.g., `fbx_loader.py`)
-2. Extend the `MeshLoader` base class
-3. Implement `supports()`, `load_into_blender()`, and `get_file_extensions()`
-4. Register in `loaders/__init__.py`
-
-Example:
+1. Create loader in `loaders/`:
 
 ```python
 from .base import MeshLoader
@@ -291,54 +243,62 @@ class FBXLoader(MeshLoader):
         return filepath.lower().endswith('.fbx')
     
     def get_file_extensions(self) -> list[str]:
-        return ['.fbx', '.FBX']
+        return ['.fbx']
     
     def load_into_blender(self, filepath: str, bpy):
         bpy.ops.import_scene.fbx(filepath=filepath)
-        # ... handle imported objects
 ```
+
+2. Register in `loaders/__init__.py`:
+
+```python
+from .fbx_loader import FBXLoader
+```
+
+## Tools Using This Library
+
+- **electrical_sprite_database** - Generate layered sprites for electrical grid components (pylons, substations, wires)
+
+## Supported File Formats
+
+- **OBJ** (`.obj`) - Fully supported
+
+Coming soon:
+- FBX (`.fbx`)
+- GLTF/GLB (`.gltf`, `.glb`)
 
 ## Troubleshooting
 
-### "Blender not found"
+### Blender Not Found
 
-Make sure Blender is in your PATH or use `--blender-path`:
-
-```bash
-./iso_render --input teapot.obj --blender-path /path/to/blender
-```
-
-### "Pillow is required"
-
-Install Pillow:
+Ensure Blender is in your PATH:
 
 ```bash
-pip install pillow
+blender --version
 ```
 
-### Sprites are too small/large
-
-Adjust `--ortho-scale` (lower = more zoomed in):
-
+For Flatpak installations:
 ```bash
-./iso_render --input teapot.obj --ortho-scale 4.0  # More zoomed in
-./iso_render --input teapot.obj --ortho-scale 8.0  # More zoomed out
+ln -s /var/lib/flatpak/exports/bin/org.blender.Blender ~/.local/bin/blender
 ```
 
-### Output is too dark/bright
+### Sprites Too Small/Large
 
-Adjust lighting:
-
+Adjust `ortho_scale` (lower = more zoomed in):
 ```bash
-./iso_render --input teapot.obj --light-energy 5.0 --ambient-energy 1.0
+--ortho-scale 2.0  # More zoomed in
+--ortho-scale 4.0  # More zoomed out
 ```
+
+### Model Not Grounded
+
+Use debugging options to verify positioning:
+```bash
+--show-ground-plane --show-axes --render-top-view --render-side-view
+```
+
+The model should sit on the X-Y plane (Z=0).
 
 ## License
 
 Part of the gowasm-engine project.
-
-## Credits
-
-- Example teapot model from [Stanford CS148](https://graphics.stanford.edu/courses/cs148-10-summer/)
-- Powered by [Blender](https://www.blender.org/)
-

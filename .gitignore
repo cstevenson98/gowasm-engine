@@ -71,9 +71,15 @@ scripts/test_output/
 assets/fonts/*.sheet.png
 assets/fonts/*.sheet.json
 
-# Isometric sprite renderer output
-tools/iso-sprite-renderer/output/**/*.png
-tools/iso-sprite-renderer/output/**/*.json
+# Isometric sprite renderer library (Python cache only)
 tools/iso-sprite-renderer/**/*.pyc
 tools/iso-sprite-renderer/**/__pycache__/
+
+# Electrical sprite database tool output
+tools/electrical_sprite_database/output/**/*.png
+tools/electrical_sprite_database/output/**/*.json
+tools/electrical_sprite_database/output/**/*.obj
+tools/electrical_sprite_database/output/**/*.mtl
+tools/electrical_sprite_database/**/*.pyc
+tools/electrical_sprite_database/**/__pycache__/
 

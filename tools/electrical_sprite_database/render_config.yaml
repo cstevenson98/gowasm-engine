@@ -1,0 +1,29 @@
+# Render configuration for sprite database generation
+# Single angle (no rotation) for base sprites and connections
+
+render:
+  size: [64, 64]
+  directions: 1  # Single angle only
+  ortho_scale: 2.828427  # sqrt(8) for perfect grid fit
+  transparent_bg: true
+  no_normalize: true
+
+lighting:
+  sun_direction: [1, -1, 1]
+  sun_color: [1.0, 1.0, 1.0]
+  sun_energy: 3.0
+  ambient_color: [0.3, 0.3, 0.3]
+  ambient_energy: 0.5
+
+camera:
+  elevation_angle: 35.264  # True isometric
+  rotation_offset: 45
+  focus_x: 0
+  focus_y: 0
+
+output:
+  directory: "./output"
+  individual_pngs: true
+  sprite_sheet: false
+  transparent_bg: true
+

@@ -13,12 +13,18 @@ class RenderConfig:
     """Render settings."""
     size: list[int] = field(default_factory=lambda: [50, 50])
     directions: int = 8
-    ortho_scale: float = 2.0  # Lower = more zoomed in, higher = more zoomed out
+    ortho_scale: float = 2.828427  # sqrt(8) - fits unit square [-1,1] in isometric view
     # Model rotation adjustments (90° increments: 0, 1, 2, 3 = 0°, 90°, 180°, 270°)
     rotate_x: int = 0  # Rotation around X axis (pitch)
     rotate_y: int = 0  # Rotation around Y axis (yaw)
     rotate_z: int = 0  # Rotation around Z axis (roll)
     show_ground_plane: bool = False  # Show reference square on ground plane
+    show_axes: bool = False  # Show X, Y, Z coordinate axes
+    render_top_view: bool = False  # Add top-down view (camera in Z axis)
+    render_side_view: bool = False  # Add side view (camera along X axis)
+    normalize_model: bool = True  # Scale and center model (disable for absolute coords)
+    camera_focus_x: float = 0.0  # Camera focus X position (for grid-based rendering)
+    camera_focus_y: float = 0.0  # Camera focus Y position (for grid-based rendering)
 
 
 @dataclass
@@ -142,6 +148,24 @@ class Config:
         
         if args.get('show_ground_plane'):
             self.render.show_ground_plane = True
+        
+        if args.get('show_axes'):
+            self.render.show_axes = True
+        
+        if args.get('render_top_view'):
+            self.render.render_top_view = True
+        
+        if args.get('render_side_view'):
+            self.render.render_side_view = True
+        
+        if args.get('no_normalize'):
+            self.render.normalize_model = False
+        
+        if args.get('camera_focus_x') is not None:
+            self.render.camera_focus_x = float(args['camera_focus_x'])
+        
+        if args.get('camera_focus_y') is not None:
+            self.render.camera_focus_y = float(args['camera_focus_y'])
         
         # Lighting settings
         if args.get('light_dir'):

@@ -1,0 +1,40 @@
+# Pylon Connection Sprite Database
+# Generate all pylon connections for testing
+
+output_dir: "output/sprite_database_pylon"
+
+sprite:
+  size: 64
+  ortho_scale: 2.828427
+
+camera:
+  elevation: 35.264
+  rotation: 45.0
+
+components:
+  - pylon
+
+connection_radius: 3
+
+phases:
+  - A
+  - B
+  - C
+
+connection_types:
+  - [pylon, pylon]
+
+wire:
+  sag: 0.1
+  radius: 0.02
+
+rendering:
+  generate_base: true
+  generate_connections: true
+  overwrite_existing: true
+
+blender:
+  background: true
+  verbose: false
+
+

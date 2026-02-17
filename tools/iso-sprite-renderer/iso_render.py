@@ -86,7 +86,7 @@ Examples:
     parser.add_argument(
         '--ortho-scale',
         type=float,
-        help='Orthographic camera scale (default: 2.0, lower = more zoomed in)'
+        help='Orthographic camera scale (default: 2.828 = sqrt(8), fits unit square)'
     )
     parser.add_argument(
         '--rotate-x',
@@ -110,6 +110,36 @@ Examples:
         '--show-ground-plane',
         action='store_true',
         help='Show reference square [-1,1] on ground plane with 0.2 unit border'
+    )
+    parser.add_argument(
+        '--show-axes',
+        action='store_true',
+        help='Show X, Y, Z coordinate axes (length 1.0, Red=X, Green=Y, Blue=Z)'
+    )
+    parser.add_argument(
+        '--render-top-view',
+        action='store_true',
+        help='Add top-down view render (camera looking down Z axis) for Z-alignment check'
+    )
+    parser.add_argument(
+        '--render-side-view',
+        action='store_true',
+        help='Add side view render (camera along X axis) to see Y-Z plane'
+    )
+    parser.add_argument(
+        '--no-normalize',
+        action='store_true',
+        help='Skip model scaling and centering (use absolute coordinates from file)'
+    )
+    parser.add_argument(
+        '--camera-focus-x',
+        type=float,
+        help='Camera focus X position (for grid-based rendering, default: 0.0)'
+    )
+    parser.add_argument(
+        '--camera-focus-y',
+        type=float,
+        help='Camera focus Y position (for grid-based rendering, default: 0.0)'
     )
     parser.add_argument(
         '--no-transparency',

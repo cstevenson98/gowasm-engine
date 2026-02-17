@@ -1,0 +1,55 @@
+# Sprite Database Generation Configuration
+
+# Output directory for sprite database
+output_dir: "output/sprite_database"
+
+# Sprite rendering parameters
+sprite:
+  size: 64                    # Sprite size in pixels (64x64)
+  ortho_scale: 2.828427       # sqrt(8) - fits unit square perfectly in frame
+  
+# Camera settings (isometric)
+camera:
+  elevation: 35.264           # Isometric elevation angle
+  rotation: 45.0              # Rotation offset
+
+# Component types to generate
+components:
+  - pylon
+  - substation
+
+# Connection radius
+# Generate all connections within this distance (in grid squares)
+connection_radius: 3
+
+# Phases to generate
+phases:
+  - A
+  - B
+  - C
+
+# Connection types
+# Format: [source_component, target_component]
+connection_types:
+  - [pylon, pylon]
+  - [pylon, substation]
+  - [substation, pylon]
+  - [substation, substation]
+
+# Wire rendering parameters
+wire:
+  sag: 0.1                    # Wire sag/droop amount
+  radius: 0.02                # Wire cylinder radius
+
+# Rendering options
+rendering:
+  generate_base: true         # Generate base component sprites (no wires)
+  generate_connections: true  # Generate connection sprites (wires only)
+  overwrite_existing: false   # Skip existing sprites if false
+
+# Blender settings
+blender:
+  background: true            # Run headless
+  verbose: false              # Print Blender output
+
+

@@ -99,6 +99,10 @@ def setup_camera():
     camera_config = config['camera']
     render_config = config['render']
     
+    # Get camera focus position (defaults to 0, 0)
+    focus_x = render_config.get('camera_focus_x', 0.0)
+    focus_y = render_config.get('camera_focus_y', 0.0)
+    
     # Add camera
     bpy.ops.object.camera_add()
     camera = bpy.context.active_object
@@ -114,23 +118,91 @@ def setup_camera():
     
     distance = 10  # Distance from origin
     
-    # Calculate camera position
+    # Calculate camera position relative to focus point
     camera.location = (
-        distance * math.cos(elevation) * math.cos(rotation_offset),
-        distance * math.cos(elevation) * math.sin(rotation_offset),
+        focus_x + distance * math.cos(elevation) * math.cos(rotation_offset),
+        focus_y + distance * math.cos(elevation) * math.sin(rotation_offset),
         distance * math.sin(elevation)
     )
     
-    # Point camera at origin
+    # Point camera at focus point
     from mathutils import Vector
-    direction = Vector((-camera.location[0], -camera.location[1], -camera.location[2]))
+    target = Vector((focus_x, focus_y, 0))
+    direction = target - camera.location
     rot_quat = direction.to_track_quat('-Z', 'Y')
     camera.rotation_euler = rot_quat.to_euler()
     
     # Set as active camera
     bpy.context.scene.camera = camera
     
+    if focus_x != 0.0 or focus_y != 0.0:
+        print(f"✓ Camera focused on grid position ({focus_x}, {focus_y})")
+    
     return camera
+
+
+def create_coordinate_axes():
+    """Create colored coordinate axes showing X, Y, Z directions."""
+    render_config = config['render']
+    if not render_config.get('show_axes', False):
+        return []
+    
+    axes = []
+    
+    # Define axes: direction, color, name
+    axes_data = [
+        ((1.0, 0.0, 0.0), (1.0, 0.0, 0.0, 1.0), "X-Axis"),  # Red
+        ((0.0, 1.0, 0.0), (0.0, 1.0, 0.0, 1.0), "Y-Axis"),  # Green
+        ((0.0, 0.0, 1.0), (0.0, 0.0, 1.0, 1.0), "Z-Axis"),  # Blue
+    ]
+    
+    for direction, color, name in axes_data:
+        # Create arrow using a curve
+        curve_data = bpy.data.curves.new(name=name, type='CURVE')
+        curve_data.dimensions = '3D'
+        curve_data.bevel_depth = 0.015  # Thickness of the arrow shaft
+        
+        # Create the shaft (line from origin to direction)
+        shaft = curve_data.splines.new('POLY')
+        shaft.points.add(1)  # Add 1 more point (already has 1)
+        shaft.points[0].co = (0.0, 0.0, 0.0, 1.0)  # Origin
+        shaft.points[1].co = (direction[0], direction[1], direction[2], 1.0)  # End point
+        
+        # Create the object
+        curve_obj = bpy.data.objects.new(name, curve_data)
+        bpy.context.collection.objects.link(curve_obj)
+        
+        # Add material with color
+        mat = bpy.data.materials.new(name=f"{name}_Material")
+        mat.diffuse_color = color
+        curve_obj.data.materials.append(mat)
+        
+        # Create arrowhead (cone)
+        bpy.ops.mesh.primitive_cone_add(
+            vertices=8,
+            radius1=0.05,  # Base radius
+            radius2=0.0,   # Tip radius (pointed)
+            depth=0.15,    # Height of cone
+            location=(direction[0], direction[1], direction[2])
+        )
+        cone = bpy.context.active_object
+        cone.name = f"{name}_Head"
+        
+        # Orient cone to point along the axis
+        if direction[0] == 1.0:  # X axis
+            cone.rotation_euler = (0, math.radians(90), 0)
+        elif direction[1] == 1.0:  # Y axis
+            cone.rotation_euler = (math.radians(-90), 0, 0)
+        # Z axis is already pointing up (default)
+        
+        # Apply the same material to cone
+        cone.data.materials.append(mat)
+        
+        axes.append(curve_obj)
+        axes.append(cone)
+    
+    print(f"✓ Created coordinate axes (X=Red, Y=Green, Z=Blue, length=1.0)")
+    return axes
 
 
 def create_ground_plane():
@@ -223,6 +295,13 @@ def load_mesh():
 
 def normalize_object(obj):
     """Center and scale object to fit in view."""
+    render_config = config['render']
+    
+    # Check if normalization is disabled
+    if not render_config.get('normalize_model', True):
+        print(f"  ⊘ Skipping normalization (using absolute coordinates)")
+        return
+    
     # Select only this object
     bpy.ops.object.select_all(action='DESELECT')
     obj.select_set(True)
@@ -258,11 +337,20 @@ def normalize_object(obj):
     
     # Center to origin (ground plane at Z=0)
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
+    obj.location = (0, 0, 0)
     
-    # Center X and Y, but keep bottom at Z=0 (sitting on ground)
+    # Now compute the actual Z offset to put bottom on ground
+    # Need to update the scene to get correct vertex positions
+    bpy.context.view_layer.update()
+    
+    # Get world-space vertex positions
     bbox = [obj.matrix_world @ v.co for v in obj.data.vertices]
     min_z = min(v.z for v in bbox)
-    obj.location = (0, 0, -min_z)  # Shift so bottom touches ground
+    
+    # Shift so bottom touches ground (Z=0)
+    obj.location = (0, 0, -min_z)
+    
+    print(f"  Model positioned: bottom Z offset = {-min_z:.3f}")
 
 
 def render_rotation(obj, angle_degrees, output_path):
@@ -277,6 +365,76 @@ def render_rotation(obj, angle_degrees, output_path):
     bpy.ops.render.render(write_still=True)
     
     print(f"✓ Rendered angle {angle_degrees}° -> {output_path}")
+
+
+def render_top_view(obj, output_path):
+    """Render top-down view (camera looking down Z axis)."""
+    # Save current camera
+    old_camera = bpy.context.scene.camera
+    
+    # Create top-down camera
+    bpy.ops.object.camera_add()
+    top_camera = bpy.context.active_object
+    top_camera.name = "TopDownCamera"
+    
+    # Position camera above, looking down
+    top_camera.location = (0, 0, 5)
+    top_camera.rotation_euler = (0, 0, 0)  # Looking straight down
+    
+    # Set to orthographic
+    render_config = config['render']
+    top_camera.data.type = 'ORTHO'
+    top_camera.data.ortho_scale = render_config['ortho_scale']
+    
+    # Set as active camera
+    bpy.context.scene.camera = top_camera
+    
+    # Render
+    bpy.context.scene.render.filepath = output_path
+    bpy.ops.render.render(write_still=True)
+    
+    print(f"✓ Rendered top-down view -> {output_path}")
+    
+    # Restore original camera and delete top camera
+    bpy.context.scene.camera = old_camera
+    bpy.ops.object.select_all(action='DESELECT')
+    top_camera.select_set(True)
+    bpy.ops.object.delete()
+
+
+def render_side_view(obj, output_path):
+    """Render side view (camera along X axis, looking at Y-Z plane)."""
+    # Save current camera
+    old_camera = bpy.context.scene.camera
+    
+    # Create side view camera
+    bpy.ops.object.camera_add()
+    side_camera = bpy.context.active_object
+    side_camera.name = "SideViewCamera"
+    
+    # Position camera along X axis, looking toward origin
+    side_camera.location = (5, 0, 0)
+    side_camera.rotation_euler = (math.radians(90), 0, math.radians(90))  # Looking along -X
+    
+    # Set to orthographic
+    render_config = config['render']
+    side_camera.data.type = 'ORTHO'
+    side_camera.data.ortho_scale = render_config['ortho_scale']
+    
+    # Set as active camera
+    bpy.context.scene.camera = side_camera
+    
+    # Render
+    bpy.context.scene.render.filepath = output_path
+    bpy.ops.render.render(write_still=True)
+    
+    print(f"✓ Rendered side view -> {output_path}")
+    
+    # Restore original camera and delete side camera
+    bpy.context.scene.camera = old_camera
+    bpy.ops.object.select_all(action='DESELECT')
+    side_camera.select_set(True)
+    bpy.ops.object.delete()
 
 
 def main():
@@ -306,6 +464,9 @@ def main():
     # Create ground plane reference if requested
     create_ground_plane()
     
+    # Create coordinate axes if requested
+    create_coordinate_axes()
+    
     # Render all directions
     directions = config['render']['directions']
     output_dir = config['output']['directory']
@@ -319,8 +480,25 @@ def main():
         output_path = os.path.join(output_dir, f"{model_name}_angle_{int(angle)}.png")
         render_rotation(obj, angle, output_path)
     
+    # Render top-down view if requested
+    render_config = config['render']
+    if render_config.get('render_top_view', False):
+        print("\nRendering top-down view...")
+        top_view_path = os.path.join(output_dir, f"{model_name}_topview.png")
+        render_top_view(obj, top_view_path)
+    
+    # Render side view if requested
+    if render_config.get('render_side_view', False):
+        print("\nRendering side view...")
+        side_view_path = os.path.join(output_dir, f"{model_name}_sideview.png")
+        render_side_view(obj, side_view_path)
+    
     print("\n" + "=" * 60)
     print(f"✓✓✓ Rendering complete! {directions} sprites generated.")
+    if render_config.get('render_top_view', False):
+        print(f"✓ Plus top-down view")
+    if render_config.get('render_side_view', False):
+        print(f"✓ Plus side view")
     print("=" * 60)
 
 
