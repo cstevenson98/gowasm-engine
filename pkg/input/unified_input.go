@@ -63,6 +63,9 @@ func (u *UnifiedInput) GetInputState() types.InputState {
 		ShiftPressed: keyboardState.ShiftPressed,
 		CtrlPressed:  keyboardState.CtrlPressed,
 
+		// Scroll wheel (keyboard captures wheel events)
+		ScrollDeltaY: keyboardState.ScrollDeltaY,
+
 		// Previous frame states
 		UpPressedLastFrame:    keyboardState.UpPressedLastFrame,
 		DownPressedLastFrame:  keyboardState.DownPressedLastFrame,

@@ -169,6 +169,17 @@ func (e *Engine) Render() {
 	currentScene := e.currentScene
 	e.stateLock.Unlock()
 
+	// Set camera from scene (or default if scene doesn't provide one)
+	if currentScene != nil {
+		if cameraProvider, ok := currentScene.(types.SceneCameraProvider); ok {
+			e.canvasManager.SetCamera(cameraProvider.GetCamera())
+		} else {
+			e.canvasManager.SetCamera(types.DefaultCamera())
+		}
+	} else {
+		e.canvasManager.SetCamera(types.DefaultCamera())
+	}
+
 	// Get renderables from scene in correct layer order
 	var renderables []types.GameObject
 	if currentScene != nil {
@@ -341,7 +352,7 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		// Fallback to manual injection for scenes not using BaseScene
 		// This maintains backward compatibility during migration
 		logger.Logger.Debugf("Using manual dependency injection for scene: %s", registeredScene.GetName())
-		
+
 		if inputProvider, ok := registeredScene.(types.SceneInputProvider); ok {
 			inputProvider.SetInputCapturer(e.inputCapturer)
 		}
@@ -355,7 +366,7 @@ func (e *Engine) SetGameState(state types.GameState) error {
 				gameStateUser.SetGameState(e.gameStateProvider)
 			}
 		}
-		
+
 		// Inject canvas manager if scene has SetCanvasManager method
 		// Use a type assertion to check for method existence
 		type canvasManagerSetter interface {

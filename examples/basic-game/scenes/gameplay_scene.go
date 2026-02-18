@@ -14,6 +14,13 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
+// Camera movement constants
+const (
+	cameraSpeed   = 200.0 // Camera pan speed in game pixels per second
+	cameraMinZoom = 1.0   // Minimum zoom level (1x = no zoom)
+	cameraMaxZoom = 8.0   // Maximum zoom level (8x zoom in)
+)
+
 // GameplayScene represents the main gameplay scene with player and game objects.
 // It embeds BaseScene to inherit all common scene functionality.
 type GameplayScene struct {
@@ -21,6 +28,11 @@ type GameplayScene struct {
 
 	// Gameplay-specific fields
 	player *gameobject.Player
+
+	// Camera state
+	cameraX    float64 // Camera X offset in game pixels
+	cameraY    float64 // Camera Y offset in game pixels
+	cameraZoom float64 // Camera zoom level (integer for pixel-perfect)
 
 	// Key press state tracking
 	key1PressedLastFrame bool
@@ -31,7 +43,7 @@ type GameplayScene struct {
 // NewGameplayScene creates a new gameplay scene
 func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 	baseScene := pkscene.NewBaseScene("Gameplay", screenWidth, screenHeight)
-	
+
 	// Set required assets
 	baseScene.SetRequiredAssets(types.SceneAssets{
 		TexturePaths: []string{
@@ -42,13 +54,14 @@ func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 			config.Global.Debug.FontPath,
 		},
 	})
-	
+
 	return &GameplayScene{
-		BaseScene: baseScene,
+		BaseScene:  baseScene,
+		cameraZoom: 1.0, // Default: no zoom
 	}
 }
 
-// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, 
+// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState,
 // SetCanvasManager, GetRequiredAssets) are inherited from BaseScene
 
 // Initialize sets up the gameplay scene and creates game objects (overrides BaseScene.Initialize)
@@ -177,6 +190,45 @@ func (s *GameplayScene) Update(deltaTime float64) {
 			return
 		}
 
+		// --- Camera controls ---
+		// Arrow keys pan the camera
+		if inputState.UpPressed {
+			s.cameraY -= cameraSpeed * deltaTime
+		}
+		if inputState.DownPressed {
+			s.cameraY += cameraSpeed * deltaTime
+		}
+		if inputState.LeftPressed {
+			s.cameraX -= cameraSpeed * deltaTime
+		}
+		if inputState.RightPressed {
+			s.cameraX += cameraSpeed * deltaTime
+		}
+
+		// Scroll wheel zoom (pixel-perfect: snap to integer levels)
+		if inputState.ScrollDeltaY < 0 {
+			// Scroll up = zoom in
+			s.cameraZoom = types.SnapZoomPixelPerfect(s.cameraZoom + 1)
+			if s.cameraZoom > cameraMaxZoom {
+				s.cameraZoom = cameraMaxZoom
+			}
+			logger.Logger.Debugf("Camera zoom in: %.0f", s.cameraZoom)
+		} else if inputState.ScrollDeltaY > 0 {
+			// Scroll down = zoom out
+			s.cameraZoom = types.SnapZoomPixelPerfect(s.cameraZoom - 1)
+			if s.cameraZoom < cameraMinZoom {
+				s.cameraZoom = cameraMinZoom
+			}
+			logger.Logger.Debugf("Camera zoom out: %.0f", s.cameraZoom)
+		}
+
+		// Update the scene camera (BaseScene provides this to engine via GetCamera)
+		s.SetSceneCamera(types.Camera{
+			X:    s.cameraX,
+			Y:    s.cameraY,
+			Zoom: s.cameraZoom,
+		})
+
 		// Update player mover (position)
 		if mover := s.player.GetMover(); mover != nil {
 			mover.Update(deltaTime)
@@ -209,10 +261,10 @@ func (s *GameplayScene) RenderOverlays() error {
 // Cleanup overrides BaseScene.Cleanup to also clear player reference
 func (s *GameplayScene) Cleanup() {
 	logger.Logger.Debugf("Cleaning up %s scene", s.GetName())
-	
+
 	// Clear player reference
 	s.player = nil
-	
+
 	// Call base cleanup (clears all layers)
 	s.BaseScene.Cleanup()
 }

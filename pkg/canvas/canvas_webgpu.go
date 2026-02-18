@@ -46,12 +46,18 @@ type WebGPUCanvasManager struct {
 	vertexBuffer  *wgpu.Buffer
 	uniformBuffer *wgpu.Buffer
 
+	// Camera resources (global uniform, group 0 on all pipelines)
+	camera                types.Camera
+	cameraBuffer          *wgpu.Buffer
+	cameraBindGroupLayout *wgpu.BindGroupLayout
+	cameraBindGroup       *wgpu.BindGroup
+
 	// Texture resources
-	sampler          *wgpu.Sampler
-	bindGroupLayout  *wgpu.BindGroupLayout
-	loadedTextures   map[string]*wgpu.Texture
-	currentTexture   *wgpu.Texture
-	textureBindGroup *wgpu.BindGroup
+	sampler                *wgpu.Sampler
+	textureBindGroupLayout *wgpu.BindGroupLayout
+	loadedTextures         map[string]*wgpu.Texture
+	currentTexture         *wgpu.Texture
+	textureBindGroup       *wgpu.BindGroup
 
 	// Batch rendering
 	batchMode               bool
@@ -69,6 +75,7 @@ type WebGPUCanvasManager struct {
 func NewWebGPUCanvasManager() *WebGPUCanvasManager {
 	return &WebGPUCanvasManager{
 		loadedTextures: make(map[string]*wgpu.Texture),
+		camera:         types.DefaultCamera(),
 	}
 }
 
@@ -166,7 +173,14 @@ func (w *WebGPUCanvasManager) Initialize(canvasID string) error {
 	w.surface.Configure(w.adapter, w.device, w.config)
 	logger.Logger.Tracef("Surface configured")
 
-	// Create pipelines
+	// Create camera resources (must be before pipelines, as they reference camera bind group layout)
+	if err := w.createCameraResources(); err != nil {
+		errMsg := fmt.Sprintf("Failed to create camera resources: %v", err)
+		logger.Logger.Errorf("ERROR: %s", errMsg)
+		return &CanvasError{Message: errMsg}
+	}
+
+	// Create pipelines (all use camera bind group layout at group 0)
 	if err := w.createTrianglePipeline(); err != nil {
 		errMsg := fmt.Sprintf("Failed to create triangle pipeline: %v", err)
 		logger.Logger.Errorf("ERROR: %s", errMsg)
@@ -244,9 +258,93 @@ func (w *WebGPUCanvasManager) SetPipelines(pipelines []types.PipelineType) error
 	return nil
 }
 
+// SetCamera sets the current camera for rendering.
+func (w *WebGPUCanvasManager) SetCamera(camera types.Camera) {
+	w.camera = camera
+}
+
+// GetCamera returns the current camera.
+func (w *WebGPUCanvasManager) GetCamera() types.Camera {
+	return w.camera
+}
+
+// createCameraResources creates the uniform buffer, bind group layout, and bind group
+// for the global camera matrix. This must be called before creating pipelines.
+func (w *WebGPUCanvasManager) createCameraResources() error {
+	// Create camera uniform buffer (64 bytes = 4x4 matrix of float32)
+	cameraBuffer, err := w.device.CreateBuffer(&wgpu.BufferDescriptor{
+		Label: "Camera Uniform Buffer",
+		Size:  64,
+		Usage: wgpu.BufferUsageUniform | wgpu.BufferUsageCopyDst,
+	})
+	if err != nil {
+		return err
+	}
+	w.cameraBuffer = cameraBuffer
+
+	// Create camera bind group layout (group 0 for all pipelines)
+	cameraBindGroupLayout, err := w.device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
+		Label: "Camera Bind Group Layout",
+		Entries: []wgpu.BindGroupLayoutEntry{
+			{
+				Binding:    0,
+				Visibility: wgpu.ShaderStageVertex,
+				Buffer: wgpu.BufferBindingLayout{
+					Type:           wgpu.BufferBindingTypeUniform,
+					MinBindingSize: 64,
+				},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	w.cameraBindGroupLayout = cameraBindGroupLayout
+
+	// Create camera bind group
+	cameraBindGroup, err := w.device.CreateBindGroup(&wgpu.BindGroupDescriptor{
+		Label:  "Camera Bind Group",
+		Layout: cameraBindGroupLayout,
+		Entries: []wgpu.BindGroupEntry{
+			{
+				Binding: 0,
+				Buffer:  cameraBuffer,
+				Size:    64,
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	w.cameraBindGroup = cameraBindGroup
+
+	// Initialize with identity matrix (default camera)
+	identityMatrix := types.DefaultCamera().GetMatrix(1, 1, 1) // Identity regardless of dimensions
+	w.queue.WriteBuffer(cameraBuffer, 0, float32SliceToBytes(identityMatrix[:]))
+
+	logger.Logger.Tracef("Camera resources created (uniform buffer, bind group)")
+	return nil
+}
+
+// computeCameraMatrix computes the current camera view-projection matrix.
+func (w *WebGPUCanvasManager) computeCameraMatrix() [16]float32 {
+	canvasWidth := w.canvas.Get("width").Float()
+	canvasHeight := w.canvas.Get("height").Float()
+	pixelScale := config.Global.Rendering.PixelScale
+	if !config.Global.Rendering.PixelPerfectScaling || pixelScale < 1 {
+		pixelScale = 1
+	}
+	return w.camera.GetMatrix(canvasWidth, canvasHeight, pixelScale)
+}
+
 // createTrianglePipeline creates the basic triangle rendering pipeline
 func (w *WebGPUCanvasManager) createTrianglePipeline() error {
 	shaderCode := `
+struct Camera {
+	viewProjection: mat4x4<f32>,
+};
+@group(0) @binding(0) var<uniform> camera: Camera;
+
 @vertex
 fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4f {
 	var pos = array<vec2f, 3>(
@@ -254,7 +352,7 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> @builtin(position) vec4f 
 		vec2f(-0.5, -0.5),
 		vec2f( 0.5, -0.5)
 	);
-	return vec4f(pos[vertexIndex], 0.0, 1.0);
+	return camera.viewProjection * vec4f(pos[vertexIndex], 0.0, 1.0);
 }
 
 @fragment
@@ -272,8 +370,19 @@ fn fs_main() -> @location(0) vec4f {
 	}
 	defer shaderModule.Release()
 
+	// Create pipeline layout with camera bind group at group 0
+	pipelineLayout, err := w.device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
+		Label:            "Triangle Pipeline Layout",
+		BindGroupLayouts: []*wgpu.BindGroupLayout{w.cameraBindGroupLayout},
+	})
+	if err != nil {
+		return err
+	}
+	defer pipelineLayout.Release()
+
 	pipeline, err := w.device.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
-		Label: "Triangle Pipeline",
+		Label:  "Triangle Pipeline",
+		Layout: pipelineLayout,
 		Vertex: wgpu.VertexState{
 			Module:     shaderModule,
 			EntryPoint: "vs_main",
@@ -312,6 +421,11 @@ fn fs_main() -> @location(0) vec4f {
 // createSpritePipeline creates the colored sprite rendering pipeline
 func (w *WebGPUCanvasManager) createSpritePipeline() error {
 	shaderCode := `
+struct Camera {
+	viewProjection: mat4x4<f32>,
+};
+@group(0) @binding(0) var<uniform> camera: Camera;
+
 struct VertexOutput {
 	@builtin(position) position: vec4f,
 	@location(0) color: vec4f,
@@ -323,7 +437,7 @@ fn vs_main(
 	@location(1) color: vec4f
 ) -> VertexOutput {
 	var output: VertexOutput;
-	output.position = vec4f(position, 0.0, 1.0);
+	output.position = camera.viewProjection * vec4f(position, 0.0, 1.0);
 	output.color = color;
 	return output;
 }
@@ -343,8 +457,19 @@ fn fs_main(@location(0) color: vec4f) -> @location(0) vec4f {
 	}
 	defer shaderModule.Release()
 
+	// Create pipeline layout with camera bind group at group 0
+	spritePipelineLayout, err := w.device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
+		Label:            "Sprite Pipeline Layout",
+		BindGroupLayouts: []*wgpu.BindGroupLayout{w.cameraBindGroupLayout},
+	})
+	if err != nil {
+		return err
+	}
+	defer spritePipelineLayout.Release()
+
 	pipeline, err := w.device.CreateRenderPipeline(&wgpu.RenderPipelineDescriptor{
-		Label: "Sprite Pipeline",
+		Label:  "Sprite Pipeline",
+		Layout: spritePipelineLayout,
 		Vertex: wgpu.VertexState{
 			Module:     shaderModule,
 			EntryPoint: "vs_main",
@@ -411,6 +536,11 @@ fn fs_main(@location(0) color: vec4f) -> @location(0) vec4f {
 // createTexturedPipeline creates the textured sprite rendering pipeline
 func (w *WebGPUCanvasManager) createTexturedPipeline() error {
 	shaderCode := `
+struct Camera {
+	viewProjection: mat4x4<f32>,
+};
+@group(0) @binding(0) var<uniform> camera: Camera;
+
 struct VertexOutput {
 	@builtin(position) position: vec4f,
 	@location(0) uv: vec2f,
@@ -422,13 +552,13 @@ fn vs_main(
 	@location(1) uv: vec2f
 ) -> VertexOutput {
 	var output: VertexOutput;
-	output.position = vec4f(position, 0.0, 1.0);
+	output.position = camera.viewProjection * vec4f(position, 0.0, 1.0);
 	output.uv = uv;
 	return output;
 }
 
-@group(0) @binding(0) var textureSampler: sampler;
-@group(0) @binding(1) var textureData: texture_2d<f32>;
+@group(1) @binding(0) var textureSampler: sampler;
+@group(1) @binding(1) var textureData: texture_2d<f32>;
 
 @fragment
 fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
@@ -445,8 +575,8 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
 	}
 	defer shaderModule.Release()
 
-	// Create bind group layout
-	bindGroupLayout, err := w.device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
+	// Create texture bind group layout (now at group 1, camera is group 0)
+	textureBindGroupLayout, err := w.device.CreateBindGroupLayout(&wgpu.BindGroupLayoutDescriptor{
 		Label: "Texture Bind Group Layout",
 		Entries: []wgpu.BindGroupLayoutEntry{
 			{
@@ -469,12 +599,12 @@ fn fs_main(@location(0) uv: vec2f) -> @location(0) vec4f {
 	if err != nil {
 		return err
 	}
-	w.bindGroupLayout = bindGroupLayout
+	w.textureBindGroupLayout = textureBindGroupLayout
 
-	// Create pipeline layout
+	// Create pipeline layout: group 0 = camera, group 1 = texture
 	pipelineLayout, err := w.device.CreatePipelineLayout(&wgpu.PipelineLayoutDescriptor{
 		Label:            "Textured Pipeline Layout",
-		BindGroupLayouts: []*wgpu.BindGroupLayout{bindGroupLayout},
+		BindGroupLayouts: []*wgpu.BindGroupLayout{w.cameraBindGroupLayout, textureBindGroupLayout},
 	})
 	if err != nil {
 		return err
@@ -626,6 +756,10 @@ func (w *WebGPUCanvasManager) Render() error {
 
 // renderFrame performs the actual rendering
 func (w *WebGPUCanvasManager) renderFrame() error {
+	// Upload camera matrix to GPU before rendering
+	cameraMatrix := w.computeCameraMatrix()
+	w.queue.WriteBuffer(w.cameraBuffer, 0, float32SliceToBytes(cameraMatrix[:]))
+
 	// Get current texture
 	nextTexture, err := w.surface.GetCurrentTexture()
 	if err != nil {
@@ -737,17 +871,20 @@ func (w *WebGPUCanvasManager) executePipeline(renderPass *wgpu.RenderPassEncoder
 	case types.TrianglePipeline:
 		if w.trianglePipeline != nil {
 			renderPass.SetPipeline(w.trianglePipeline)
+			renderPass.SetBindGroup(0, w.cameraBindGroup, nil) // Camera uniform
 			renderPass.Draw(3, 1, 0, 0)
 		}
 	case types.SpritePipeline:
 		if w.spritePipeline != nil && w.stagedVertexCount > 0 {
 			renderPass.SetPipeline(w.spritePipeline)
+			renderPass.SetBindGroup(0, w.cameraBindGroup, nil) // Camera uniform
 			renderPass.SetVertexBuffer(0, w.vertexBuffer, 0, wgpu.WholeSize)
 			renderPass.Draw(uint32(w.stagedVertexCount), 1, 0, 0)
 		}
 	case types.TexturedPipeline:
 		if w.texturedPipeline != nil && len(w.batches) > 0 {
 			renderPass.SetPipeline(w.texturedPipeline)
+			renderPass.SetBindGroup(0, w.cameraBindGroup, nil) // Camera uniform (group 0)
 
 			// Upload all batches to different offsets in the vertex buffer
 			// This ensures they don't overwrite each other
@@ -786,7 +923,7 @@ func (w *WebGPUCanvasManager) executePipeline(renderPass *wgpu.RenderPassEncoder
 
 			// Now draw all batches using their stored data
 			for _, info := range drawInfos {
-				renderPass.SetBindGroup(0, info.bindGroup, nil)
+				renderPass.SetBindGroup(1, info.bindGroup, nil) // Texture bind group (group 1)
 				renderPass.SetVertexBuffer(0, w.vertexBuffer, info.offset, wgpu.WholeSize)
 				renderPass.Draw(info.vertexCount, 1, 0, 0)
 			}
@@ -1030,7 +1167,7 @@ func (w *WebGPUCanvasManager) createTextureBindGroup(texture *wgpu.Texture) *wgp
 
 	bindGroup, err := w.device.CreateBindGroup(&wgpu.BindGroupDescriptor{
 		Label:  "Texture Bind Group",
-		Layout: w.bindGroupLayout,
+		Layout: w.textureBindGroupLayout,
 		Entries: []wgpu.BindGroupEntry{
 			{
 				Binding: 0,
@@ -1142,11 +1279,17 @@ func (w *WebGPUCanvasManager) Cleanup() error {
 	if w.vertexBuffer != nil {
 		w.vertexBuffer.Release()
 	}
+	if w.cameraBuffer != nil {
+		w.cameraBuffer.Release()
+	}
+	if w.cameraBindGroupLayout != nil {
+		w.cameraBindGroupLayout.Release()
+	}
 	if w.sampler != nil {
 		w.sampler.Release()
 	}
-	if w.bindGroupLayout != nil {
-		w.bindGroupLayout.Release()
+	if w.textureBindGroupLayout != nil {
+		w.textureBindGroupLayout.Release()
 	}
 	if w.queue != nil {
 		w.queue.Release()

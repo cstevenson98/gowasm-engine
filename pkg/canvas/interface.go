@@ -36,6 +36,10 @@ type CanvasManager interface {
 	GetBackgroundPipeline() types.Pipeline
 	SetPipelines(pipelines []types.PipelineType) error
 
+	// Camera management
+	SetCamera(camera types.Camera)
+	GetCamera() types.Camera
+
 	// Canvas management
 	ClearCanvas() error
 

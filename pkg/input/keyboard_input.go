@@ -16,6 +16,7 @@ type KeyboardInput struct {
 	mu          sync.RWMutex
 	keydownFunc js.Func
 	keyupFunc   js.Func
+	wheelFunc   js.Func
 	initialized bool
 }
 
@@ -29,8 +30,8 @@ func NewKeyboardInput() *KeyboardInput {
 
 // GetInputState returns the current input state
 func (k *KeyboardInput) GetInputState() types.InputState {
-	k.mu.RLock()
-	defer k.mu.RUnlock()
+	k.mu.Lock()
+	defer k.mu.Unlock()
 
 	// Copy current state and set previous frame states
 	state := k.inputState
@@ -49,6 +50,9 @@ func (k *KeyboardInput) GetInputState() types.InputState {
 
 	// Update last state for next frame
 	k.lastState = k.inputState
+
+	// Reset scroll delta after reading (consumed per frame)
+	k.inputState.ScrollDeltaY = 0
 
 	return state
 }
@@ -159,12 +163,35 @@ func (k *KeyboardInput) Initialize() error {
 		return nil
 	})
 
+	// Create wheel handler for scroll zoom
+	k.wheelFunc = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		if len(args) == 0 {
+			return nil
+		}
+
+		event := args[0]
+		event.Call("preventDefault") // Prevent page scroll
+		deltaY := event.Get("deltaY").Float()
+
+		k.mu.Lock()
+		defer k.mu.Unlock()
+
+		k.inputState.ScrollDeltaY += deltaY
+
+		return nil
+	})
+
 	// Add event listeners to the document
 	js.Global().Get("document").Call("addEventListener", "keydown", k.keydownFunc)
 	js.Global().Get("document").Call("addEventListener", "keyup", k.keyupFunc)
 
+	// Use passive: false to allow preventDefault on wheel events
+	options := js.Global().Get("Object").New()
+	options.Set("passive", false)
+	js.Global().Get("document").Call("addEventListener", "wheel", k.wheelFunc, options)
+
 	k.initialized = true
-	println("DEBUG: Keyboard input initialized - Use WASD to move")
+	println("DEBUG: Keyboard input initialized - Use WASD to move, arrows for camera, scroll for zoom")
 
 	return nil
 }
@@ -177,9 +204,11 @@ func (k *KeyboardInput) Cleanup() {
 
 	js.Global().Get("document").Call("removeEventListener", "keydown", k.keydownFunc)
 	js.Global().Get("document").Call("removeEventListener", "keyup", k.keyupFunc)
+	js.Global().Get("document").Call("removeEventListener", "wheel", k.wheelFunc)
 
 	k.keydownFunc.Release()
 	k.keyupFunc.Release()
+	k.wheelFunc.Release()
 
 	k.initialized = false
 	println("DEBUG: Keyboard input cleaned up")

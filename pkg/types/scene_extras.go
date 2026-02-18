@@ -89,6 +89,14 @@ type DependencyProvider interface {
 	GetScreenHeight() float64
 }
 
+// SceneCameraProvider is an optional interface a Scene can implement
+// to provide a camera for rendering. If a scene implements this interface,
+// the engine will use its camera; otherwise, DefaultCamera() is used.
+type SceneCameraProvider interface {
+	// GetCamera returns the current camera for this scene.
+	GetCamera() Camera
+}
+
 // SceneInjectable is an optional interface a Scene can implement to receive
 // all engine dependencies in a single call via the DependencyProvider interface.
 // This is the recommended pattern for new scenes as it reduces boilerplate.

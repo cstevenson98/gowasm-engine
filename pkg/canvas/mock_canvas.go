@@ -13,6 +13,7 @@ type MockCanvasManager struct {
 	error         string
 	renderCount   int
 	cleanupCalled bool
+	camera        types.Camera
 }
 
 // NewMockCanvasManager creates a new mock canvas manager
@@ -22,6 +23,7 @@ func NewMockCanvasManager() *MockCanvasManager {
 		error:         "",
 		renderCount:   0,
 		cleanupCalled: false,
+		camera:        types.DefaultCamera(),
 	}
 }
 
@@ -193,6 +195,17 @@ func (m *MockCanvasManager) SetPipelines(pipelines []types.PipelineType) error {
 		fmt.Printf("  Pipeline %d: %s\n", i, p.String())
 	}
 	return nil
+}
+
+// SetCamera sets the current camera for rendering
+func (m *MockCanvasManager) SetCamera(camera types.Camera) {
+	m.camera = camera
+	fmt.Printf("Mock: SetCamera - Position: (%.2f, %.2f), Zoom: %.2f\n", camera.X, camera.Y, camera.Zoom)
+}
+
+// GetCamera returns the current camera
+func (m *MockCanvasManager) GetCamera() types.Camera {
+	return m.camera
 }
 
 // DrawColoredRect draws a colored rectangle

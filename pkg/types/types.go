@@ -1,9 +1,67 @@
 package types
 
+import "math"
+
 // Vector2 represents a 2D vector
 type Vector2 struct {
 	X float64
 	Y float64
+}
+
+// Camera represents a 2D camera with position and zoom.
+// Position (X, Y) is an offset in game pixel coordinates from the default view.
+// (0, 0) means no offset (default view). Positive X pans right, positive Y pans down.
+// Zoom is the zoom level (1.0 = default, 2.0 = 2x zoom in, etc.).
+// For pixel-perfect rendering, zoom should be a positive integer.
+type Camera struct {
+	X    float64 // Camera X offset in game pixels (0 = default)
+	Y    float64 // Camera Y offset in game pixels (0 = default)
+	Zoom float64 // Zoom level (1.0 = no zoom, 2.0 = 2x, etc.)
+}
+
+// DefaultCamera returns a camera with default settings (no pan, no zoom).
+func DefaultCamera() Camera {
+	return Camera{X: 0, Y: 0, Zoom: 1.0}
+}
+
+// GetMatrix computes the camera view-projection matrix for GPU upload.
+// The matrix is in column-major order (WGSL mat4x4<f32> layout).
+// canvasWidth and canvasHeight are the actual canvas pixel dimensions.
+// pixelScale is the game-to-screen pixel ratio.
+func (c Camera) GetMatrix(canvasWidth, canvasHeight float64, pixelScale int) [16]float32 {
+	z := float32(c.Zoom)
+	ps := float64(pixelScale)
+	if ps < 1 {
+		ps = 1
+	}
+
+	// Convert camera position from game pixels to screen pixel offset
+	screenOffsetX := c.X * ps
+	screenOffsetY := c.Y * ps
+
+	// Convert to NDC offset
+	// Moving camera right (positive X) shifts world left in NDC
+	// Moving camera down (positive Y) shifts world up in NDC (Y is flipped)
+	shiftX := float32(-screenOffsetX * 2.0 / canvasWidth)
+	shiftY := float32(screenOffsetY * 2.0 / canvasHeight)
+
+	// Column-major 4x4 matrix: Scale(zoom) * Translate(shift)
+	return [16]float32{
+		z, 0, 0, 0, // column 0
+		0, z, 0, 0, // column 1
+		0, 0, 1, 0, // column 2
+		shiftX * z, shiftY * z, 0, 1, // column 3
+	}
+}
+
+// SnapZoomPixelPerfect snaps zoom to the nearest pixel-perfect value.
+// Pixel-perfect means zoom is a positive integer (each game pixel = zoom * pixelScale screen pixels).
+func SnapZoomPixelPerfect(zoom float64) float64 {
+	snapped := math.Round(zoom)
+	if snapped < 1 {
+		snapped = 1
+	}
+	return snapped
 }
 
 // UVRect represents UV coordinates for texture sampling

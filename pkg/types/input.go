@@ -26,6 +26,9 @@ type InputState struct {
 	ShiftPressed bool
 	CtrlPressed  bool // Ctrl key for save shortcuts (Ctrl+S)
 
+	// Scroll wheel (accumulated since last frame, reset each frame)
+	ScrollDeltaY float64 // Positive = scroll down (zoom out), Negative = scroll up (zoom in)
+
 	// Previous frame state for detecting key presses
 	UpPressedLastFrame    bool
 	DownPressedLastFrame  bool

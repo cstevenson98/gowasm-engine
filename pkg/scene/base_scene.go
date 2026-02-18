@@ -70,6 +70,9 @@ type BaseScene struct {
 	// Required assets (for SceneAssetProvider)
 	requiredAssets types.SceneAssets
 
+	// Camera (default is identity/no-op)
+	camera types.Camera
+
 	// Debug console (engine feature, auto-initialized)
 	debugFont               text.Font
 	debugTextRenderer       text.TextRenderer
@@ -85,6 +88,7 @@ func NewBaseScene(name string, width, height float64) *BaseScene {
 		screenHeight: height,
 		layers:       make(map[SceneLayer][]types.GameObject),
 		savedState:   make(map[string]interface{}),
+		camera:       types.DefaultCamera(),
 		requiredAssets: types.SceneAssets{
 			TexturePaths: []string{},
 			FontPaths:    []string{},
@@ -242,6 +246,22 @@ func (b *BaseScene) SetCanvasManager(cm canvas.CanvasManager) {
 // Returns nil if no canvas manager is set.
 func (b *BaseScene) GetCanvasManager() canvas.CanvasManager {
 	return b.canvasManager
+}
+
+// ===== SceneCameraProvider Interface =====
+
+// GetCamera returns the current camera for this scene.
+// Default is DefaultCamera() (no pan, no zoom).
+// Override this in your scene to provide a custom camera.
+// Implements SceneCameraProvider interface.
+func (b *BaseScene) GetCamera() types.Camera {
+	return b.camera
+}
+
+// SetSceneCamera sets the camera for this scene.
+// Call this from your scene's Update() to pan/zoom.
+func (b *BaseScene) SetSceneCamera(camera types.Camera) {
+	b.camera = camera
 }
 
 // GetExtraTexturePaths returns additional texture paths to preload.
