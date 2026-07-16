@@ -1,11 +1,10 @@
-//go:build js
-
 package engine
 
 import (
 	"fmt"
 	"sync"
-	"syscall/js"
+
+	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
@@ -17,28 +16,30 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// Engine represents the game engine that manages the canvas and game loop
-type Engine struct {
-	canvasManager      canvas.CanvasManager
-	inputCapturer      types.InputCapturer
-	lastTime           float64
-	textureLoaded      bool
+// EbitenEngine represents the game engine that manages the canvas and game loop for Ebiten
+// It implements the ebiten.Game interface
+type EbitenEngine struct {
+	canvasManager      *canvas.EbitenCanvasManager
+	inputCapturer      *input.EbitenInput
 	running            bool
 	currentGameState   types.GameState
 	gameStatePipelines map[types.GameState][]types.PipelineType
-	registeredScenes   map[types.GameState]scene.Scene // Scenes registered by external users
-	currentScene       scene.Scene                     // Active scene managing game objects
-	stateLock          sync.Mutex                      // Lock to prevent concurrent state changes
+	registeredScenes   map[types.GameState]scene.Scene
+	currentScene       scene.Scene
+	stateLock          sync.Mutex
 	screenWidth        float64
 	screenHeight       float64
-	gameStateProvider  interface{} // Generic game state provider (type defined by game, not engine)
+	gameStateProvider  interface{}
+	
+	// Ebiten-specific
+	tickCount uint64 // Frame counter
 }
 
-// NewEngine creates a new game engine instance
-func NewEngine() *Engine {
-	e := &Engine{
-		canvasManager:      canvas.NewWebGPUCanvasManager(),
-		inputCapturer:      input.NewUnifiedInput(),
+// NewEbitenEngine creates a new Ebiten game engine instance
+func NewEbitenEngine() *EbitenEngine {
+	e := &EbitenEngine{
+		canvasManager:      canvas.NewEbitenCanvasManager(),
+		inputCapturer:      input.NewEbitenInput(),
 		running:            false,
 		gameStatePipelines: make(map[types.GameState][]types.PipelineType),
 		registeredScenes:   make(map[types.GameState]scene.Scene),
@@ -53,7 +54,7 @@ func NewEngine() *Engine {
 }
 
 // initializeGameStates sets up the pipeline configurations for each game state
-func (e *Engine) initializeGameStates() {
+func (e *EbitenEngine) initializeGameStates() {
 	// MENU state uses textured pipeline for text rendering
 	e.gameStatePipelines[types.MENU] = []types.PipelineType{
 		types.TexturedPipeline,
@@ -73,7 +74,7 @@ func (e *Engine) initializeGameStates() {
 }
 
 // RegisterScene registers a scene for a specific game state
-func (e *Engine) RegisterScene(state types.GameState, scene scene.Scene) {
+func (e *EbitenEngine) RegisterScene(state types.GameState, scene scene.Scene) {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 
@@ -81,9 +82,9 @@ func (e *Engine) RegisterScene(state types.GameState, scene scene.Scene) {
 	logger.Logger.Debugf("Registered scene for game state: %s", state.String())
 }
 
-// Initialize sets up the engine with the specified canvas ID
-func (e *Engine) Initialize(canvasID string) error {
-	logger.Logger.Debugf("Engine initializing with canvas: %s", canvasID)
+// Initialize sets up the engine
+func (e *EbitenEngine) Initialize(canvasID string) error {
+	logger.Logger.Debugf("EbitenEngine initializing")
 
 	// Register debug console as global debug poster
 	types.SetGlobalDebugPoster(debug.Console)
@@ -101,53 +102,35 @@ func (e *Engine) Initialize(canvasID string) error {
 		return err
 	}
 
-	logger.Logger.Debugf("Engine initialized successfully")
+	logger.Logger.Debugf("EbitenEngine initialized successfully")
 	return nil
 }
 
-// Start begins th e game loop
-func (e *Engine) Start() {
+// Start begins the game loop (called before ebiten.RunGame)
+func (e *EbitenEngine) Start() {
 	if e.running {
 		logger.Logger.Debugf("Engine already running")
 		return
 	}
 
 	e.running = true
-	logger.Logger.Debugf("Engine starting render loop")
-
-	e.startRenderLoop()
+	logger.Logger.Debugf("EbitenEngine started")
 }
 
-// startRenderLoop initializes and starts the animation loop
-func (e *Engine) startRenderLoop() {
-	var animationLoop js.Func
-	animationLoop = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		if !e.running {
-			return nil
-		}
-
-		currentTime := js.Global().Get("performance").Call("now").Float() / 1000.0
-
-		if e.lastTime == 0 {
-			e.lastTime = currentTime
-		}
-
-		deltaTime := currentTime - e.lastTime
-		e.lastTime = currentTime
-
-		// Update and render the frame
-		e.Update(deltaTime)
-		e.Render()
-
-		js.Global().Call("requestAnimationFrame", animationLoop)
+// Update implements ebiten.Game interface - called 60 times per second
+func (e *EbitenEngine) Update() error {
+	if !e.running {
 		return nil
-	})
+	}
 
-	js.Global().Call("requestAnimationFrame", animationLoop)
-}
+	e.tickCount++
+	
+	// Fixed timestep: Ebiten runs at 60 TPS by default
+	deltaTime := 1.0 / 60.0
 
-// Update handles game logic updates
-func (e *Engine) Update(deltaTime float64) {
+	// Poll input
+	e.inputCapturer.PollInput()
+
 	e.stateLock.Lock()
 	currentScene := e.currentScene
 	e.stateLock.Unlock()
@@ -157,14 +140,22 @@ func (e *Engine) Update(deltaTime float64) {
 		currentScene.Update(deltaTime)
 	}
 
-	// TODO: This should be done in a separate thread,
-	// at game state change, with a black screen in between.
 	// Load textures for sprites if needed
 	e.loadSpriteTextures()
+
+	// Check for ESC key to quit (optional debug feature)
+	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
+		return ebiten.Termination
+	}
+
+	return nil
 }
 
-// Render draws the current frame
-func (e *Engine) Render() {
+// Draw implements ebiten.Game interface - renders the current frame
+func (e *EbitenEngine) Draw(screen *ebiten.Image) {
+	// Set the screen in canvas manager
+	e.canvasManager.SetScreen(screen)
+
 	e.stateLock.Lock()
 	currentScene := e.currentScene
 	e.stateLock.Unlock()
@@ -224,12 +215,16 @@ func (e *Engine) Render() {
 			logger.Logger.Errorf("Failed to end batch: %s", err.Error())
 		}
 	}
+}
 
-	e.canvasManager.Render()
+// Layout implements ebiten.Game interface - returns the virtual screen size
+func (e *EbitenEngine) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
+	// Return virtual resolution - Ebiten will scale automatically
+	return int(e.screenWidth), int(e.screenHeight)
 }
 
 // loadSpriteTextures loads textures for all game objects in the current scene
-func (e *Engine) loadSpriteTextures() {
+func (e *EbitenEngine) loadSpriteTextures() {
 	e.stateLock.Lock()
 	currentScene := e.currentScene
 	e.stateLock.Unlock()
@@ -262,13 +257,13 @@ func (e *Engine) loadSpriteTextures() {
 }
 
 // Stop stops the game loop
-func (e *Engine) Stop() {
+func (e *EbitenEngine) Stop() {
 	e.running = false
-	logger.Logger.Debugf("Engine stopped")
+	logger.Logger.Debugf("EbitenEngine stopped")
 }
 
 // Cleanup releases engine resources
-func (e *Engine) Cleanup() error {
+func (e *EbitenEngine) Cleanup() error {
 	e.Stop()
 
 	// Cleanup input capturer
@@ -280,14 +275,13 @@ func (e *Engine) Cleanup() error {
 }
 
 // GetCanvasManager returns the underlying canvas manager for advanced usage
-func (e *Engine) GetCanvasManager() canvas.CanvasManager {
+func (e *EbitenEngine) GetCanvasManager() canvas.CanvasManager {
 	return e.canvasManager
 }
 
 // RegisterGameStateProvider registers a game state provider that will be injected
-// into scenes that implement SceneGameStateUser. The provider type is defined by
-// the game, not the engine - the engine just passes it through.
-func (e *Engine) RegisterGameStateProvider(provider interface{}) {
+// into scenes that implement SceneGameStateUser
+func (e *EbitenEngine) RegisterGameStateProvider(provider interface{}) {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 	e.gameStateProvider = provider
@@ -295,13 +289,13 @@ func (e *Engine) RegisterGameStateProvider(provider interface{}) {
 }
 
 // SetGameState changes the current game state and updates the active pipelines
-func (e *Engine) SetGameState(state types.GameState) error {
+func (e *EbitenEngine) SetGameState(state types.GameState) error {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 
 	pipelines, exists := e.gameStatePipelines[state]
 	if !exists {
-		return &EngineError{Message: "Game state not configured: " + state.String()}
+		return fmt.Errorf("game state not configured: %s", state.String())
 	}
 
 	err := e.canvasManager.SetPipelines(pipelines)
@@ -322,24 +316,21 @@ func (e *Engine) SetGameState(state types.GameState) error {
 	// Get registered scene for this state
 	registeredScene, exists := e.registeredScenes[state]
 	if !exists {
-		return &EngineError{Message: "No scene registered for game state: " + state.String()}
+		return fmt.Errorf("no scene registered for game state: %s", state.String())
 	}
 
-	// Preload all scene assets BEFORE initialization to avoid deadlocks
-	// This ensures all blocking I/O (fonts, textures) happens before the game loop
+	// Preload all scene assets BEFORE initialization
 	err = e.preloadSceneAssets(registeredScene)
 	if err != nil {
 		logger.Logger.Warnf("Some assets failed to preload for scene %s: %s", registeredScene.GetName(), err.Error())
-		// Continue anyway - assets might load lazily later
 	}
 
-	// Try new dependency injection pattern first (for scenes using BaseScene)
+	// Inject dependencies
 	if injectable, ok := registeredScene.(types.SceneInjectable); ok {
 		injectable.InjectDependencies(e.GetDependencies())
 		logger.Logger.Debugf("Injected all dependencies into scene via InjectDependencies(): %s", registeredScene.GetName())
 	} else {
-		// Fallback to manual injection for scenes not using BaseScene
-		// This maintains backward compatibility during migration
+		// Fallback to manual injection
 		logger.Logger.Debugf("Using manual dependency injection for scene: %s", registeredScene.GetName())
 		
 		if inputProvider, ok := registeredScene.(types.SceneInputProvider); ok {
@@ -356,8 +347,7 @@ func (e *Engine) SetGameState(state types.GameState) error {
 			}
 		}
 		
-		// Inject canvas manager if scene has SetCanvasManager method
-		// Use a type assertion to check for method existence
+		// Inject canvas manager
 		type canvasManagerSetter interface {
 			SetCanvasManager(canvas.CanvasManager)
 		}
@@ -366,13 +356,13 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		}
 	}
 
-	// Initialize the registered scene (assets are already loaded, so this should be fast)
+	// Initialize the registered scene
 	err = registeredScene.Initialize()
 	if err != nil {
-		return &EngineError{Message: "Failed to initialize scene: " + err.Error()}
+		return fmt.Errorf("failed to initialize scene: %w", err)
 	}
 
-	// Restore state if scene is stateful (after initialization so objects exist)
+	// Restore state if scene is stateful
 	if stateful, ok := registeredScene.(types.SceneStateful); ok {
 		stateful.RestoreState()
 		logger.Logger.Debugf("Restored state for scene: %s", registeredScene.GetName())
@@ -387,57 +377,56 @@ func (e *Engine) SetGameState(state types.GameState) error {
 }
 
 // preloadSceneAssets loads all assets required by a scene before initialization
-// This prevents deadlocks by doing all blocking I/O upfront, before the game loop
-func (e *Engine) preloadSceneAssets(s scene.Scene) error {
+func (e *EbitenEngine) preloadSceneAssets(s scene.Scene) error {
 	logger.Logger.Debugf("Preloading assets for scene: %s", s.GetName())
 
 	var errors []error
 
-	// Check if scene implements SceneAssetProvider to get asset list
+	// Check if scene implements SceneAssetProvider
 	if assetProvider, ok := s.(types.SceneAssetProvider); ok {
 		assets := assetProvider.GetRequiredAssets()
 
 		// Preload all textures
 		for _, texturePath := range assets.TexturePaths {
 			if texturePath != "" {
-				e.canvasManager.LoadTexture(texturePath)
-				logger.Logger.Debugf("Preloaded texture: %s", texturePath)
+				err := e.canvasManager.LoadTexture(texturePath)
+				if err != nil {
+					errors = append(errors, err)
+				} else {
+					logger.Logger.Debugf("Preloaded texture: %s", texturePath)
+				}
 			}
 		}
 
-		// Preload all fonts (blocking operations - this is where deadlocks used to occur)
-		// Font cache will prevent duplicate loads across scenes
+		// Preload all fonts
 		for _, fontPath := range assets.FontPaths {
 			if fontPath != "" {
-			// Create a temporary font and load it to ensure it's ready
-			// The scene will reuse this font instance via cache
-			tempFont := text.NewSpriteFont()
-			err := tempFont.LoadFont(fontPath)
-			if err != nil {
-				errMsg := fmt.Errorf("failed to preload font %s: %w", fontPath, err)
-				logger.Logger.Warnf("%s", errMsg.Error())
-				errors = append(errors, errMsg)
-				// Continue loading other assets
-			} else {
-				logger.Logger.Debugf("Preloaded font: %s (cached for reuse)", fontPath)
-				
-				// Also load the font's texture (PNG) into the canvas manager
-				fontTexturePath := tempFont.GetTexturePath()
-				if fontTexturePath != "" {
-					err := e.canvasManager.LoadTexture(fontTexturePath)
-					if err != nil {
-						errMsg := fmt.Errorf("failed to preload font texture %s: %w", fontTexturePath, err)
-						logger.Logger.Warnf("%s", errMsg.Error())
-						errors = append(errors, errMsg)
-					} else {
-						logger.Logger.Debugf("Preloaded font texture: %s", fontTexturePath)
+				tempFont := text.NewSpriteFont()
+				err := tempFont.LoadFont(fontPath)
+				if err != nil {
+					errMsg := fmt.Errorf("failed to preload font %s: %w", fontPath, err)
+					logger.Logger.Warnf("%s", errMsg.Error())
+					errors = append(errors, errMsg)
+				} else {
+					logger.Logger.Debugf("Preloaded font: %s (cached for reuse)", fontPath)
+					
+					// Also load the font's texture
+					fontTexturePath := tempFont.GetTexturePath()
+					if fontTexturePath != "" {
+						err := e.canvasManager.LoadTexture(fontTexturePath)
+						if err != nil {
+							errMsg := fmt.Errorf("failed to preload font texture %s: %w", fontTexturePath, err)
+							logger.Logger.Warnf("%s", errMsg.Error())
+							errors = append(errors, errMsg)
+						} else {
+							logger.Logger.Debugf("Preloaded font texture: %s", fontTexturePath)
+						}
 					}
 				}
 			}
-			}
 		}
 	} else {
-		// Fallback: try to discover assets from SceneTextureProvider
+		// Fallback: try SceneTextureProvider
 		if textureProvider, ok := s.(types.SceneTextureProvider); ok {
 			for _, path := range textureProvider.GetExtraTexturePaths() {
 				if path != "" {
@@ -448,7 +437,6 @@ func (e *Engine) preloadSceneAssets(s scene.Scene) error {
 		}
 	}
 
-	// Log summary
 	if len(errors) > 0 {
 		logger.Logger.Warnf("Preloaded assets for scene %s with %d error(s)", s.GetName(), len(errors))
 		return fmt.Errorf("preload completed with %d error(s)", len(errors))
@@ -459,17 +447,18 @@ func (e *Engine) preloadSceneAssets(s scene.Scene) error {
 }
 
 // GetGameState returns the current game state
-func (e *Engine) GetGameState() types.GameState {
+func (e *EbitenEngine) GetGameState() types.GameState {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 	return e.currentGameState
 }
 
-// EngineError represents an error in the engine
-type EngineError struct {
-	Message string
-}
-
-func (e *EngineError) Error() string {
-	return e.Message
+// GetDependencies returns all injectable dependencies for scenes
+func (e *EbitenEngine) GetDependencies() types.SceneDependencies {
+	return types.SceneDependencies{
+		InputCapturer:       e.inputCapturer,
+		CanvasManager:       e.canvasManager,
+		StateChangeCallback: e.SetGameState,
+		GameStateProvider:   e.gameStateProvider,
+	}
 }

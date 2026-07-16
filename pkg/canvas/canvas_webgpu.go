@@ -1022,6 +1022,11 @@ func (w *WebGPUCanvasManager) generateTexturedQuadVertices(pos types.Vector2, si
 
 // createTextureBindGroup creates a bind group for a specific texture
 func (w *WebGPUCanvasManager) createTextureBindGroup(texture *wgpu.Texture) *wgpu.BindGroup {
+	if texture == nil {
+		logger.Logger.Errorf("Cannot create bind group: texture is nil")
+		return nil
+	}
+	
 	textureView, err := texture.CreateView(nil)
 	if err != nil {
 		logger.Logger.Errorf("Failed to create texture view: %s", err)

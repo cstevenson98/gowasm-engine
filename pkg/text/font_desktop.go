@@ -1,13 +1,12 @@
-
-//go:build js
+//go:build !js
 
 package text
 
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
-	"syscall/js"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -58,7 +57,7 @@ func NewSpriteFont() *SpriteFont {
 	}
 }
 
-// LoadFont loads a font sprite sheet from the given base path
+// LoadFont loads a font sprite sheet from the given base path (desktop version using os.ReadFile)
 // It expects both a .sheet.png and .sheet.json file
 // Uses a global cache to avoid reloading the same font metadata multiple times
 func (f *SpriteFont) LoadFont(basePath string) error {
@@ -100,103 +99,69 @@ func (f *SpriteFont) LoadFont(basePath string) error {
 	return nil
 }
 
-// loadMetadata loads the JSON metadata file
+// loadMetadata loads the JSON metadata file (desktop version using os.ReadFile)
 func (f *SpriteFont) loadMetadata(path string) error {
-	// Use fetch API to load the JSON file
-	promise := js.Global().Call("fetch", path)
-
-	// Create channels for async handling
-	done := make(chan error, 1)
-
-	// Handle the promise
-	promise.Call("then", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		response := args[0]
-
-		// Check if response is OK
-		if !response.Get("ok").Bool() {
-			done <- fmt.Errorf("failed to fetch metadata: HTTP %d", response.Get("status").Int())
-			return nil
-		}
-
-		// Get JSON from response
-		jsonPromise := response.Call("json")
-		jsonPromise.Call("then", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			jsonData := args[0]
-
-			// Convert to JSON string
-			jsonString := js.Global().Get("JSON").Call("stringify", jsonData).String()
-
-			// Parse JSON into our struct
-			var metadata FontMetadata
-			err := json.Unmarshal([]byte(jsonString), &metadata)
-			if err != nil {
-				done <- fmt.Errorf("failed to parse font metadata JSON: %w", err)
-				return nil
-			}
-
-			f.metadata = &metadata
-			done <- nil
-			return nil
-		}))
-
-		jsonPromise.Call("catch", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			done <- fmt.Errorf("failed to parse JSON response")
-			return nil
-		}))
-
-		return nil
-	}))
-
-	promise.Call("catch", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		done <- fmt.Errorf("fetch failed: %s", args[0].String())
-		return nil
-	}))
-
-	// Wait for async operation to complete
-	err := <-done
-	return err
-}
-
-// GetCharacterUV returns the UV coordinates for a given character
-func (f *SpriteFont) GetCharacterUV(char rune) (types.UVRect, error) {
-	if !f.loaded {
-		return types.UVRect{}, fmt.Errorf("font not loaded")
+	// Read file from filesystem
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("failed to read font metadata file: %w", err)
 	}
 
-	charStr := string(char)
-	charData, exists := f.metadata.CharacterMap[charStr]
-	if !exists {
-		// Return UV for '?' as fallback if it exists, otherwise return error
-		charData, exists = f.metadata.CharacterMap["?"]
-		if !exists {
-			return types.UVRect{}, fmt.Errorf("character not found: %c", char)
-		}
-		logger.Logger.Tracef("Character '%c' not found, using '?' as fallback", char)
+	// Parse JSON into our struct
+	var metadata FontMetadata
+	err = json.Unmarshal(data, &metadata)
+	if err != nil {
+		return fmt.Errorf("failed to parse font metadata JSON: %w", err)
 	}
 
-	// Convert from U0,V0,U1,V1 format to U,V,W,H format
-	return types.UVRect{
-		U: charData.U0,
-		V: charData.V0,
-		W: charData.U1 - charData.U0,
-		H: charData.V1 - charData.V0,
-	}, nil
+	f.metadata = &metadata
+	return nil
 }
 
-// GetTexturePath returns the path to the font sprite sheet texture
+// GetTexturePath returns the path to the texture PNG file
 func (f *SpriteFont) GetTexturePath() string {
 	return f.texturePath
 }
 
-// GetCellSize returns the width and height of each character cell
-func (f *SpriteFont) GetCellSize() (int, int) {
-	if !f.loaded || f.metadata == nil {
-		return 0, 0
+// GetCharacter returns the UV coordinates and dimensions for a character
+func (f *SpriteFont) GetCharacter(char rune) (types.UVRect, types.Vector2, error) {
+	if !f.loaded {
+		return types.UVRect{}, types.Vector2{}, fmt.Errorf("font not loaded")
 	}
-	return f.metadata.CellWidth, f.metadata.CellHeight
+
+	charData, exists := f.metadata.CharacterMap[string(char)]
+	if !exists {
+		// Return a default character (space) or error
+		charData, exists = f.metadata.CharacterMap[" "]
+		if !exists {
+			return types.UVRect{}, types.Vector2{}, fmt.Errorf("character not found in font: %c", char)
+		}
+	}
+
+	uv := types.UVRect{
+		U: charData.U0,
+		V: charData.V0,
+		W: charData.U1 - charData.U0,
+		H: charData.V1 - charData.V0,
+	}
+
+	size := types.Vector2{
+		X: float64(f.metadata.CellWidth),
+		Y: float64(f.metadata.CellHeight),
+	}
+
+	return uv, size, nil
 }
 
-// IsLoaded returns true if the font is loaded and ready to use
+// GetMetadata returns the font metadata
+func (f *SpriteFont) GetMetadata() (*FontMetadata, error) {
+	if !f.loaded {
+		return nil, fmt.Errorf("font not loaded")
+	}
+	return f.metadata, nil
+}
+
+// IsLoaded returns whether the font is loaded
 func (f *SpriteFont) IsLoaded() bool {
-	return f.loaded && f.metadata != nil
+	return f.loaded
 }

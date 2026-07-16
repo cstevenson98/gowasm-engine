@@ -1,4 +1,3 @@
-//go:build js
 
 package gamestate
 
@@ -6,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"syscall/js"
+	"time"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
@@ -111,7 +110,7 @@ func (gsm *GameStateManager) SaveCurrentGame() (string, error) {
 	}
 
 	// Set timestamp to current time
-	gsm.currentState.Timestamp = int64(js.Global().Get("Date").New().Call("getTime").Float())
+	gsm.currentState.Timestamp = time.Now().UnixMilli()
 
 	// Serialize to JSON
 	data, err := json.Marshal(gsm.currentState)

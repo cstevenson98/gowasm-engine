@@ -1,10 +1,8 @@
-//go:build js
 
 package scenes
 
 import (
 	"fmt"
-	"syscall/js"
 
 	"example.com/basic-game/game/gamestate"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
@@ -279,10 +277,10 @@ func (s *PlayerMenuScene) handleSaveGame() {
 	}
 }
 
-// showAlert shows a browser alert using syscall/js
+// showAlert shows an alert message (logs to console and debug overlay)
 func (s *PlayerMenuScene) showAlert(message string) {
-	js.Global().Get("window").Call("alert", message)
-	logger.Logger.Debugf("Alert shown: %s", message)
+	logger.Logger.Infof("Alert: %s", message)
+	debug.Console.PostMessage("Alert", message)
 }
 
 // RenderOverlays implements types.SceneOverlayRenderer

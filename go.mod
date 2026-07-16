@@ -5,4 +5,5 @@ go 1.24.3
 require (
 	github.com/cogentcore/webgpu v0.23.0
 	github.com/google/uuid v1.6.0
+	github.com/hajimehoshi/ebiten/v2 v2.6.3
 )

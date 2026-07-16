@@ -1,4 +1,3 @@
-//go:build js
 
 package scene
 
@@ -79,6 +78,12 @@ type BaseScene struct {
 // NewBaseScene creates a new BaseScene with the given name and screen dimensions.
 // This initializes all internal structures but does not call Initialize().
 func NewBaseScene(name string, width, height float64) *BaseScene {
+	// Start with debug font if debug is enabled
+	fontPaths := []string{}
+	if config.Global.Debug.Enabled {
+		fontPaths = append(fontPaths, config.Global.Debug.FontPath)
+	}
+	
 	return &BaseScene{
 		name:         name,
 		screenWidth:  width,
@@ -87,7 +92,7 @@ func NewBaseScene(name string, width, height float64) *BaseScene {
 		savedState:   make(map[string]interface{}),
 		requiredAssets: types.SceneAssets{
 			TexturePaths: []string{},
-			FontPaths:    []string{},
+			FontPaths:    fontPaths,
 		},
 	}
 }
