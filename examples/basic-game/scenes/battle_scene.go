@@ -50,7 +50,7 @@ func NewBattleScene(screenWidth, screenHeight float64) *BattleScene {
 	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
 	baseScene.SetRequiredAssets(types.SceneAssets{
 		TexturePaths: []string{
-			"art/test-background.png",
+			"assets/art/test-background.png",
 			config.Global.Player.TexturePath,
 			config.Global.Battle.EnemyTexture,
 			fontTexturePath,

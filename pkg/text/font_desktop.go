@@ -123,6 +123,31 @@ func (f *SpriteFont) GetTexturePath() string {
 	return f.texturePath
 }
 
+// GetCharacterUV returns the UV coordinates for a given character (Font interface method)
+func (f *SpriteFont) GetCharacterUV(char rune) (types.UVRect, error) {
+	if !f.loaded {
+		return types.UVRect{}, fmt.Errorf("font not loaded")
+	}
+
+	charStr := string(char)
+	charData, exists := f.metadata.CharacterMap[charStr]
+	if !exists {
+		// Return UV for '?' as fallback if it exists, otherwise return error
+		charData, exists = f.metadata.CharacterMap["?"]
+		if !exists {
+			return types.UVRect{}, fmt.Errorf("character not found: %c", char)
+		}
+	}
+
+	// Convert from U0,V0,U1,V1 format to U,V,W,H format
+	return types.UVRect{
+		U: charData.U0,
+		V: charData.V0,
+		W: charData.U1 - charData.U0,
+		H: charData.V1 - charData.V0,
+	}, nil
+}
+
 // GetCharacter returns the UV coordinates and dimensions for a character
 func (f *SpriteFont) GetCharacter(char rune) (types.UVRect, types.Vector2, error) {
 	if !f.loaded {
@@ -164,4 +189,12 @@ func (f *SpriteFont) GetMetadata() (*FontMetadata, error) {
 // IsLoaded returns whether the font is loaded
 func (f *SpriteFont) IsLoaded() bool {
 	return f.loaded
+}
+
+// GetCellSize returns the width and height of each character cell
+func (f *SpriteFont) GetCellSize() (int, int) {
+	if !f.loaded || f.metadata == nil {
+		return 0, 0
+	}
+	return f.metadata.CellWidth, f.metadata.CellHeight
 }

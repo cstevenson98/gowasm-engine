@@ -34,7 +34,7 @@ func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 	// Set required assets
 	baseScene.SetRequiredAssets(types.SceneAssets{
 		TexturePaths: []string{
-			"art/test-background.png",
+			"assets/art/test-background.png",
 			config.Global.Player.TexturePath,
 		},
 		FontPaths: []string{

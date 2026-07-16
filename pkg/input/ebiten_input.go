@@ -2,7 +2,6 @@ package input
 
 import (
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/inpututil"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"

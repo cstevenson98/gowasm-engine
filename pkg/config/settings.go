@@ -88,7 +88,7 @@ var Global = Settings{
 		SpawnY:        0.0,   // Will be calculated as center in scene
 		Size:          32.0,  // Native sprite frame size (1:1 with texture, will be scaled by PixelScale)
 		Speed:         200.0, // pixels per second
-		TexturePath:   "llama.png",
+		TexturePath:   "assets/llama.png",
 		SpriteColumns: 2,
 		SpriteRows:    3,
 	},
@@ -98,9 +98,9 @@ var Global = Settings{
 	},
 	Debug: DebugSettings{
 		Enabled:                   true,
-		FontPath:                  "fonts/Mono_10", // Will append .sheet.png/.sheet.json
-		FontScale:                 1.0,             // 1:1 scale (no additional scaling beyond pixel scale)
-		CharacterSpacingReduction: 8.0,             // Reduce spacing by 8 pixels (adjust as needed)
+		FontPath:                  "assets/fonts/Mono_10", // Will append .sheet.png/.sheet.json
+		FontScale:                 1.0,                    // 1:1 scale (no additional scaling beyond pixel scale)
+		CharacterSpacingReduction: 8.0,                    // Reduce spacing by 8 pixels (adjust as needed)
 		MaxMessages:               10,
 		MessageLifetime:           0, // 0 = never fade (keep all messages)
 		ConsoleHeight:             200.0,
@@ -120,8 +120,8 @@ var Global = Settings{
 		PlayerMaxHP:   100,
 		EnemyHP:       80,
 		EnemyMaxHP:    80,
-		EnemyTexture:  "art/ghost.png",
-		MenuFontPath:  "fonts/Mono_10",
+		EnemyTexture:  "assets/art/ghost.png",
+		MenuFontPath:  "assets/fonts/Mono_10",
 		MenuFontScale: 1.0,
 
 		// Battle system configuration

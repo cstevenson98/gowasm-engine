@@ -453,12 +453,56 @@ func (e *EbitenEngine) GetGameState() types.GameState {
 	return e.currentGameState
 }
 
+// EngineDependencies holds all injectable dependencies from the engine (Ebiten version)
+type EngineDependencies struct {
+	InputCapturer       *input.EbitenInput
+	CanvasManager       *canvas.EbitenCanvasManager
+	StateChangeCallback func(state types.GameState) error
+	GameStateProvider   interface{}
+	ScreenWidth         float64
+	ScreenHeight        float64
+}
+
 // GetDependencies returns all injectable dependencies for scenes
-func (e *EbitenEngine) GetDependencies() types.SceneDependencies {
-	return types.SceneDependencies{
+func (e *EbitenEngine) GetDependencies() *EngineDependencies {
+	return &EngineDependencies{
 		InputCapturer:       e.inputCapturer,
 		CanvasManager:       e.canvasManager,
 		StateChangeCallback: e.SetGameState,
 		GameStateProvider:   e.gameStateProvider,
+		ScreenWidth:         e.screenWidth,
+		ScreenHeight:        e.screenHeight,
 	}
+}
+
+// Implement types.DependencyProvider interface methods
+
+// GetInputCapturer returns the input capturer
+func (d *EngineDependencies) GetInputCapturer() types.InputCapturer {
+	return d.InputCapturer
+}
+
+// GetCanvasManager returns the canvas manager as interface{}
+func (d *EngineDependencies) GetCanvasManager() interface{} {
+	return d.CanvasManager
+}
+
+// GetStateChangeCallback returns the state change callback
+func (d *EngineDependencies) GetStateChangeCallback() func(types.GameState) error {
+	return d.StateChangeCallback
+}
+
+// GetGameStateProvider returns the game state provider
+func (d *EngineDependencies) GetGameStateProvider() interface{} {
+	return d.GameStateProvider
+}
+
+// GetScreenWidth returns the screen width
+func (d *EngineDependencies) GetScreenWidth() float64 {
+	return d.ScreenWidth
+}
+
+// GetScreenHeight returns the screen height
+func (d *EngineDependencies) GetScreenHeight() float64 {
+	return d.ScreenHeight
 }
