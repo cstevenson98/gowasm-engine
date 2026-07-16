@@ -111,7 +111,7 @@ var Global = Settings{
 		PixelArtMode:        true,      // Enable pixel-perfect rendering
 		TextureFiltering:    "nearest", // Use nearest-neighbor filtering for pixel art
 		PixelPerfectScaling: true,      // Ensure integer scaling
-		PixelScale:          3,         // 3 real pixels per game pixel (3x upscaling)
+		PixelScale:          2,         // 2 real pixels per game pixel (2x upscaling)
 		UILineSpacing:       1.1,       // UI elements line spacing (menus, logs, status)
 		TextLineSpacing:     1.1,       // Paragraph text line spacing (newlines in strings)
 	},
