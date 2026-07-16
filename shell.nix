@@ -24,6 +24,7 @@ pkgs.mkShell {
     # Development tools
     git
     gnumake
+    zsh
   ];
   
   # Set library paths for runtime linking
@@ -50,12 +51,14 @@ pkgs.mkShell {
     echo "  make test           - Run unit tests"
     echo "  make clean          - Clean build artifacts"
     echo ""
-    echo "Project structure:"
-    echo "  cmd/ebiten-game/    - Desktop entry point"
-    echo "  pkg/                - Engine library code"
-    echo "  examples/           - Example games"
-    echo ""
     echo "Go version: $(go version)"
     echo "=================================================="
+    echo ""
+    
+    # Source global zsh configuration if available
+    if [ -f ~/.zshrc ]; then
+      export ZDOTDIR=$HOME
+      exec zsh
+    fi
   '';
 }
