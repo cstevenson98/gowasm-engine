@@ -2154,3 +2154,46 @@ Initially attempted to use Python virtual environment, but Cursor has compatibil
 
 ---
 
+
+## [2026-07-16 20:06:28 BST] - Created Ebiten Migration Plan
+
+**Prompt/Request**: Write a migration plan to Ebiten for my engine for now just Linux desktop
+
+**Changes Made**:
+- Created `EBITEN_MIGRATION_PLAN.md` - comprehensive 8-phase migration strategy document
+- Analyzed existing architecture and mapped WebGPU components to Ebiten equivalents
+- Designed incremental migration approach preserving component-based architecture
+
+**Reasoning**:
+The user wants to migrate from WebGPU WASM engine to Ebiten for native Linux desktop. The existing engine has clean separation of concerns with a `CanvasManager` interface, making backend replacement feasible. Created a detailed phased plan to minimize risk while preserving game logic and architecture.
+
+**Impact**:
+- **Roadmap Created**: 8-phase plan from foundation to polish
+- **Architecture Mapping**: Documented component-by-component changes
+  - Engine: Refactor to implement `ebiten.Game` interface
+  - CanvasManager: Replace WebGPU with Ebiten implementation
+  - Input: Replace JS APIs with Ebiten input APIs
+  - GameObject/Sprite/Mover: **No changes needed** (properly abstracted)
+  - Scene: Minor changes (remove JS build tags)
+  - Config: Update rendering settings for Ebiten
+- **Key Decisions Documented**:
+  - Use Ebiten's built-in pixel-perfect scaling (simpler than manual NDC)
+  - Keep custom sprite font system (already works)
+  - Start with immediate rendering, optimize with batching if needed
+  - Remove `//go:build js` tags initially (desktop-only)
+- **Risk Mitigation**: Identified high/medium/low risk areas with fallback strategies
+- **Build System**: Documented Makefile changes, go.mod updates, NixOS shell.nix reuse
+
+**Testing**:
+- N/A - This is a planning document
+- Includes testing strategy for each migration phase
+- Defined success criteria and manual testing checklist
+
+**Notes**:
+- Phase 1 (Foundation) partially complete: `examples/ebiten-demo/` already exists with working pixel-perfect scaling
+- Migration preserves ability to keep WebGPU WASM build via build tags (dual backend support)
+- Estimated timeline: 3-5 weeks (1-2 phases per week)
+- File structure preserves existing architecture while adding Ebiten-specific implementations
+- Next step: User review and approval, then begin Phase 2 (Canvas Manager Migration)
+
+---
