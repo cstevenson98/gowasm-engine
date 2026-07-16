@@ -2197,3 +2197,64 @@ The user wants to migrate from WebGPU WASM engine to Ebiten for native Linux des
 - Next step: User review and approval, then begin Phase 2 (Canvas Manager Migration)
 
 ---
+
+## [2026-07-16 20:24:43 BST] - Ebiten Migration Phases 2-5 Complete
+
+**Prompt/Request**: Make a new branch and begin the migration plan
+
+**Changes Made**:
+- Created branch `ebiten-migration`
+- **Phase 2 (Canvas Manager)**: Created `pkg/canvas/canvas_ebiten.go` implementing CanvasManager with Ebiten
+  - Texture loading via ebitenutil
+  - Batched rendering support
+  - Pixel-perfect filtering (FilterNearest)
+  - All draw methods (texture, rotated, scaled, colored rect)
+- **Phase 3 (Input)**: Created `pkg/input/ebiten_input.go`
+  - Keyboard input (WASD, arrows, action keys)
+  - Gamepad input (D-pad, analog sticks, face buttons)
+  - Standard gamepad layout support
+  - Input state merging
+- **Phase 4 (Engine)**: Created `pkg/engine/engine_ebiten.go`
+  - Implements `ebiten.Game` interface (Update, Draw, Layout)
+  - Fixed 60 TPS game loop
+  - Scene management preserved
+  - Asset preloading intact
+- **Phase 5 (Entry Point)**: Created `cmd/ebiten-game/main.go`
+  - Desktop game initialization
+  - Scene registration
+  - Window configuration (pixel-perfect scaling)
+- **Build Tag Refactoring**:
+  - Removed `//go:build js` from generic code (gameobjects, scenes, debug, etc.)
+  - Added build tags to separate WASM and desktop implementations
+  - Created desktop-specific implementations:
+    - `pkg/text/font_desktop.go` - File-based font loading
+    - `examples/basic-game/game/gamestate/storage_desktop.go` - File-based saves (~/.gowasm-game-saves/)
+  - Kept WASM implementations with `//go:build js` tag
+- **Phase 8 (Build System)**: Updated `Makefile`
+  - `make build-desktop` - Build Ebiten binary
+  - `make run-desktop` - Build and run
+  - `make build-wasm` - Legacy WebGPU build
+- Created `README_EBITEN.md` with build instructions and NixOS guidance
+
+**Reasoning**:
+Followed the migration plan to incrementally port from WebGPU WASM to Ebiten desktop. Key strategy was preserving the component-based architecture and using build tags to support both backends simultaneously.
+
+**Impact**:
+- **Architecture Preserved**: GameObject, Sprite, Mover, Scene all unchanged
+- **Dual Backend Support**: WASM (WebGPU) and Desktop (Ebiten) coexist via build tags
+- **Desktop-Specific Features**: File-based saves, native font loading
+- **Breaking Changes**: None for game logic, but build process changed
+
+**Testing**:
+- Code compiles but requires X11 headers (NixOS `nix-shell` environment)
+- Next: Build in nix-shell and test all scenes
+- Asset paths need verification (relative to binary location)
+
+**Notes**:
+- **Status**: Phases 2-5 and 8 complete (5 of 8 phases done)
+- **Remaining**: Phase 6 (testing), Phase 7 (polish/config)
+- **Build Instructions**: Use `nix-shell examples/ebiten-demo/shell.nix` then `make run-desktop`
+- **Asset Discovery**: Need to test if assets load correctly from examples/basic-game/assets/
+- **Next Steps**: User should test build in nix-shell environment
+
+---
