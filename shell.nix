@@ -60,8 +60,13 @@ pkgs.mkShell {
     echo "  make clean          - Clean build artifacts"
     echo ""
     echo "Go version: $(go version)"
+    echo "CGO configured for GLFW: ${pkgs.glfw}"
     echo "=================================================="
     echo ""
+    
+    # Export CGO flags explicitly before launching zsh
+    export CGO_CFLAGS="-I${pkgs.glfw}/include"
+    export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
     
     # Source global zsh configuration if available
     if [ -f ~/.zshrc ]; then
