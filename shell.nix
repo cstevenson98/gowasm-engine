@@ -57,16 +57,29 @@ pkgs.mkShell {
     echo ""
     echo "Go version: $(go version)"
     echo "CGO configured for GLFW: ${pkgs.glfw}"
-    echo ""
-    echo "CGO Flags (set automatically):"
-    echo "  CGO_CFLAGS=-I${pkgs.glfw}/include"
-    echo "  CGO_LDFLAGS=-L${pkgs.glfw}/lib"
     echo "=================================================="
     echo ""
     
-    # Set CGO flags
-    export CGO_CFLAGS="-I${pkgs.glfw}/include"
-    export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
-    export PKG_CONFIG_PATH="${pkgs.glfw}/lib/pkgconfig:$PKG_CONFIG_PATH"
+    # Create a temporary zshrc that sources the original and sets CGO flags
+    if [ -f ~/.zshrc ]; then
+      mkdir -p /tmp/nix-shell-zsh-$$
+      cat > /tmp/nix-shell-zsh-$$/zshrc << EOFZSH
+# Source original zshrc for oh-my-zsh
+source ~/.zshrc
+
+# Set CGO flags for Ebiten/GLFW
+export CGO_CFLAGS="-I${pkgs.glfw}/include"
+export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
+export PKG_CONFIG_PATH="${pkgs.glfw}/lib/pkgconfig:\$PKG_CONFIG_PATH"
+EOFZSH
+      
+      export ZDOTDIR=/tmp/nix-shell-zsh-$$
+      exec zsh
+    else
+      # Fallback to bash with CGO flags
+      export CGO_CFLAGS="-I${pkgs.glfw}/include"
+      export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
+      export PKG_CONFIG_PATH="${pkgs.glfw}/lib/pkgconfig:$PKG_CONFIG_PATH"
+    fi
   '';
 }
