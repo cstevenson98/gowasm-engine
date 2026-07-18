@@ -1,35 +1,110 @@
-# Root Makefile - engine library and desktop builds
+# Root Makefile - Go WASM Engine Development
 
-.PHONY: test test-all tidy build-desktop run-desktop build-wasm clean
+.PHONY: help test test-all test-verbose test-coverage tidy fmt lint \
+        build-desktop build-wasm build-all run-desktop run-desktop-from-assets \
+        serve-wasm dev clean clean-all
 
-test:
-	go test ./pkg/...
+.DEFAULT_GOAL := help
 
-test-all:
-	go test ./...
+# Colors for output
+CYAN := \033[0;36m
+GREEN := \033[0;32m
+YELLOW := \033[0;33m
+RED := \033[0;31m
+NC := \033[0m # No Color
 
-tidy:
-	go mod tidy
+##@ General
 
-# Build Ebiten desktop binary
-build-desktop:
-	@echo "Building Ebiten desktop binary..."
-	cd cmd/ebiten-game && go mod tidy && go build -o ../../build/game-desktop
-	@echo "Build complete: build/game-desktop"
+help: ## Display this help message
+	@echo "$(CYAN)Go WASM Engine - Available Commands$(NC)"
+	@echo ""
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(GREEN)<target>$(NC)\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(CYAN)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-# Run Ebiten desktop game
-run-desktop: build-desktop
-	@echo "Running desktop game..."
-	./build/game-desktop
+##@ Building
 
-# Build WASM binary (legacy WebGPU version) 
-build-wasm:
-	@echo "Building WASM binary (WebGPU)..."
-	cd examples/basic-game/game && GOOS=js GOARCH=wasm go build -o ../../../build/main.wasm
-	@echo "Build complete: build/main.wasm"
+build-desktop: ## Build Ebiten desktop binary
+	@echo "$(CYAN)Building Ebiten desktop binary...$(NC)"
+	@cd cmd/ebiten-game && go mod tidy && go build -o ../../build/game-desktop
+	@echo "$(GREEN)✓ Build complete: build/game-desktop$(NC)"
 
-# Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	rm -rf build/
-	@echo "Clean complete"
+build-wasm: ## Build WebGPU WASM binary
+	@echo "$(CYAN)Building WASM binary (WebGPU)...$(NC)"
+	@cd examples/basic-game/game && GOOS=js GOARCH=wasm go build -o ../../../build/main.wasm
+	@cp $(shell go env GOROOT)/misc/wasm/wasm_exec.js build/
+	@echo "$(GREEN)✓ Build complete: build/main.wasm$(NC)"
+
+build-all: build-desktop build-wasm ## Build both desktop and WASM binaries
+
+##@ Running
+
+run-desktop: build-desktop ## Build and run desktop game (from project root)
+	@echo "$(CYAN)Running desktop game...$(NC)"
+	@cd examples/basic-game && ../../build/game-desktop
+
+run-desktop-from-assets: build-desktop ## Run desktop game from assets directory
+	@echo "$(CYAN)Running desktop game from assets directory...$(NC)"
+	@cd examples/basic-game/assets && ../../../build/game-desktop
+
+serve-wasm: build-wasm ## Build WASM and start local server
+	@echo "$(CYAN)Starting WASM development server...$(NC)"
+	@echo "$(GREEN)Open http://localhost:8080 in your browser$(NC)"
+	@cd examples/basic-game && python3 -m http.server 8080
+
+dev: ## Quick rebuild and run (for rapid iteration)
+	@echo "$(CYAN)Quick dev build...$(NC)"
+	@cd cmd/ebiten-game && go build -o ../../build/game-desktop
+	@cd examples/basic-game && ../../build/game-desktop
+
+##@ Testing
+
+test: ## Run engine library tests
+	@echo "$(CYAN)Running engine tests...$(NC)"
+	@go test ./pkg/...
+
+test-all: ## Run all tests (including examples)
+	@echo "$(CYAN)Running all tests...$(NC)"
+	@go test ./...
+
+test-verbose: ## Run tests with verbose output
+	@echo "$(CYAN)Running tests (verbose)...$(NC)"
+	@go test -v ./pkg/...
+
+test-coverage: ## Run tests with coverage report
+	@echo "$(CYAN)Running tests with coverage...$(NC)"
+	@go test -coverprofile=coverage.out ./pkg/...
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "$(GREEN)✓ Coverage report: coverage.html$(NC)"
+
+##@ Code Quality
+
+fmt: ## Format all Go code
+	@echo "$(CYAN)Formatting Go code...$(NC)"
+	@go fmt ./...
+	@echo "$(GREEN)✓ Code formatted$(NC)"
+
+lint: ## Run linter (requires golangci-lint)
+	@echo "$(CYAN)Running linter...$(NC)"
+	@if command -v golangci-lint >/dev/null 2>&1; then \
+		golangci-lint run ./...; \
+	else \
+		echo "$(YELLOW)⚠ golangci-lint not installed, skipping$(NC)"; \
+	fi
+
+tidy: ## Tidy and verify dependencies
+	@echo "$(CYAN)Tidying dependencies...$(NC)"
+	@go mod tidy
+	@cd cmd/ebiten-game && go mod tidy
+	@echo "$(GREEN)✓ Dependencies tidied$(NC)"
+
+##@ Cleaning
+
+clean: ## Clean build artifacts
+	@echo "$(CYAN)Cleaning build artifacts...$(NC)"
+	@rm -rf build/
+	@echo "$(GREEN)✓ Build directory cleaned$(NC)"
+
+clean-all: clean ## Clean all artifacts including coverage reports
+	@echo "$(CYAN)Cleaning all artifacts...$(NC)"
+	@rm -f coverage.out coverage.html
+	@find . -name "*.test" -type f -delete
+	@echo "$(GREEN)✓ All artifacts cleaned$(NC)"
