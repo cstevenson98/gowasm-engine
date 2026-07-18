@@ -9,6 +9,9 @@ pkgs.mkShell {
     gcc
     pkg-config
     
+    # GLFW (required for Ebiten)
+    glfw
+    
     # X11 libraries for Ebiten window management
     xorg.libX11
     xorg.libXcursor
