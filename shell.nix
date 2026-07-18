@@ -63,7 +63,7 @@ pkgs.mkShell {
     # Create a temporary zshrc that sources the original and sets CGO flags
     if [ -f ~/.zshrc ]; then
       mkdir -p /tmp/nix-shell-zsh-$$
-      cat > /tmp/nix-shell-zsh-$$/zshrc << EOFZSH
+      cat > /tmp/nix-shell-zsh-$$/.zshrc << EOFZSH
 # Source original zshrc for oh-my-zsh
 source ~/.zshrc
 
