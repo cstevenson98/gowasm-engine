@@ -44,6 +44,12 @@ pkgs.mkShell {
   ] + ":/run/opengl-driver/lib";
   
   shellHook = ''
+    # Write CGO config to a temporary file that zsh can source
+    cat > /tmp/nix-shell-cgo-$$.sh << 'EOFCGO'
+export CGO_CFLAGS="-I${pkgs.glfw}/include"
+export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
+EOFCGO
+    
     echo "=================================================="
     echo "  Go WASM Engine Development Environment"
     echo "=================================================="
@@ -60,14 +66,12 @@ pkgs.mkShell {
     echo "=================================================="
     echo ""
     
-    # Export CGO flags explicitly before launching zsh
-    export CGO_CFLAGS="-I${pkgs.glfw}/include"
-    export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
-    
-    # Source global zsh configuration if available
+    # Source the CGO config and then launch zsh
     if [ -f ~/.zshrc ]; then
       export ZDOTDIR=$HOME
-      exec zsh
+      exec zsh -c "source /tmp/nix-shell-cgo-$$.sh && exec zsh"
+    else
+      source /tmp/nix-shell-cgo-$$.sh
     fi
   '';
 }
