@@ -44,6 +44,11 @@ pkgs.mkShell {
   ] + ":/run/opengl-driver/lib";
   
   shellHook = ''
+    # Set CGO flags for Ebiten/GLFW
+    export CGO_CFLAGS="-I${pkgs.glfw}/include"
+    export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
+    export PKG_CONFIG_PATH="${pkgs.glfw}/lib/pkgconfig:$PKG_CONFIG_PATH"
+    
     echo "=================================================="
     echo "  Go WASM Engine Development Environment"
     echo "=================================================="
@@ -55,31 +60,13 @@ pkgs.mkShell {
     echo "  make test           - Run unit tests"
     echo "  make clean          - Clean build artifacts"
     echo ""
-    echo "Go version: $(go version)"
-    echo "CGO configured for GLFW: ${pkgs.glfw}"
+    echo "Environment:"
+    echo "  Go: $(go version | cut -d' ' -f3-4)"
+    echo "  CGO_CFLAGS: $CGO_CFLAGS"
+    echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
+    echo ""
+    echo "Tip: Type 'zsh' to use your shell (CGO flags will persist)"
     echo "=================================================="
     echo ""
-    
-    # Create a temporary zshrc that sources the original and sets CGO flags
-    if [ -f ~/.zshrc ]; then
-      mkdir -p /tmp/nix-shell-zsh-$$
-      cat > /tmp/nix-shell-zsh-$$/.zshrc << EOFZSH
-# Source original zshrc for oh-my-zsh
-source ~/.zshrc
-
-# Set CGO flags for Ebiten/GLFW
-export CGO_CFLAGS="-I${pkgs.glfw}/include"
-export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
-export PKG_CONFIG_PATH="${pkgs.glfw}/lib/pkgconfig:\$PKG_CONFIG_PATH"
-EOFZSH
-      
-      export ZDOTDIR=/tmp/nix-shell-zsh-$$
-      exec zsh
-    else
-      # Fallback to bash with CGO flags
-      export CGO_CFLAGS="-I${pkgs.glfw}/include"
-      export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
-      export PKG_CONFIG_PATH="${pkgs.glfw}/lib/pkgconfig:$PKG_CONFIG_PATH"
-    fi
   '';
 }
