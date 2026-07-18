@@ -43,10 +43,6 @@ pkgs.mkShell {
     xorg.libXxf86vm
   ] + ":/run/opengl-driver/lib";
   
-  # Set CGO flags for GLFW headers
-  CGO_CFLAGS = "-I${pkgs.glfw}/include";
-  CGO_LDFLAGS = "-L${pkgs.glfw}/lib";
-  
   shellHook = ''
     echo "=================================================="
     echo "  Go WASM Engine Development Environment"
