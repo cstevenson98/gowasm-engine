@@ -34,6 +34,7 @@ pkgs.mkShell {
   LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath [
     libGL
     libglvnd
+    glfw
     xorg.libX11
     xorg.libXcursor
     xorg.libXrandr
@@ -41,6 +42,10 @@ pkgs.mkShell {
     xorg.libXi
     xorg.libXxf86vm
   ] + ":/run/opengl-driver/lib";
+  
+  # Set CGO flags for GLFW headers
+  CGO_CFLAGS = "-I${pkgs.glfw}/include";
+  CGO_LDFLAGS = "-L${pkgs.glfw}/lib";
   
   shellHook = ''
     echo "=================================================="
