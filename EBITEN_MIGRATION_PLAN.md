@@ -1,5 +1,12 @@
 # Ebiten Migration Plan
 
+> **STATUS (2026-07-18): COMPLETE — WebGPU/WASM backend fully removed.**
+> The engine is now pure Ebiten. All `//go:build js` files, the WebGPU canvas,
+> the WASM entry point, pipeline/batching abstractions, and the `cogentcore/webgpu`
+> dependency have been deleted. `EbitenEngine`/`EbitenCanvasManager`/`EbitenInput`
+> were renamed to `Engine`/`Canvas`/`Input`. The sections below are retained for
+> historical context on how the migration was carried out.
+
 ## Executive Summary
 
 This document outlines the migration strategy from the WebGPU WASM engine to Ebiten for Linux desktop. The migration is designed to be incremental, preserving the existing component-based architecture while replacing the rendering backend.

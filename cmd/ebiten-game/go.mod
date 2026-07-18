@@ -13,7 +13,6 @@ require (
 )
 
 require (
-	github.com/cogentcore/webgpu v0.23.0 // indirect
 	github.com/ebitengine/purego v0.5.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jezek/xgb v1.1.0 // indirect

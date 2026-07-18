@@ -149,29 +149,14 @@ func TestGameStateString(t *testing.T) {
 		state    GameState
 		expected string
 	}{
-		{GAMEPLAY, "SPRITE"},
-		{TRIANGLE, "TRIANGLE"},
+		{MENU, "MENU"},
+		{GAMEPLAY, "GAMEPLAY"},
+		{PLAYER_MENU, "PLAYER_MENU"},
+		{BATTLE, "BATTLE"},
 	}
 
 	for _, tt := range tests {
 		got := tt.state.String()
-		if got != tt.expected {
-			t.Errorf("Expected %s, got %s", tt.expected, got)
-		}
-	}
-}
-
-func TestPipelineTypeString(t *testing.T) {
-	tests := []struct {
-		pipeline PipelineType
-		expected string
-	}{
-		{TrianglePipeline, "TrianglePipeline"},
-		{TexturedPipeline, "TexturedPipeline"},
-	}
-
-	for _, tt := range tests {
-		got := tt.pipeline.String()
 		if got != tt.expected {
 			t.Errorf("Expected %s, got %s", tt.expected, got)
 		}

@@ -7,34 +7,34 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// EbitenInput implements InputCapturer using Ebiten's input APIs
-// It combines keyboard and gamepad input automatically
-type EbitenInput struct {
+// Input implements InputCapturer using Ebiten's input APIs.
+// It combines keyboard and gamepad input automatically.
+type Input struct {
 	state         types.InputState
 	previousState types.InputState
 }
 
-// NewEbitenInput creates a new Ebiten input capturer
-func NewEbitenInput() *EbitenInput {
-	return &EbitenInput{
+// NewInput creates a new Ebiten input capturer.
+func NewInput() *Input {
+	return &Input{
 		state:         types.InputState{},
 		previousState: types.InputState{},
 	}
 }
 
 // Initialize sets up input handling (no-op for Ebiten)
-func (e *EbitenInput) Initialize() error {
+func (e *Input) Initialize() error {
 	logger.Logger.Debugf("EbitenInput initialized")
 	return nil
 }
 
 // GetInputState returns the current input state
-func (e *EbitenInput) GetInputState() types.InputState {
+func (e *Input) GetInputState() types.InputState {
 	return e.state
 }
 
 // PollInput updates the input state by polling keyboard and gamepad
-func (e *EbitenInput) PollInput() types.InputState {
+func (e *Input) PollInput() types.InputState {
 	// Save previous state for edge detection
 	e.previousState = e.state
 
@@ -65,7 +65,7 @@ func (e *EbitenInput) PollInput() types.InputState {
 }
 
 // pollKeyboard polls keyboard input
-func (e *EbitenInput) pollKeyboard() {
+func (e *Input) pollKeyboard() {
 	// Movement keys (continuous)
 	// WASD + Arrow keys
 	moveUp := ebiten.IsKeyPressed(ebiten.KeyArrowUp) || ebiten.IsKeyPressed(ebiten.KeyW)
@@ -98,7 +98,7 @@ func (e *EbitenInput) pollKeyboard() {
 }
 
 // pollGamepad polls gamepad input and merges with keyboard state
-func (e *EbitenInput) pollGamepad() {
+func (e *Input) pollGamepad() {
 	// Get connected gamepads
 	gamepadIDs := ebiten.AppendGamepadIDs(nil)
 	if len(gamepadIDs) == 0 {
@@ -177,11 +177,11 @@ func (e *EbitenInput) pollGamepad() {
 }
 
 // Update is called each frame to poll input (alias for PollInput)
-func (e *EbitenInput) Update() {
+func (e *Input) Update() {
 	e.PollInput()
 }
 
 // Cleanup releases input resources (no-op for Ebiten)
-func (e *EbitenInput) Cleanup() {
+func (e *Input) Cleanup() {
 	logger.Logger.Debugf("EbitenInput cleanup")
 }

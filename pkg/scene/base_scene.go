@@ -1,4 +1,3 @@
-
 package scene
 
 import (
@@ -83,7 +82,7 @@ func NewBaseScene(name string, width, height float64) *BaseScene {
 	if config.Global.Debug.Enabled {
 		fontPaths = append(fontPaths, config.Global.Debug.FontPath)
 	}
-	
+
 	return &BaseScene{
 		name:         name,
 		screenWidth:  width,

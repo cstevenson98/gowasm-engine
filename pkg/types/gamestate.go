@@ -10,8 +10,6 @@ const (
 	GAMEPLAY
 	// PLAYER_MENU is the player menu state (accessible from gameplay)
 	PLAYER_MENU
-	// TRIANGLE is the triangle rendering state
-	TRIANGLE
 	// BATTLE is the battle scene state
 	BATTLE
 )
@@ -25,8 +23,6 @@ func (g GameState) String() string {
 		return "GAMEPLAY"
 	case PLAYER_MENU:
 		return "PLAYER_MENU"
-	case TRIANGLE:
-		return "TRIANGLE"
 	case BATTLE:
 		return "BATTLE"
 	default:

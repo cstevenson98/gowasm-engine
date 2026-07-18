@@ -1,5 +1,3 @@
-//go:build js
-
 package gameobject
 
 import (
@@ -242,15 +240,14 @@ func TestPlayerWithMockComponents(t *testing.T) {
 	)
 
 	// Create player manually with mocks
+	base := NewBaseGameObject(mockSprite, mockMover, types.ObjectState{
+		ID:       "test",
+		Position: types.Vector2{X: 100, Y: 100},
+		Visible:  true,
+	})
 	player := &Player{
-		sprite:    mockSprite,
-		mover:     mockMover,
-		moveSpeed: 100.0,
-		state: types.ObjectState{
-			ID:       "test",
-			Position: types.Vector2{X: 100, Y: 100},
-			Visible:  true,
-		},
+		BaseGameObject: base,
+		moveSpeed:      100.0,
 	}
 
 	// Test that we can interact with mocked components

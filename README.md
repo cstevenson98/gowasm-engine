@@ -1,12 +1,14 @@
-# Go WASM WebGPU 2D Game Engine (Library)
+# Go 2D Game Engine (Library)
 
-A component-based 2D game engine written in Go, compiled to WebAssembly, and rendered with WebGPU via the `cogentcore/webgpu` wrapper. It is designed as a reusable library with clear interfaces for scenes, sprites, movers, input, and rendering. Example games live under `examples/` and consume the engine as a module.
+A component-based 2D game engine written in Go and rendered with [Ebiten](https://ebiten.org/). It is designed as a reusable library with clear interfaces for scenes, sprites, movers, input, and rendering. Example games live under `examples/` and consume the engine as a module.
+
+> Note: this engine previously targeted WebAssembly + WebGPU. It has been migrated to a pure Ebiten backend for desktop. The module path (`github.com/cstevenson98/gowasm-engine`) is retained for now.
 
 ## Quick Start
 
 Prerequisites:
 - Go 1.24+
-- A WebGPU-capable browser (recent Chromium-based browser with WebGPU enabled)
+- A C toolchain and the Ebiten system dependencies (GLFW/X11/OpenGL on Linux — see `shell.nix`)
 - Git LFS (for image assets)
 
 ### Setting Up Git LFS
@@ -36,10 +38,8 @@ git lfs pull
 ### Build and Run Examples
 
 ```bash
-make -C examples list
-make -C examples build
-make -C examples serve
-# open the printed example URL(s)
+make build-desktop   # build the Ebiten desktop binary
+make run-desktop      # build and run the example game
 ```
 
 Use as a library in your own project (local dev with replace):
@@ -51,13 +51,16 @@ replace github.com/cstevenson98/gowasm-engine => ../path/to/engine/repo
 ```
 
 ```go
-// main.go (WASM entrypoint with //go:build js)
+// main.go (desktop entrypoint)
 eng := engine.NewEngine()
-myScene := NewMyScene()  // Input will be injected automatically
+myScene := NewMyScene()  // Dependencies are injected automatically
 eng.RegisterScene(types.GAMEPLAY, myScene)
-_ = eng.Initialize("canvas-id")
-_ = eng.SetGameState(types.GAMEPLAY)  // Input injected here if scene implements SceneInputProvider
+_ = eng.Initialize("")                 // canvasID is unused by the Ebiten backend
+_ = eng.SetGameState(types.GAMEPLAY)   // deps injected here for scenes embedding BaseScene
 eng.Start()
+if err := ebiten.RunGame(eng); err != nil {
+	log.Fatal(err)
+}
 ```
 
 ## Using from a Private GitHub Repository

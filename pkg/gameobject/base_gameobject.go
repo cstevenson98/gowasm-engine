@@ -1,4 +1,3 @@
-
 package gameobject
 
 import (
@@ -99,4 +98,3 @@ func (b *BaseGameObject) SetMover(mover types.Mover) {
 	defer b.mu.Unlock()
 	b.mover = mover
 }
-

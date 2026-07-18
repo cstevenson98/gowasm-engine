@@ -2302,3 +2302,27 @@ Desktop builds use filesystem paths relative to the binary's working directory, 
 - **Performance**: Smooth 60 FPS at 2400x1800 resolution
 
 ---
+
+## [2026-07-18 12:55:00 BST] - Removed WebGPU/WASM Backend (Pure Ebiten)
+
+**Prompt/Request**: Plan and implement removal of all old WebGPU code in favour of a pure Ebiten implementation, plus sensible type renames. Done on branch `pure-ebiten`.
+
+**Changes Made**:
+- Deleted the entire `//go:build js` WebGPU/WASM half: `pkg/canvas/canvas_webgpu.go` (+test), `pkg/engine/engine.go`+`dependencies.go`+`engine_test.go` (js), `pkg/input/unified_input.go`/`keyboard_input.go`/`gamepad_input.go`, `pkg/text/font.go` (js), `examples/basic-game/game/main.go` (WASM entry), `examples/basic-game/game/gamestate/storage.go` (js).
+- Deleted WASM/WebGPU assets & tooling: `wasm_exec.js`, `wasm_exec_tinygo.js`, `test-webgpu-support.html`, `test-webgl.html`, `index.html`, `scripts/test-webgpu-browser.sh`, `docs/WEBGPU_TESTING.md`.
+- Promoted Ebiten files to canonical names (via `git mv`, tags dropped): `engine_ebiten.go`→`engine.go`, `ebiten_input.go`→`input.go`, `font_desktop.go`→`font.go`, `storage_desktop.go`→`storage.go`.
+- Renamed types: `EbitenEngine`→`Engine`, `EbitenCanvasManager`→`Canvas`, `EbitenInput`→`Input` (+ `NewEbiten*`→`New*`). Deleted `WebGPUTexture`, `WebGPUPipeline`, `Texture`/`Pipeline` interfaces, `PipelineType`, `SpriteVertex`, `SpriteUniforms`, `DemoState`, `Demo`, and the dead `TRIANGLE` game state.
+- Simplified engine: removed the game-state→pipeline map, `initializeGameStates()`, `SetPipelines`, and the manual batching layer (`BeginBatch`/`EndBatch`/`FlushBatch`). `SetGameState` now validates against registered scenes; `Draw` issues `DrawTexturedRect` immediately (Ebiten coalesces draws internally).
+- Slimmed `CanvasManager` interface to `Initialize`/`Cleanup`/`LoadTexture`/`DrawTexturedRect`/`DrawColoredRect`. Rewrote `MockCanvasManager` and `canvas_test.go` to match.
+- Fixed stale `pkg/gameobject/player_test.go` (de-tagged; updated to the current `BaseGameObject`-embedding API) and `pkg/types/types_test.go` (removed pipeline/TRIANGLE cases).
+- Removed `github.com/cogentcore/webgpu` from all three modules (`go mod tidy`). Updated `Makefile` (dropped `build-wasm`/`serve-wasm`) and `shell.nix`. Updated `README.md` and `EBITEN_MIGRATION_PLAN.md`.
+
+**Reasoning**: The dual-backend split was maintenance debt — two near-identical engines. With desktop Ebiten working, the WebGPU path and its WASM ceremony (pipelines, manual batching, JS fetch) were redundant. Ebiten batches draw calls internally, so the manual batch layer added state without benefit.
+
+**Impact**: Single engine/canvas/input implementation, no build tags in engine code, 4-method (game-facing) canvas interface. WASM/browser target is dropped. Module path unchanged.
+
+**Testing**: `go build ./...` (root) OK; `make test` (all `pkg/...` tests) pass; `cd cmd/ebiten-game && go build` produces `build/game-desktop` (12.8 MB).
+
+**Notes**: Docs still referencing `internal/`, WASM, or WebGPU (e.g. `docs/ARCHITECTURE.md`, `.cursor/rules/gameEngine.mdc`, `README_EBITEN.md`) were not exhaustively rewritten. `examples/ebiten-demo/` retained as a minimal smoke test. Module rename and collapsing the three modules into one were deferred by choice.
+
+---

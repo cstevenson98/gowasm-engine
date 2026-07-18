@@ -1,7 +1,7 @@
 { pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
-  name = "gowasm-engine-dev";
+  name = "ebiten-engine-dev";
   
   buildInputs = with pkgs; [
     # Go toolchain
@@ -56,7 +56,6 @@ pkgs.mkShell {
     echo "Available commands:"
     echo "  make build-desktop  - Build Ebiten desktop binary"
     echo "  make run-desktop    - Build and run desktop game"
-    echo "  make build-wasm     - Build WebGPU WASM binary"
     echo "  make test           - Run unit tests"
     echo "  make clean          - Clean build artifacts"
     echo ""

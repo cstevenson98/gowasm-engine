@@ -1,91 +1,138 @@
-
-//go:build js
-
 package gamestate
 
 import (
 	"encoding/json"
 	"fmt"
-	"syscall/js"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 )
+
+// Storage directory for game saves
+const saveDir = ".gowasm-game-saves"
 
 // localStorageKeyPrefix is the prefix for all game save keys
 const localStorageKeyPrefix = "game_save_"
 const localStorageIndexKey = "game_saves_index"
 
-// SaveToLocalStorage saves data to browser localStorage
+// getSaveDir returns the full path to the save directory
+func getSaveDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("failed to get home directory: %w", err)
+	}
+
+	savePath := filepath.Join(homeDir, saveDir)
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(savePath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create save directory: %w", err)
+	}
+
+	return savePath, nil
+}
+
+// keyToFilename converts a storage key to a safe filename
+func keyToFilename(key string) string {
+	// Replace any unsafe characters
+	safe := strings.ReplaceAll(key, "/", "_")
+	safe = strings.ReplaceAll(safe, "\\", "_")
+	return safe + ".json"
+}
+
+// SaveToLocalStorage saves data to a file (desktop implementation)
 func SaveToLocalStorage(key string, data []byte) error {
-	localStorage := js.Global().Get("localStorage")
-	if localStorage.IsUndefined() {
-		return fmt.Errorf("localStorage not available")
+	savePath, err := getSaveDir()
+	if err != nil {
+		return err
 	}
 
-	// Convert byte slice to base64 string using btoa
-	// btoa expects a string where each byte is a character (Latin-1 encoding)
-	// Convert bytes to string and wrap in js.ValueOf for proper JavaScript conversion
-	dataString := string(data)
-	encodedStr := js.Global().Call("btoa", js.ValueOf(dataString)).String()
+	filename := filepath.Join(savePath, keyToFilename(key))
 
-	// Save to localStorage
-	localStorage.Call("setItem", key, encodedStr)
-	logger.Logger.Debugf("Saved to localStorage: %s (%d bytes)", key, len(data))
+	err = os.WriteFile(filename, data, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to write save file: %w", err)
+	}
+
+	logger.Logger.Debugf("Saved to file: %s (%d bytes)", filename, len(data))
 	return nil
 }
 
-// LoadFromLocalStorage loads data from browser localStorage
+// LoadFromLocalStorage loads data from a file (desktop implementation)
 func LoadFromLocalStorage(key string) ([]byte, error) {
-	localStorage := js.Global().Get("localStorage")
-	if localStorage.IsUndefined() {
-		return nil, fmt.Errorf("localStorage not available")
+	savePath, err := getSaveDir()
+	if err != nil {
+		return nil, err
 	}
 
-	// Get from localStorage
-	dataStr := localStorage.Call("getItem", key)
-	if dataStr.IsNull() || dataStr.IsUndefined() {
-		return nil, fmt.Errorf("key not found in localStorage: %s", key)
+	filename := filepath.Join(savePath, keyToFilename(key))
+
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("key not found: %s", key)
+		}
+		return nil, fmt.Errorf("failed to read save file: %w", err)
 	}
 
-	// Decode base64 string back to bytes using atob global function
-	decoded := js.Global().Call("atob", dataStr).String()
-	logger.Logger.Debugf("Loaded from localStorage: %s (%d bytes)", key, len(decoded))
-	return []byte(decoded), nil
+	logger.Logger.Debugf("Loaded from file: %s (%d bytes)", filename, len(data))
+	return data, nil
 }
 
-// DeleteFromLocalStorage deletes a key from browser localStorage
+// DeleteFromLocalStorage deletes a file (desktop implementation)
 func DeleteFromLocalStorage(key string) error {
-	localStorage := js.Global().Get("localStorage")
-	if localStorage.IsUndefined() {
-		return fmt.Errorf("localStorage not available")
+	savePath, err := getSaveDir()
+	if err != nil {
+		return err
 	}
 
-	localStorage.Call("removeItem", key)
-	logger.Logger.Debugf("Deleted from localStorage: %s", key)
+	filename := filepath.Join(savePath, keyToFilename(key))
+
+	err = os.Remove(filename)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to delete save file: %w", err)
+	}
+
+	logger.Logger.Debugf("Deleted file: %s", filename)
 	return nil
 }
 
-// ListKeys returns all localStorage keys with the given prefix
+// ListKeys returns all storage keys with the given prefix (desktop implementation)
 func ListKeys(prefix string) []string {
-	localStorage := js.Global().Get("localStorage")
-	if localStorage.IsUndefined() {
+	savePath, err := getSaveDir()
+	if err != nil {
+		logger.Logger.Warnf("Failed to get save directory: %s", err)
+		return []string{}
+	}
+
+	entries, err := os.ReadDir(savePath)
+	if err != nil {
+		logger.Logger.Warnf("Failed to read save directory: %s", err)
 		return []string{}
 	}
 
 	var keys []string
-	length := localStorage.Get("length").Int()
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
 
-	for i := 0; i < length; i++ {
-		key := localStorage.Call("key", i).String()
-		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
-			keys = append(keys, key)
+		// Remove .json extension and check prefix
+		name := entry.Name()
+		if strings.HasSuffix(name, ".json") {
+			key := strings.TrimSuffix(name, ".json")
+			if strings.HasPrefix(key, prefix) {
+				keys = append(keys, key)
+			}
 		}
 	}
 
 	return keys
 }
 
-// LoadSaveIndex loads the save index from localStorage
+// LoadSaveIndex loads the save index from storage
 func LoadSaveIndex() ([]SaveInfo, error) {
 	data, err := LoadFromLocalStorage(localStorageIndexKey)
 	if err != nil {
@@ -102,7 +149,7 @@ func LoadSaveIndex() ([]SaveInfo, error) {
 	return saves, nil
 }
 
-// SaveSaveIndex saves the save index to localStorage
+// SaveSaveIndex saves the save index to storage
 func SaveSaveIndex(saves []SaveInfo) error {
 	data, err := json.Marshal(saves)
 	if err != nil {

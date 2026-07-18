@@ -1,8 +1,8 @@
-# Root Makefile - Go WASM Engine Development
+# Root Makefile - Ebiten Game Engine Development
 
 .PHONY: help test test-all test-verbose test-coverage tidy fmt lint \
-        build-desktop build-wasm build-all run-desktop run-desktop-from-assets \
-        serve-wasm dev clean clean-all
+        build-desktop build-all run-desktop run-desktop-from-assets \
+        dev clean clean-all
 
 .DEFAULT_GOAL := help
 
@@ -27,13 +27,7 @@ build-desktop: ## Build Ebiten desktop binary
 	@cd cmd/ebiten-game && go mod tidy && go build -o ../../build/game-desktop
 	@echo "$(GREEN)✓ Build complete: build/game-desktop$(NC)"
 
-build-wasm: ## Build WebGPU WASM binary
-	@echo "$(CYAN)Building WASM binary (WebGPU)...$(NC)"
-	@cd examples/basic-game/game && GOOS=js GOARCH=wasm go build -o ../../../build/main.wasm
-	@cp $(shell go env GOROOT)/misc/wasm/wasm_exec.js build/
-	@echo "$(GREEN)✓ Build complete: build/main.wasm$(NC)"
-
-build-all: build-desktop build-wasm ## Build both desktop and WASM binaries
+build-all: build-desktop ## Build all binaries
 
 ##@ Running
 
@@ -44,11 +38,6 @@ run-desktop: build-desktop ## Build and run desktop game (from project root)
 run-desktop-from-assets: build-desktop ## Run desktop game from assets directory
 	@echo "$(CYAN)Running desktop game from assets directory...$(NC)"
 	@cd examples/basic-game/assets && ../../../build/game-desktop
-
-serve-wasm: build-wasm ## Build WASM and start local server
-	@echo "$(CYAN)Starting WASM development server...$(NC)"
-	@echo "$(GREEN)Open http://localhost:8080 in your browser$(NC)"
-	@cd examples/basic-game && python3 -m http.server 8080
 
 dev: ## Quick rebuild and run (for rapid iteration)
 	@echo "$(CYAN)Quick dev build...$(NC)"

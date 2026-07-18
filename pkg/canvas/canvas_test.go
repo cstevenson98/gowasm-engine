@@ -2,150 +2,70 @@ package canvas
 
 import (
 	"testing"
+
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 func TestMockCanvasManager_Initialize(t *testing.T) {
-	tests := []struct {
-		name        string
-		canvasID    string
-		expectError bool
-		expectInit  bool
-	}{
-		{
-			name:        "WebGPU initialization",
-			canvasID:    "test-webgpu",
-			expectError: false,
-			expectInit:  true,
-		},
-		{
-			name:        "WebGL fallback",
-			canvasID:    "test-webgl",
-			expectError: false,
-			expectInit:  true,
-		},
-		{
-			name:        "Error scenario",
-			canvasID:    "test-error",
-			expectError: true,
-			expectInit:  false,
-		},
-		{
-			name:        "Default initialization",
-			canvasID:    "default-canvas",
-			expectError: false,
-			expectInit:  true,
-		},
+	mock := NewMockCanvasManager()
+	if mock.IsInitialized() {
+		t.Fatalf("expected mock to start uninitialized")
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mock := NewMockCanvasManager()
-
-			err := mock.Initialize(tt.canvasID)
-
-			if tt.expectError && err == nil {
-				t.Errorf("Expected error but got none")
-			}
-			if !tt.expectError && err != nil {
-				t.Errorf("Expected no error but got: %v", err)
-			}
-
-			initialized, _ := mock.GetStatus()
-			if initialized != tt.expectInit {
-				t.Errorf("Expected initialized=%v, got %v", tt.expectInit, initialized)
-			}
-		})
+	if err := mock.Initialize("test-canvas"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !mock.IsInitialized() {
+		t.Errorf("expected mock to be initialized after Initialize")
 	}
 }
 
-func TestMockCanvasManager_Render(t *testing.T) {
+func TestMockCanvasManager_LoadAndDraw(t *testing.T) {
 	mock := NewMockCanvasManager()
 
-	// Test render before initialization
-	err := mock.Render()
-	if err == nil {
-		t.Errorf("Expected error when rendering before initialization")
+	// Drawing before initialization should fail.
+	if err := mock.DrawTexturedRect("tex.png", types.Vector2{}, types.Vector2{}, types.UVRect{}); err == nil {
+		t.Errorf("expected error drawing before initialization")
 	}
 
-	// Initialize and test render
 	mock.Initialize("test-canvas")
 
-	err = mock.Render()
-	if err != nil {
-		t.Errorf("Expected no error when rendering after initialization, got: %v", err)
+	// Drawing an unloaded texture should fail.
+	if err := mock.DrawTexturedRect("tex.png", types.Vector2{}, types.Vector2{}, types.UVRect{}); err == nil {
+		t.Errorf("expected error drawing unloaded texture")
 	}
 
-	if mock.GetRenderCount() != 1 {
-		t.Errorf("Expected render count 1, got %d", mock.GetRenderCount())
+	if err := mock.LoadTexture("tex.png"); err != nil {
+		t.Fatalf("unexpected error loading texture: %v", err)
 	}
 
-	// Test multiple renders
-	mock.Render()
-	mock.Render()
+	if err := mock.DrawTexturedRect("tex.png", types.Vector2{X: 1}, types.Vector2{X: 2}, types.UVRect{}); err != nil {
+		t.Fatalf("unexpected error drawing loaded texture: %v", err)
+	}
 
-	if mock.GetRenderCount() != 3 {
-		t.Errorf("Expected render count 3, got %d", mock.GetRenderCount())
+	if mock.DrawnRectCount() != 1 {
+		t.Errorf("expected 1 draw call, got %d", mock.DrawnRectCount())
 	}
 }
 
 func TestMockCanvasManager_Cleanup(t *testing.T) {
 	mock := NewMockCanvasManager()
-
-	// Initialize first
 	mock.Initialize("test-canvas")
 
-	// Test cleanup
-	err := mock.Cleanup()
-	if err != nil {
-		t.Errorf("Expected no error during cleanup, got: %v", err)
+	if err := mock.Cleanup(); err != nil {
+		t.Fatalf("unexpected error during cleanup: %v", err)
 	}
-
 	if !mock.WasCleanupCalled() {
-		t.Errorf("Expected cleanup to be called")
+		t.Errorf("expected cleanup to be recorded")
 	}
-
-	initialized, _ := mock.GetStatus()
-	if initialized {
-		t.Errorf("Expected canvas to be uninitialized after cleanup")
-	}
-}
-
-func TestMockCanvasManager_Status(t *testing.T) {
-	mock := NewMockCanvasManager()
-
-	// Test initial status
-	initialized, message := mock.GetStatus()
-	if initialized {
-		t.Errorf("Expected initial status to be uninitialized")
-	}
-	if message != "" {
-		t.Errorf("Expected initial message to be empty, got: %s", message)
-	}
-
-	// Test status after initialization
-	mock.Initialize("test-canvas")
-	initialized, message = mock.GetStatus()
-	if !initialized {
-		t.Errorf("Expected status to be initialized after init")
-	}
-	if message == "" {
-		t.Errorf("Expected non-empty message after initialization")
-	}
-
-	// Test status update
-	mock.SetStatus(false, "Test error")
-	initialized, message = mock.GetStatus()
-	if initialized {
-		t.Errorf("Expected status to be uninitialized after SetStatus")
-	}
-	if message != "Test error" {
-		t.Errorf("Expected message 'Test error', got: %s", message)
+	if mock.IsInitialized() {
+		t.Errorf("expected canvas uninitialized after cleanup")
 	}
 }
 
 func TestCanvasError(t *testing.T) {
 	err := &CanvasError{Message: "Test error"}
 	if err.Error() != "Test error" {
-		t.Errorf("Expected error message 'Test error', got: %s", err.Error())
+		t.Errorf("expected 'Test error', got: %s", err.Error())
 	}
 }
