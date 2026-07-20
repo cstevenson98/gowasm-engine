@@ -71,9 +71,10 @@ func main() {
 	// Start the engine (sets running flag)
 	gameEngine.Start()
 
-	// Configure Ebiten window
-	windowWidth := int(config.Global.Screen.Width * float64(config.Global.Rendering.PixelScale))
-	windowHeight := int(config.Global.Screen.Height * float64(config.Global.Rendering.PixelScale))
+	// Configure Ebiten window. The window size is derived from the virtual
+	// resolution and the pixel scale.
+	windowWidth := config.WindowWidth()
+	windowHeight := config.WindowHeight()
 
 	ebiten.SetWindowSize(windowWidth, windowHeight)
 	ebiten.SetWindowTitle("Go WASM Engine - Ebiten Edition")

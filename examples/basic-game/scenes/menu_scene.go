@@ -243,16 +243,12 @@ func (s *MenuScene) RenderOverlays() error {
 	return s.BaseScene.RenderOverlays()
 }
 
-// textWidth returns the rendered width (in screen pixels) of a single-line
+// textWidth returns the rendered width (in virtual pixels) of a single-line
 // string in the menu font, matching how BasicTextRenderer advances characters
-// (cell width, reduced by the configured spacing, scaled by the pixel scale).
+// (cell width reduced by the configured spacing).
 func (s *MenuScene) textWidth(str string) float64 {
 	cellWidth, _ := s.menuFont.GetCellSize()
-	pixelScale := 1.0
-	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-		pixelScale = float64(config.Global.Rendering.PixelScale)
-	}
-	advance := (float64(cellWidth) - config.Global.Debug.CharacterSpacingReduction) * pixelScale
+	advance := float64(cellWidth) - config.Global.Debug.CharacterSpacingReduction
 	return float64(len(str)) * advance
 }
 
@@ -269,11 +265,7 @@ func (s *MenuScene) renderMainMenu() error {
 
 	// Calculate centered position
 	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight)
-	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-		lineHeight *= float64(config.Global.Rendering.PixelScale)
-	}
-	lineHeight *= config.Global.Rendering.UILineSpacing
+	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 	totalHeight := float64(len(menu.options)) * lineHeight
 	startY := (s.GetScreenHeight() - totalHeight) / 2
@@ -313,11 +305,7 @@ func (s *MenuScene) renderLoadMenu() error {
 
 	// Calculate centered position
 	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight)
-	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-		lineHeight *= float64(config.Global.Rendering.PixelScale)
-	}
-	lineHeight *= config.Global.Rendering.UILineSpacing
+	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 	// Title
 	title := "Load Game"

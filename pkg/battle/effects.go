@@ -6,6 +6,11 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
+// damageFloatSpeed is how fast damage/healing numbers drift upward, in virtual
+// pixels per second. Kept slow so the per-pixel snapping of pixel-perfect
+// rendering is clearly visible as the number rises.
+const damageFloatSpeed = 8.0
+
 // DamageEffect represents a visual damage/healing effect
 type DamageEffect struct {
 	Position  types.Vector2
@@ -62,8 +67,8 @@ func (de *DamageEffect) GetPosition() types.Vector2 {
 	de.mu.RLock()
 	defer de.mu.RUnlock()
 
-	// Simple floating animation - move up over time
-	floatOffset := de.Elapsed * 30.0 // 30 pixels per second upward
+	// Simple floating animation - move up over time.
+	floatOffset := de.Elapsed * damageFloatSpeed
 	return types.Vector2{
 		X: de.Position.X,
 		Y: de.Position.Y - floatOffset,

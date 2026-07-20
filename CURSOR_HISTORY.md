@@ -2400,3 +2400,50 @@ Go doc comments cannot render tables/images/diagrams; if architecture diagrams o
 **Notes**: `battle_menu.go` had pre-existing gofmt drift (unrelated) - left as-is. `GameplayScene.handleSaveGame` is retained (Ctrl+S path) though currently uncalled. `BaseScene.SetCanvasManager` kept as a public helper.
 
 ---
+
+## [2026-07-20 10:44:54 BST] - Made text layout scale-independent
+
+**Prompt/Request**: Text looked very spread apart after moving to 240p @ 3x; asked how to toggle debug menus and to make text spacing scale-independent.
+
+**Changes Made**:
+- pkg/text/text_renderer.go: removed PixelScale from layout. Glyphs are drawn in virtual pixels and the engine upscales the whole virtual screen, so character advance and line height no longer multiply by PixelScale. Advance = (cellWidth - CharacterSpacingReduction) * scale; lineHeight = cellHeight * scale * TextLineSpacing.
+- examples/basic-game/scenes/{menu,player_menu,battle}_scene.go: removed the PixelScale multiplier from UI lineHeight calculations (8 sites) so vertical spacing matches.
+- examples/basic-game/scenes/menu_scene.go: textWidth() helper no longer multiplies by PixelScale (kept in sync with renderer advance for centering).
+
+**Reasoning**:
+Advance was cellWidth*scale*pixelScale while glyphs were drawn at cellWidth*scale, so raising PixelScale 2->3 stretched the gaps between letters. Under the Ebiten backend, PixelScale is purely the virtual->window upscale (Layout returns virtual resolution), so it must not appear in any draw/layout math.
+
+**Impact**:
+- Text spacing is now tighter and independent of PixelScale; changing scale keeps proportions.
+- Affects all rendered text (menus, battle UI, debug console).
+
+**Testing**:
+- go build ./... (engine) and go build ./... + go vet ./scenes/... (example module) pass.
+
+**Notes**:
+- Debug console toggled with F2 (also gamepad Start via InputState.F2Pressed) and handled in menu_scene.go and battle_scene.go.
+
+---
+
+## [2026-07-20 10:49:04 BST] - Pixel-perfect object positioning by default
+
+**Prompt/Request**: Objects/text shimmered while moving in the battle scene; wanted pixel-perfect positioning for objects by default.
+
+**Changes Made**:
+- pkg/canvas/canvas.go: added snapToPixel() helper that rounds a draw position to whole virtual pixels when Rendering.PixelPerfectScaling is enabled. Applied in DrawTexturedRect and DrawColoredRect.
+
+**Reasoning**:
+Positions came from movers as float64 and were passed straight into GeoM.Translate. In the low-res virtual buffer (Layout returns virtual resolution, upscaled by PixelScale), fractional positions made sprite edges land on different real-pixel boundaries per frame -> shimmer. Snapping only the rendered position (not the logical mover position) keeps motion smooth while rendering crisp. The previously-unused PixelPerfectScaling flag now gates this and is on by default.
+
+**Impact**:
+- All draws (objects, text, UI/debug overlays) snap to whole virtual pixels by default.
+- Movers still track sub-pixel positions; only rendering is quantized.
+- Can be disabled via config.Global.Rendering.PixelPerfectScaling.
+
+**Testing**:
+- go build ./... and go vet ./pkg/canvas/... pass.
+
+**Notes**:
+- Sizes are unchanged (already integer from sprite config); only position is rounded.
+
+---

@@ -41,25 +41,18 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		return fmt.Errorf("invalid font cell size: %dx%d", cellWidth, cellHeight)
 	}
 
-	// Scale the cell size
-	// Note: The canvas manager will handle pixel-perfect snapping and upscaling automatically
-	// based on the PixelScale setting, so we just apply the font scale here
+	// Glyphs are drawn in virtual (game) pixels. The engine upscales the whole
+	// virtual screen to the window, so text layout here is independent of the
+	// pixel scale - it only depends on the font scale.
 	scaledWidth := float64(cellWidth) * scale
 	scaledHeight := float64(cellHeight) * scale
 
-	// Account for pixel scale when advancing character positions
-	// The canvas scales sizes by PixelScale, so we need to advance by the same amount
-	pixelScale := 1.0
-	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-		pixelScale = float64(config.Global.Rendering.PixelScale)
-	}
+	// Horizontal advance per character: the cell width tightened by the
+	// configured spacing reduction (mono-font cells carry built-in padding).
+	advance := (float64(cellWidth) - config.Global.Debug.CharacterSpacingReduction) * scale
 
-	// Actual rendered dimensions (after canvas scaling)
-	renderedWidth := scaledWidth * pixelScale
-	renderedHeight := scaledHeight * pixelScale
-
-	// Line height includes extra spacing between lines for paragraph text
-	lineHeight := renderedHeight * config.Global.Rendering.TextLineSpacing
+	// Vertical distance between lines for multi-line strings.
+	lineHeight := scaledHeight * config.Global.Rendering.TextLineSpacing
 
 	// Current position for rendering (advances with each character)
 	currentX := position.X
@@ -76,9 +69,7 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		}
 
 		if char == ' ' {
-			// Space: advance position with reduced spacing
-			spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
-			currentX += renderedWidth - spacingReduction
+			currentX += advance
 			continue
 		}
 
@@ -86,8 +77,7 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		uv, err := font.GetCharacterUV(char)
 		if err != nil {
 			logger.Logger.Tracef("Character '%c' not found in font, skipping", char)
-			spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
-			currentX += renderedWidth - spacingReduction
+			currentX += advance
 			continue
 		}
 
@@ -100,16 +90,12 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 		)
 
 		if err != nil {
-			// Texture might not be loaded yet - silently skip and continue
-			// This is normal during initial loading
-			spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
-			currentX += renderedWidth - spacingReduction
+			// Texture might not be loaded yet - normal during initial loading.
+			currentX += advance
 			continue
 		}
 
-		// Advance to next character position, reducing spacing by configured amount
-		spacingReduction := config.Global.Debug.CharacterSpacingReduction * scale * pixelScale
-		currentX += renderedWidth - spacingReduction
+		currentX += advance
 	}
 
 	return nil

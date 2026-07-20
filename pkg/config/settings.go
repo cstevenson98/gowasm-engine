@@ -10,12 +10,12 @@ type Settings struct {
 	Battle    BattleSettings
 }
 
-// ScreenSettings contains display and canvas configuration
+// ScreenSettings contains display configuration. The virtual resolution is the
+// fixed coordinate space the game renders in; the actual window size is derived
+// from it and Rendering.PixelScale (see WindowWidth/WindowHeight).
 type ScreenSettings struct {
-	Width        float64 // Virtual game resolution width
-	Height       float64 // Virtual game resolution height
-	CanvasWidth  int     // Actual canvas pixel width
-	CanvasHeight int     // Actual canvas pixel height
+	Width  float64 // Virtual game resolution width
+	Height float64 // Virtual game resolution height
 }
 
 // PlayerSettings contains player-specific configuration
@@ -78,10 +78,8 @@ type BattleSettings struct {
 // Global is the global settings instance
 var Global = Settings{
 	Screen: ScreenSettings{
-		Width:        800.0, // Virtual game resolution
-		Height:       600.0, // Virtual game resolution
-		CanvasWidth:  960,   // Actual canvas size (2x virtual for 4x pixel scale)
-		CanvasHeight: 720,   // Actual canvas size (2x virtual for 4x pixel scale)
+		Width:  320.0, // Virtual game resolution (240p, 4:3)
+		Height: 240.0, // Virtual game resolution (240p, 4:3)
 	},
 	Player: PlayerSettings{
 		SpawnX:        0.0,   // Will be calculated as center in scene
@@ -111,7 +109,7 @@ var Global = Settings{
 		PixelArtMode:        true,      // Enable pixel-perfect rendering
 		TextureFiltering:    "nearest", // Use nearest-neighbor filtering for pixel art
 		PixelPerfectScaling: true,      // Ensure integer scaling
-		PixelScale:          2,         // 2 real pixels per game pixel (2x upscaling)
+		PixelScale:          5,         // 3 real pixels per game pixel (3x upscaling)
 		UILineSpacing:       1.1,       // UI elements line spacing (menus, logs, status)
 		TextLineSpacing:     1.1,       // Paragraph text line spacing (newlines in strings)
 	},
@@ -130,6 +128,18 @@ var Global = Settings{
 		DamageEffectDuration: 2.0,  // 2 seconds for damage numbers
 		ActionQueueSize:      100,  // Buffer for 100 actions
 	},
+}
+
+// WindowWidth returns the actual window pixel width: the virtual resolution
+// width scaled up by the pixel scale.
+func WindowWidth() int {
+	return int(Global.Screen.Width) * Global.Rendering.PixelScale
+}
+
+// WindowHeight returns the actual window pixel height: the virtual resolution
+// height scaled up by the pixel scale.
+func WindowHeight() int {
+	return int(Global.Screen.Height) * Global.Rendering.PixelScale
 }
 
 // GetPlayerSpawnPosition calculates the centered spawn position for the player

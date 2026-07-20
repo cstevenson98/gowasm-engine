@@ -265,11 +265,7 @@ func (s *BattleScene) RenderActionTimerBars() error {
 
 	// Calculate line height accounting for pixel scale
 	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight)
-	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-		lineHeight *= float64(config.Global.Rendering.PixelScale)
-	}
-	lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
+	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 	// Render player timer bar
 	if s.player != nil {
@@ -351,11 +347,7 @@ func (s *BattleScene) RenderBattleMenu() error {
 	if battleLog != nil {
 		// Calculate line height accounting for pixel scale
 		_, cellHeight := s.menuFont.GetCellSize()
-		lineHeight := float64(cellHeight)
-		if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-			lineHeight *= float64(config.Global.Rendering.PixelScale)
-		}
-		lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
+		lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 		y := battleLog.GetPosition().Y
 		for i, message := range battleLog.GetMessages() {
@@ -382,11 +374,7 @@ func (s *BattleScene) RenderBattleMenu() error {
 
 		// Calculate line height accounting for pixel scale
 		_, cellHeight := s.menuFont.GetCellSize()
-		lineHeight := float64(cellHeight)
-		if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-			lineHeight *= float64(config.Global.Rendering.PixelScale)
-		}
-		lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
+		lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 		// Player status
 		playerText := fmt.Sprintf("Player: %d/%d HP", characterStatus.GetPlayerHP(), characterStatus.GetPlayerMaxHP())
@@ -422,11 +410,7 @@ func (s *BattleScene) RenderBattleMenu() error {
 
 		// Calculate line height accounting for pixel scale
 		_, cellHeight := s.menuFont.GetCellSize()
-		lineHeight := float64(cellHeight)
-		if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-			lineHeight *= float64(config.Global.Rendering.PixelScale)
-		}
-		lineHeight *= config.Global.Rendering.UILineSpacing // UI line spacing
+		lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 		for i, action := range actions {
 			// Add selection indicator

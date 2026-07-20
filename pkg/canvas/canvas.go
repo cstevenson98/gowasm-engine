@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -101,9 +102,11 @@ func (c *Canvas) DrawTexturedRect(texturePath string, position types.Vector2, si
 
 	subImg := img.SubImage(image.Rect(x0, y0, x1, y1)).(*ebiten.Image)
 
+	pos := snapToPixel(position)
+
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Scale(size.X/float64(x1-x0), size.Y/float64(y1-y0))
-	opts.GeoM.Translate(position.X, position.Y)
+	opts.GeoM.Translate(pos.X, pos.Y)
 
 	if config.Global.Rendering.PixelArtMode {
 		opts.Filter = ebiten.FilterNearest
@@ -130,8 +133,24 @@ func (c *Canvas) DrawColoredRect(position types.Vector2, size types.Vector2, col
 		A: uint8(colorRGBA[3] * 255),
 	})
 
+	pos := snapToPixel(position)
+
 	opts := &ebiten.DrawImageOptions{}
-	opts.GeoM.Translate(position.X, position.Y)
+	opts.GeoM.Translate(pos.X, pos.Y)
 	c.screen.DrawImage(rect, opts)
 	return nil
+}
+
+// snapToPixel rounds a position to whole virtual pixels when pixel-perfect
+// rendering is enabled. Movers keep their smooth sub-pixel position; only the
+// rendered position is quantized, which keeps sprites and text crisp and free
+// of shimmer as they move (the virtual screen is later upscaled by PixelScale).
+func snapToPixel(position types.Vector2) types.Vector2 {
+	if !config.Global.Rendering.PixelPerfectScaling {
+		return position
+	}
+	return types.Vector2{
+		X: math.Round(position.X),
+		Y: math.Round(position.Y),
+	}
 }

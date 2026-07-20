@@ -275,11 +275,7 @@ func (s *PlayerMenuScene) renderPlayerInfo() error {
 	}
 
 	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight)
-	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-		lineHeight *= float64(config.Global.Rendering.PixelScale)
-	}
-	lineHeight *= config.Global.Rendering.UILineSpacing
+	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 	// Left side position
 	startX := 50.0
@@ -331,11 +327,7 @@ func (s *PlayerMenuScene) renderMenu() error {
 	}
 
 	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight)
-	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
-		lineHeight *= float64(config.Global.Rendering.PixelScale)
-	}
-	lineHeight *= config.Global.Rendering.UILineSpacing
+	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
 
 	// Right side position
 	startX := s.GetScreenWidth() - 250.0
