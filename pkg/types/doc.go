@@ -35,9 +35,10 @@
 // engine feature-detects these with type assertions during scene setup, so a
 // scene only pays for what it uses. See scene_extras.go.
 //
-// # Sub-systems
+// # Scope
 //
-// The battle interfaces (BattleEntity, Action, ActionTimer) and the input
-// snapshot (InputState) live here too, again so that gameplay code can depend
-// on behaviour without importing the concrete implementations.
+// This package holds only engine-generic vocabulary. Domain-specific systems
+// own their own types: the combat vocabulary (BattleEntity, Action, ActionTimer)
+// lives in pkg/systems/battle, not here. The input snapshot (InputState) does
+// live here, since input is a core engine concern.
 package types

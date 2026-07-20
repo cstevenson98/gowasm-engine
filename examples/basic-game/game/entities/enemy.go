@@ -1,26 +1,28 @@
-package gameobject
+package entities
 
 import (
 	"sync"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/mover"
 	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
+	"github.com/cstevenson98/gowasm-engine/pkg/systems/battle"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // Enemy represents an enemy character in battle.
 // It embeds BaseGameObject to inherit common GameObject functionality.
 type Enemy struct {
-	*BaseGameObject
+	*gameobject.BaseGameObject
 
 	// Enemy-specific fields
 	size types.Vector2
 
 	// Battle system
-	actionTimer *types.ActionTimer
-	stats       *types.EntityStats
+	actionTimer *battle.ActionTimer
+	stats       *battle.EntityStats
 	mu          sync.Mutex
 }
 
@@ -46,15 +48,15 @@ func NewEnemy(position, size types.Vector2, texturePath string) *Enemy {
 	}
 
 	// Initialize BaseGameObject
-	baseGameObject := NewBaseGameObject(enemySprite, enemyMover, enemyState)
+	baseGameObject := gameobject.NewBaseGameObject(enemySprite, enemyMover, enemyState)
 
 	logger.Logger.Debugf("Created Enemy at position (%.2f, %.2f)", position.X, position.Y)
 
 	return &Enemy{
 		BaseGameObject: baseGameObject,
 		size:           size,
-		actionTimer:    types.NewActionTimer(),
-		stats: &types.EntityStats{
+		actionTimer:    battle.NewActionTimer(),
+		stats: &battle.EntityStats{
 			HP:    80, // Will be overridden by config
 			MaxHP: 80,
 			Speed: 1.0,
@@ -72,7 +74,7 @@ func (e *Enemy) Update(deltaTime float64) {
 // BattleEntity interface implementation
 
 // GetActionTimer returns the enemy's action timer
-func (e *Enemy) GetActionTimer() *types.ActionTimer {
+func (e *Enemy) GetActionTimer() *battle.ActionTimer {
 	return e.actionTimer
 }
 
@@ -98,14 +100,14 @@ func (e *Enemy) IsReady() bool {
 }
 
 // GetStats returns the enemy's battle stats
-func (e *Enemy) GetStats() *types.EntityStats {
+func (e *Enemy) GetStats() *battle.EntityStats {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.stats
 }
 
 // SelectAction returns the enemy's selected action (random for now)
-func (e *Enemy) SelectAction() *types.Action {
+func (e *Enemy) SelectAction() *battle.Action {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 

@@ -2538,3 +2538,66 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: UIManager kept lean (no scaled-text method); debug FontScale defaults to 1.0 so line height matches prior output.
 
 ---
+
+## [2026-07-20 13:07:28 BST] - Debug console: hidden by default, toggle moved to "3", centralized
+
+**Prompt/Request**: On the gameplay screen the debug overlay appeared after a delay; also change the toggle key from F2 to "3".
+
+**Changes Made**:
+- pkg/debug/console.go: console now starts hidden (visible=false); shows only when toggled.
+- pkg/types/input.go & pkg/input/input.go: replaced F2Pressed/F2PressedLastFrame with Key3Pressed/Key3PressedLastFrame, mapped to ebiten.Key3 (gamepad Start still maps to it).
+- pkg/scene/base_scene.go: BaseScene.Update now splits into updateGameObjects + updateDebugConsole; the latter edge-detects "3" to toggle the console and ages messages, so the console works in every scene.
+- examples/basic-game/scenes: removed per-scene F2 toggle and manual debug.Console.Update; menu/player_menu now call s.BaseScene.Update; dropped unused debug imports in menu/battle.
+- README_EBITEN.md: documented "3" as the debug toggle key.
+
+**Reasoning**: The delay-then-appear was the old lazy debug-console init posting a "scene ready" message once the canvas was ready (removed in the prior UI migration). Starting hidden plus centralizing the toggle removes the surprise overlay and makes the "3" toggle consistent across all scenes.
+
+**Impact**: Debug console no longer appears on its own; toggle key is now "3" (keyboard) / Start (gamepad).
+
+**Testing**: go build/vet/test on both modules pass; no lint errors.
+
+**Notes**: F2 fields fully removed; historical CURSOR_HISTORY references left intact.
+
+---
+
+## [2026-07-20 13:22:41 BST] - Refactor battle into a decoupled, reusable add-on (pkg/systems/battle)
+
+**Prompt/Request**: Turn the battle system into a proper library add-on: inject config + a local Logger interface and move it under pkg/systems, as a reference for building engine add-ons.
+
+**Changes Made**:
+- Moved pkg/battle -> pkg/systems/battle (git mv; package name unchanged).
+- Added pkg/systems/battle/config.go: Config struct (ActionQueueSize, TimerChargeRate, DamageEffectDuration, Logger) with DefaultConfig() and normalize() so zero values fall back to defaults.
+- Added pkg/systems/battle/logger.go: minimal Logger interface (Debugf/Warnf) + nopLogger default; removes dependency on pkg/logger.
+- manager.go: NewBattleManager now takes battle.Config; dropped pkg/config and pkg/logger imports; reads timings from cfg and logs via injected logger; damage/heal effect duration now comes from cfg instead of a hard-coded 2.0.
+- examples/basic-game/scenes/battle_scene.go: updated import to pkg/systems/battle and wired engine config.Global.Battle + logger.Logger into battle.Config.
+- doc.go: documented the add-on model (depends only on pkg/types + injected Config).
+
+**Reasoning**: The battle system read config.Global and the global logger directly, coupling it to the engine and blocking reuse/testing. Injecting these via Config and defining a local Logger interface makes it a self-contained, reusable system. Kept Action/BattleEntity in pkg/types (the engine's shared interface layer) intentionally.
+
+**Impact**: battle is now an optional system under pkg/systems with no engine-global coupling; the engine core still never imports it. Constructor signature changed (now requires a Config; pass battle.Config{} for defaults).
+
+**Testing**: go build/vet/test on both modules (native) and GOOS=js GOARCH=wasm builds pass; no lint errors; no remaining references to pkg/battle.
+
+**Notes**: Reference pattern for future add-ons (inventory, dialogue, tilemap): depend inward on pkg/types, receive config/services explicitly, live under pkg/systems, be wired by the game.
+
+---
+
+## [2026-07-20 13:35:59 BST] - Move battle vocabulary out of pkg/types; relocate Player/Enemy to the game
+
+**Prompt/Request**: Follow-up to the battle add-on refactor: put the battle types where they belong (with their consumer) and stop the engine core from depending on battle. Chosen scope: move types into battle AND move Player/Enemy into the example game.
+
+**Changes Made**:
+- Deleted pkg/types/battle.go. Moved BattleEntity, EntityStats, ActionTimer into pkg/systems/battle/entity.go and ActionType, Action, NewAction, GetRandomDamage into pkg/systems/battle/action_types.go. Delocalized all types.* combat references inside the battle package (Vector2/Mover still come from types).
+- Moved pkg/gameobject/{player.go,enemy.go,player_test.go} -> examples/basic-game/game/entities/ (new package "entities"). They now embed gameobject.BaseGameObject and implement battle.BattleEntity, so the dependency runs game -> systems + core, never core -> system.
+- Updated consumers: gameplay_scene, player_menu_scene, battle_scene use entities.Player/Enemy (gameobject still provides Background); battle_scene/battle_menu use battle.ActionType/BattleEntity. Added entities/battle imports as needed.
+- Updated docs: pkg/types/doc.go (types is engine-generic only), pkg/gameobject/doc.go (ready-made objects are Llama/Background; game entities live in the game), pkg/systems/battle/doc.go (owns the combat vocabulary).
+
+**Reasoning**: Per Go's "consumer owns the interface" idiom, BattleEntity/Action belong with battle. Keeping them in pkg/types made the shared leaf carry battle concepts. Player/Enemy are game entities (the engine kernel never imported gameobject anyway), so they belong in the game, which is free to depend on the battle system.
+
+**Impact**: pkg/types no longer knows about combat; engine core has zero dependency on battle. gameobject keeps only generic objects (BaseGameObject, Background, Llama). Games implement battle.BattleEntity on their own entities.
+
+**Testing**: go build/vet/test on both modules (native), GOOS=js GOARCH=wasm builds, and the relocated entities tests all pass; no lint errors; no stray references to the old locations.
+
+**Notes**: Clean layering now: types (generic) <- gameobject/systems/battle <- game entities <- scenes. This is the reference shape for future systems + game entities.
+
+---

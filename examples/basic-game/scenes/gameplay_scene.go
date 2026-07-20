@@ -3,6 +3,7 @@ package scenes
 import (
 	"fmt"
 
+	"example.com/basic-game/game/entities"
 	"example.com/basic-game/game/gamestate"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
@@ -18,7 +19,7 @@ type GameplayScene struct {
 	*pkscene.BaseScene
 
 	// Gameplay-specific fields
-	player *gameobject.Player
+	player *entities.Player
 }
 
 // NewGameplayScene creates a new gameplay scene
@@ -68,7 +69,7 @@ func (s *GameplayScene) Initialize() error {
 	playerPos := s.resolvePlayerPosition()
 	logger.Logger.Debugf("Creating Player at (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
 
-	s.player = gameobject.NewPlayer(
+	s.player = entities.NewPlayer(
 		playerPos,
 		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
 		config.Global.Player.Speed,
@@ -132,13 +133,8 @@ func (s *GameplayScene) Update(deltaTime float64) {
 	}
 
 	// Advance every object in the scene (player included: BaseGameObject.Update
-	// moves the mover and animates the sprite).
+	// moves the mover and animates the sprite) and drive the debug console.
 	s.BaseScene.Update(deltaTime)
-
-	// Update debug console
-	if config.Global.Debug.Enabled {
-		debug.Console.Update(deltaTime)
-	}
 }
 
 // RenderOverlays renders debug console and other overlays (overrides BaseScene.RenderOverlays)

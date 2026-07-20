@@ -3,10 +3,10 @@ package scenes
 import (
 	"fmt"
 
+	"example.com/basic-game/game/entities"
 	"example.com/basic-game/game/gamestate"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
-	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -18,7 +18,7 @@ type PlayerMenuScene struct {
 	*pkscene.BaseScene
 
 	// Player reference (passed from gameplay scene)
-	player *gameobject.Player
+	player *entities.Player
 
 	// Menu system
 	menuSystem *PlayerMenuSystem
@@ -69,7 +69,7 @@ func (s *PlayerMenuScene) updatePlayerReference() {
 	}
 
 	// Cast to the game's player type
-	if p, ok := player.(*gameobject.Player); ok {
+	if p, ok := player.(*entities.Player); ok {
 		// Only log if player changed
 		if s.player != p {
 			s.player = p
@@ -140,10 +140,8 @@ func (s *PlayerMenuScene) Update(deltaTime float64) {
 		}
 	}
 
-	// Update debug console
-	if config.Global.Debug.Enabled {
-		debug.Console.Update(deltaTime)
-	}
+	// Drive shared behaviour (debug console toggle + aging).
+	s.BaseScene.Update(deltaTime)
 }
 
 // handleSaveGame handles saving the current game state and shows browser alert

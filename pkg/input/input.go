@@ -54,9 +54,9 @@ func (e *Input) PollInput() types.InputState {
 	e.state.RightPressedLastFrame = e.previousState.RightPressed
 	e.state.EnterPressedLastFrame = e.previousState.EnterPressed
 	e.state.SpacePressedLastFrame = e.previousState.SpacePressed
-	e.state.F2PressedLastFrame = e.previousState.F2Pressed
 	e.state.Key1PressedLastFrame = e.previousState.Key1Pressed
 	e.state.Key2PressedLastFrame = e.previousState.Key2Pressed
+	e.state.Key3PressedLastFrame = e.previousState.Key3Pressed
 	e.state.MPressedLastFrame = e.previousState.MPressed
 	e.state.ShiftPressedLastFrame = e.previousState.ShiftPressed
 	e.state.CtrlPressedLastFrame = e.previousState.CtrlPressed
@@ -87,9 +87,9 @@ func (e *Input) pollKeyboard() {
 	// Action keys
 	e.state.EnterPressed = ebiten.IsKeyPressed(ebiten.KeyEnter) || ebiten.IsKeyPressed(ebiten.KeyNumpadEnter)
 	e.state.SpacePressed = ebiten.IsKeyPressed(ebiten.KeySpace)
-	e.state.F2Pressed = ebiten.IsKeyPressed(ebiten.KeyF2)
 	e.state.Key1Pressed = ebiten.IsKeyPressed(ebiten.Key1)
 	e.state.Key2Pressed = ebiten.IsKeyPressed(ebiten.Key2)
+	e.state.Key3Pressed = ebiten.IsKeyPressed(ebiten.Key3)
 	e.state.MPressed = ebiten.IsKeyPressed(ebiten.KeyM)
 
 	// Modifier keys
@@ -167,9 +167,9 @@ func (e *Input) pollGamepad() {
 	yButton := ebiten.IsStandardGamepadButtonPressed(gid, ebiten.StandardGamepadButtonRightTop)
 	e.state.Key2Pressed = e.state.Key2Pressed || yButton
 
-	// Start button = F2 (debug toggle)
+	// Start button = debug console toggle (key "3")
 	startButton := ebiten.IsStandardGamepadButtonPressed(gid, ebiten.StandardGamepadButtonCenterRight)
-	e.state.F2Pressed = e.state.F2Pressed || startButton
+	e.state.Key3Pressed = e.state.Key3Pressed || startButton
 
 	// Select/Back button = M (menu)
 	selectButton := ebiten.IsStandardGamepadButtonPressed(gid, ebiten.StandardGamepadButtonCenterLeft)

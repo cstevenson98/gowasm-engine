@@ -17,9 +17,9 @@ type InputState struct {
 	// Action keys
 	EnterPressed bool
 	SpacePressed bool
-	F2Pressed    bool // F2 key for debug console toggle
 	Key1Pressed  bool // Key 1 for scene switching
 	Key2Pressed  bool // Key 2 for scene switching
+	Key3Pressed  bool // Key 3 for debug console toggle
 	MPressed     bool // M key for player menu
 
 	// Modifier keys
@@ -33,9 +33,9 @@ type InputState struct {
 	RightPressedLastFrame bool
 	EnterPressedLastFrame bool
 	SpacePressedLastFrame bool
-	F2PressedLastFrame    bool
 	Key1PressedLastFrame  bool
 	Key2PressedLastFrame  bool
+	Key3PressedLastFrame  bool
 	MPressedLastFrame     bool
 	ShiftPressedLastFrame bool
 	CtrlPressedLastFrame  bool

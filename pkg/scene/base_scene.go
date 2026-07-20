@@ -5,6 +5,7 @@ import (
 
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
@@ -119,16 +120,21 @@ func (b *BaseScene) Initialize() error {
 	return nil
 }
 
-// Update updates all game objects in all layers.
-// Override this method to add custom update logic.
-// You can call b.BaseScene.Update(deltaTime) to update all objects,
-// then add your custom logic.
+// Update advances all game objects in all layers and drives the engine's debug
+// console (toggle + message aging). Override this method to add custom update
+// logic, but call b.BaseScene.Update(deltaTime) so every scene keeps the shared
+// debug console behaviour.
 // Implements Scene interface.
 func (b *BaseScene) Update(deltaTime float64) {
+	b.updateGameObjects(deltaTime)
+	b.updateDebugConsole(deltaTime)
+}
+
+// updateGameObjects advances every game object across all layers.
+func (b *BaseScene) updateGameObjects(deltaTime float64) {
 	b.layerMutex.RLock()
 	defer b.layerMutex.RUnlock()
 
-	// Update all game objects in all layers
 	for _, layer := range []SceneLayer{BACKGROUND, ENTITIES, UI} {
 		if objects, exists := b.layers[layer]; exists {
 			for _, obj := range objects {
@@ -136,6 +142,23 @@ func (b *BaseScene) Update(deltaTime float64) {
 			}
 		}
 	}
+}
+
+// updateDebugConsole handles the engine-wide debug console: it toggles
+// visibility on the "3" key (edge-detected) and ages out messages. This runs
+// for every scene, so the console works consistently everywhere.
+func (b *BaseScene) updateDebugConsole(deltaTime float64) {
+	if !config.Global.Debug.Enabled {
+		return
+	}
+
+	input := b.GetInputState()
+	if input.Key3Pressed && !input.Key3PressedLastFrame {
+		debug.Console.ToggleVisibility()
+		logger.Logger.Debugf("Debug console toggled via key 3")
+	}
+
+	debug.Console.Update(deltaTime)
 }
 
 // GetRenderables returns all game objects in the correct render order (layer order).

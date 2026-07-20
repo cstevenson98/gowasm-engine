@@ -3,11 +3,11 @@ package scenes
 import (
 	"fmt"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/battle"
+	"example.com/basic-game/game/entities"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/systems/battle"
 	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
@@ -18,8 +18,8 @@ type BattleScene struct {
 	*pkscene.BaseScene
 
 	// Battle participants
-	player *gameobject.Player
-	enemy  *gameobject.Enemy
+	player *entities.Player
+	enemy  *entities.Enemy
 
 	// Battle menu system
 	menuSystem *BattleMenuSystem
@@ -92,7 +92,7 @@ func (s *BattleScene) Initialize() error {
 	// Create player on the left side (ENTITIES layer)
 	playerX := s.GetScreenWidth() * 0.2  // 20% from left
 	playerY := s.GetScreenHeight() * 0.5 // Center vertically
-	s.player = gameobject.NewPlayer(
+	s.player = entities.NewPlayer(
 		types.Vector2{X: playerX, Y: playerY},
 		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
 		config.Global.Player.Speed,
@@ -102,7 +102,7 @@ func (s *BattleScene) Initialize() error {
 	// Create enemy on the right side (ENTITIES layer)
 	enemyX := s.GetScreenWidth() * 0.8  // 80% from left (right side)
 	enemyY := s.GetScreenHeight() * 0.5 // Center vertically
-	s.enemy = gameobject.NewEnemy(
+	s.enemy = entities.NewEnemy(
 		types.Vector2{X: enemyX, Y: enemyY},
 		types.Vector2{X: 32.0, Y: 64.0}, // Ghost sprite dimensions (96x128 total, 3x2 grid = 32x64 per frame)
 		config.Global.Battle.EnemyTexture,
@@ -119,8 +119,14 @@ func (s *BattleScene) Initialize() error {
 	// Set player reference for timer checking
 	s.menuSystem.SetPlayer(s.player)
 
-	// Initialize battle system
-	s.battleManager = battle.NewBattleManager()
+	// Initialize battle system, wiring the engine's global config and logger
+	// into the add-on's injected Config.
+	s.battleManager = battle.NewBattleManager(battle.Config{
+		ActionQueueSize:      config.Global.Battle.ActionQueueSize,
+		TimerChargeRate:      config.Global.Battle.TimerChargeRate,
+		DamageEffectDuration: config.Global.Battle.DamageEffectDuration,
+		Logger:               logger.Logger,
+	})
 
 	// Add entities to battle manager
 	s.battleManager.AddEntity(s.player)
@@ -165,12 +171,6 @@ func (s *BattleScene) Update(deltaTime float64) {
 
 	inputState := s.GetInputState()
 
-	// Debug console toggle (F2).
-	if inputState.F2Pressed && !inputState.F2PressedLastFrame {
-		debug.Console.ToggleVisibility()
-		logger.Logger.Debugf("Debug console toggled via F2")
-	}
-
 	// Scene switching: Key 1 returns to gameplay. The engine defers the switch
 	// to the next frame, so it is safe to continue this Update.
 	if inputState.Key1Pressed && !inputState.Key1PressedLastFrame {
@@ -178,11 +178,6 @@ func (s *BattleScene) Update(deltaTime float64) {
 		if err := s.RequestStateChange(types.GAMEPLAY); err != nil {
 			logger.Logger.Errorf("Failed to switch to gameplay scene: %s", err.Error())
 		}
-	}
-
-	// Update debug console
-	if config.Global.Debug.Enabled {
-		debug.Console.Update(deltaTime)
 	}
 }
 
@@ -225,7 +220,7 @@ func (s *BattleScene) RenderActionTimerBars() error {
 }
 
 // renderEntityTimerBar renders a timer bar for a specific entity
-func (s *BattleScene) renderEntityTimerBar(entity types.BattleEntity, position types.Vector2, label string) {
+func (s *BattleScene) renderEntityTimerBar(entity battle.BattleEntity, position types.Vector2, label string) {
 	timer := entity.GetActionTimer()
 	current := timer.Current
 
@@ -373,17 +368,17 @@ func (s *BattleScene) Cleanup() {
 // GetName, AddGameObject, RemoveGameObject are inherited from BaseScene
 
 // GetPlayer returns the player object
-func (s *BattleScene) GetPlayer() *gameobject.Player {
+func (s *BattleScene) GetPlayer() *entities.Player {
 	return s.player
 }
 
 // GetEnemy returns the enemy object
-func (s *BattleScene) GetEnemy() *gameobject.Enemy {
+func (s *BattleScene) GetEnemy() *entities.Enemy {
 	return s.enemy
 }
 
 // EnqueuePlayerAction creates and enqueues a player action
-func (s *BattleScene) EnqueuePlayerAction(actionType types.ActionType) {
+func (s *BattleScene) EnqueuePlayerAction(actionType battle.ActionType) {
 	if s.battleManager == nil || s.player == nil || s.enemy == nil {
 		return
 	}

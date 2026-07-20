@@ -5,54 +5,60 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // BattleManager manages the battle system including action queue processing
 type BattleManager struct {
 	actionQueue    *ActionQueue
-	entities       []types.BattleEntity
+	entities       []BattleEntity
 	mu             sync.RWMutex
 	ctx            context.Context
 	cancel         context.CancelFunc
 	processingDone chan bool
 	effectManager  *EffectManager
+	cfg            Config
+	log            Logger
 }
 
-// NewBattleManager creates a new battle manager
-func NewBattleManager() *BattleManager {
+// NewBattleManager creates a new battle manager configured by cfg. All engine
+// coupling (timings, queue size, logging) enters through Config, so the same
+// system can be dropped into any game. Unset Config fields fall back to
+// sensible defaults - pass battle.Config{} for an all-default manager.
+func NewBattleManager(cfg Config) *BattleManager {
+	cfg = cfg.normalize()
 	ctx, cancel := context.WithCancel(context.Background())
 	return &BattleManager{
-		actionQueue:    NewActionQueue(config.Global.Battle.ActionQueueSize),
-		entities:       make([]types.BattleEntity, 0),
+		actionQueue:    NewActionQueue(cfg.ActionQueueSize),
+		entities:       make([]BattleEntity, 0),
 		mu:             sync.RWMutex{},
 		ctx:            ctx,
 		cancel:         cancel,
 		processingDone: make(chan bool, 1),
 		effectManager:  NewEffectManager(),
+		cfg:            cfg,
+		log:            cfg.Logger,
 	}
 }
 
 // AddEntity adds a battle entity to the manager
-func (bm *BattleManager) AddEntity(entity types.BattleEntity) {
+func (bm *BattleManager) AddEntity(entity BattleEntity) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
 	bm.entities = append(bm.entities, entity)
-	logger.Logger.Debugf("Added entity %s to battle manager", entity.GetID())
+	bm.log.Debugf("Added entity %s to battle manager", entity.GetID())
 }
 
 // RemoveEntity removes a battle entity from the manager
-func (bm *BattleManager) RemoveEntity(entity types.BattleEntity) {
+func (bm *BattleManager) RemoveEntity(entity BattleEntity) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
 
 	for i, e := range bm.entities {
 		if e.GetID() == entity.GetID() {
 			bm.entities = append(bm.entities[:i], bm.entities[i+1:]...)
-			logger.Logger.Debugf("Removed entity %s from battle manager", entity.GetID())
+			bm.log.Debugf("Removed entity %s from battle manager", entity.GetID())
 			return
 		}
 	}
@@ -61,7 +67,7 @@ func (bm *BattleManager) RemoveEntity(entity types.BattleEntity) {
 // StartProcessing starts the action queue processing goroutine
 func (bm *BattleManager) StartProcessing() {
 	go bm.processActions()
-	logger.Logger.Debugf("Started battle manager action processing")
+	bm.log.Debugf("Started battle manager action processing")
 }
 
 // StopProcessing stops the action queue processing
@@ -72,23 +78,23 @@ func (bm *BattleManager) StopProcessing() {
 	// Wait for processing to complete
 	select {
 	case <-bm.processingDone:
-		logger.Logger.Debugf("Battle manager processing stopped")
+		bm.log.Debugf("Battle manager processing stopped")
 	case <-time.After(5 * time.Second):
-		logger.Logger.Warnf("Battle manager stop timeout")
+		bm.log.Warnf("Battle manager stop timeout")
 	}
 }
 
 // EnqueueAction adds an action to the queue
-func (bm *BattleManager) EnqueueAction(action *types.Action) bool {
+func (bm *BattleManager) EnqueueAction(action *Action) bool {
 	if action == nil {
 		return false
 	}
 
 	success := bm.actionQueue.Enqueue(action)
 	if success {
-		logger.Logger.Debugf("Enqueued action: %s", action.Description)
+		bm.log.Debugf("Enqueued action: %s", action.Description)
 	} else {
-		logger.Logger.Warnf("Failed to enqueue action: %s", action.Description)
+		bm.log.Warnf("Failed to enqueue action: %s", action.Description)
 	}
 	return success
 }
@@ -111,11 +117,11 @@ func (bm *BattleManager) IsAnimating() bool {
 }
 
 // GetEntities returns a copy of the entities list
-func (bm *BattleManager) GetEntities() []types.BattleEntity {
+func (bm *BattleManager) GetEntities() []BattleEntity {
 	bm.mu.RLock()
 	defer bm.mu.RUnlock()
 
-	entities := make([]types.BattleEntity, len(bm.entities))
+	entities := make([]BattleEntity, len(bm.entities))
 	copy(entities, bm.entities)
 	return entities
 }
@@ -134,11 +140,11 @@ func (bm *BattleManager) processActions() {
 	for {
 		select {
 		case <-bm.ctx.Done():
-			logger.Logger.Debugf("Battle manager processing stopped by context")
+			bm.log.Debugf("Battle manager processing stopped by context")
 			return
 		case action, ok := <-bm.actionQueue.actions:
 			if !ok {
-				logger.Logger.Debugf("Action queue closed")
+				bm.log.Debugf("Action queue closed")
 				return
 			}
 
@@ -148,8 +154,8 @@ func (bm *BattleManager) processActions() {
 }
 
 // processAction executes a single action
-func (bm *BattleManager) processAction(action *types.Action) {
-	logger.Logger.Debugf("Processing action: %s %s", action.Actor.GetID(), action.Description)
+func (bm *BattleManager) processAction(action *Action) {
+	bm.log.Debugf("Processing action: %s %s", action.Actor.GetID(), action.Description)
 
 	// Execute the action (no animation blocking)
 	bm.executeAction(action)
@@ -159,25 +165,25 @@ func (bm *BattleManager) processAction(action *types.Action) {
 }
 
 // executeAction performs the actual action effects
-func (bm *BattleManager) executeAction(action *types.Action) {
+func (bm *BattleManager) executeAction(action *Action) {
 	switch action.Type {
-	case types.ActionAttack, types.ActionHaunt:
+	case ActionAttack, ActionHaunt:
 		bm.executeDamage(action)
-	case types.ActionDefend:
+	case ActionDefend:
 		bm.executeDefend(action)
-	case types.ActionItem:
+	case ActionItem:
 		bm.executeHeal(action)
-	case types.ActionRun:
+	case ActionRun:
 		bm.executeRun(action)
 	default:
-		logger.Logger.Warnf("Unknown action type: %v", action.Type)
+		bm.log.Warnf("Unknown action type: %v", action.Type)
 	}
 }
 
 // executeDamage applies damage to the target
-func (bm *BattleManager) executeDamage(action *types.Action) {
+func (bm *BattleManager) executeDamage(action *Action) {
 	if action.Target == nil {
-		logger.Logger.Warnf("Damage action has no target")
+		bm.log.Warnf("Damage action has no target")
 		return
 	}
 
@@ -193,25 +199,25 @@ func (bm *BattleManager) executeDamage(action *types.Action) {
 		pos := mover.GetPosition()
 		// Offset slightly above the entity
 		effectPos := types.Vector2{X: pos.X, Y: pos.Y - 20}
-		damageEffect := NewDamageEffect(effectPos, action.Damage, 2.0, false) // 2 second duration
+		damageEffect := NewDamageEffect(effectPos, action.Damage, bm.cfg.DamageEffectDuration, false)
 		bm.effectManager.AddEffect(damageEffect)
 	}
 
-	logger.Logger.Debugf("%s deals %d damage to %s (HP: %d/%d)",
+	bm.log.Debugf("%s deals %d damage to %s (HP: %d/%d)",
 		action.Actor.GetID(), action.Damage, action.Target.GetID(),
 		stats.HP, stats.MaxHP)
 }
 
 // executeDefend applies defense effect
-func (bm *BattleManager) executeDefend(action *types.Action) {
-	logger.Logger.Debugf("%s defends", action.Actor.GetID())
+func (bm *BattleManager) executeDefend(action *Action) {
+	bm.log.Debugf("%s defends", action.Actor.GetID())
 	// Defense logic would go here (e.g., set defense flag)
 }
 
 // executeHeal applies healing to the target
-func (bm *BattleManager) executeHeal(action *types.Action) {
+func (bm *BattleManager) executeHeal(action *Action) {
 	if action.Target == nil {
-		logger.Logger.Warnf("Heal action has no target")
+		bm.log.Warnf("Heal action has no target")
 		return
 	}
 
@@ -227,24 +233,24 @@ func (bm *BattleManager) executeHeal(action *types.Action) {
 		pos := mover.GetPosition()
 		// Offset slightly above the entity
 		effectPos := types.Vector2{X: pos.X, Y: pos.Y - 20}
-		healEffect := NewDamageEffect(effectPos, healAmount, 2.0, true) // 2 second duration, healing
+		healEffect := NewDamageEffect(effectPos, healAmount, bm.cfg.DamageEffectDuration, true)
 		bm.effectManager.AddEffect(healEffect)
 	}
 
-	logger.Logger.Debugf("%s heals %d HP to %s (HP: %d/%d)",
+	bm.log.Debugf("%s heals %d HP to %s (HP: %d/%d)",
 		action.Actor.GetID(), healAmount, action.Target.GetID(),
 		stats.HP, stats.MaxHP)
 }
 
 // executeRun handles run action
-func (bm *BattleManager) executeRun(action *types.Action) {
-	logger.Logger.Debugf("%s attempts to run", action.Actor.GetID())
+func (bm *BattleManager) executeRun(action *Action) {
+	bm.log.Debugf("%s attempts to run", action.Actor.GetID())
 	// Run logic would go here (e.g., chance to escape)
 }
 
 // chargeAllTimers charges all entity timers
 func (bm *BattleManager) chargeAllTimers(deltaTime float64) {
-	chargeRate := config.Global.Battle.TimerChargeRate
+	chargeRate := bm.cfg.TimerChargeRate
 	for _, entity := range bm.entities {
 		// Apply charge rate to deltaTime
 		entity.ChargeTimer(deltaTime * chargeRate)
@@ -264,7 +270,7 @@ func (bm *BattleManager) checkForReadyEntities() {
 				} else {
 					// Handle entities that don't select their own actions (like enemies)
 					// Find a target for the entity (for now, just find any other entity)
-					var target types.BattleEntity
+					var target BattleEntity
 					for _, otherEntity := range bm.entities {
 						if otherEntity.GetID() != entity.GetID() {
 							target = otherEntity

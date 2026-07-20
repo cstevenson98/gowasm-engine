@@ -38,7 +38,9 @@
 //
 // # Ready-made objects
 //
-// [Player] and [Llama] are complete examples: Player reads the injected input
-// each frame to move, while Llama drifts across the screen and wraps around,
-// demonstrating the sprite + mover split with no custom input.
+// [Llama] and [Background] are complete examples: Llama drifts across the screen
+// and wraps around, demonstrating the sprite + mover split with no custom input,
+// while Background is a static full-screen sprite. Game-specific entities that
+// carry gameplay behaviour (a player that reads input, a battle enemy) belong in
+// the game rather than here - see the basic-game example's entities package.
 package gameobject

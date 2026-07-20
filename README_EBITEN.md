@@ -45,7 +45,7 @@ make build-wasm
 - **Enter**: Confirm / Select
 - **Space**: Cancel / Back
 - **M**: Open player menu (in gameplay)
-- **F2**: Toggle debug console
+- **3**: Toggle debug console
 - **1/2**: Scene switching (debug)
 - **ESC**: Quit game
 

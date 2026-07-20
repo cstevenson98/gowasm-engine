@@ -5,6 +5,7 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/systems/battle"
 	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
@@ -25,10 +26,10 @@ type BattleMenuSystem struct {
 	canvasManager canvas.CanvasManager
 
 	// Action callback
-	onActionSelected func(types.ActionType)
+	onActionSelected func(battle.ActionType)
 
 	// Player reference for timer checking
-	player types.BattleEntity
+	player battle.BattleEntity
 }
 
 // BattleLog displays battle messages
@@ -146,7 +147,7 @@ func (bms *BattleMenuSystem) Update(deltaTime float64, inputCapturer types.Input
 
 		// Convert string action to ActionType and trigger callback
 		actionType := bms.convertStringToActionType(selectedAction)
-		if actionType != types.ActionRun && bms.onActionSelected != nil {
+		if actionType != battle.ActionRun && bms.onActionSelected != nil {
 			bms.onActionSelected(actionType)
 		}
 	}
@@ -251,27 +252,27 @@ func (am *ActionMenu) GetSize() types.Vector2 {
 }
 
 // SetActionCallback sets the callback function for when an action is selected
-func (bms *BattleMenuSystem) SetActionCallback(callback func(types.ActionType)) {
+func (bms *BattleMenuSystem) SetActionCallback(callback func(battle.ActionType)) {
 	bms.onActionSelected = callback
 }
 
 // SetPlayer sets the player reference for timer checking
-func (bms *BattleMenuSystem) SetPlayer(player types.BattleEntity) {
+func (bms *BattleMenuSystem) SetPlayer(player battle.BattleEntity) {
 	bms.player = player
 }
 
 // convertStringToActionType converts a string action to ActionType
-func (bms *BattleMenuSystem) convertStringToActionType(action string) types.ActionType {
+func (bms *BattleMenuSystem) convertStringToActionType(action string) battle.ActionType {
 	switch action {
 	case "Attack":
-		return types.ActionAttack
+		return battle.ActionAttack
 	case "Defend":
-		return types.ActionDefend
+		return battle.ActionDefend
 	case "Item":
-		return types.ActionItem
+		return battle.ActionItem
 	case "Run":
-		return types.ActionRun
+		return battle.ActionRun
 	default:
-		return types.ActionAttack // Default fallback
+		return battle.ActionAttack // Default fallback
 	}
 }

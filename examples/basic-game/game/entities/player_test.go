@@ -1,8 +1,9 @@
-package gameobject
+package entities
 
 import (
 	"testing"
 
+	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/mover"
 	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -240,7 +241,7 @@ func TestPlayerWithMockComponents(t *testing.T) {
 	)
 
 	// Create player manually with mocks
-	base := NewBaseGameObject(mockSprite, mockMover, types.ObjectState{
+	base := gameobject.NewBaseGameObject(mockSprite, mockMover, types.ObjectState{
 		ID:       "test",
 		Position: types.Vector2{X: 100, Y: 100},
 		Visible:  true,

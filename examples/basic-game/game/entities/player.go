@@ -1,18 +1,20 @@
-package gameobject
+package entities
 
 import (
 	"sync"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/mover"
 	"github.com/cstevenson98/gowasm-engine/pkg/sprite"
+	"github.com/cstevenson98/gowasm-engine/pkg/systems/battle"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // Player is a GameObject that represents the player character.
 // It embeds BaseGameObject to inherit common GameObject functionality.
 type Player struct {
-	*BaseGameObject
+	*gameobject.BaseGameObject
 
 	// Player-specific fields
 	moveSpeed float64 // Base movement speed in pixels per second
@@ -22,9 +24,9 @@ type Player struct {
 	debugMessageInterval float64 // Post debug message every N seconds
 
 	// Battle system
-	actionTimer    *types.ActionTimer
-	stats          *types.EntityStats
-	selectedAction types.ActionType // Player's selected action from menu
+	actionTimer    *battle.ActionTimer
+	stats          *battle.EntityStats
+	selectedAction battle.ActionType // Player's selected action from menu
 
 	mu sync.Mutex // Player-specific mutex for battle system fields
 }
@@ -62,20 +64,20 @@ func NewPlayer(position types.Vector2, size types.Vector2, moveSpeed float64) *P
 	}
 
 	// Initialize BaseGameObject with sprite, mover, and state
-	baseGameObject := NewBaseGameObject(playerSprite, playerMover, playerState)
+	baseGameObject := gameobject.NewBaseGameObject(playerSprite, playerMover, playerState)
 
 	return &Player{
 		BaseGameObject:       baseGameObject,
 		moveSpeed:            moveSpeed,
 		debugMessageTimer:    0,
 		debugMessageInterval: 2.0, // Post every 2 seconds
-		actionTimer:          types.NewActionTimer(),
-		stats: &types.EntityStats{
+		actionTimer:          battle.NewActionTimer(),
+		stats: &battle.EntityStats{
 			HP:    100, // Will be overridden by config
 			MaxHP: 100,
 			Speed: 1.0,
 		},
-		selectedAction: types.ActionAttack, // Default action
+		selectedAction: battle.ActionAttack, // Default action
 	}
 }
 
@@ -132,7 +134,7 @@ func (p *Player) HandleInput(inputState types.InputState) {
 // BattleEntity interface implementation
 
 // GetActionTimer returns the player's action timer
-func (p *Player) GetActionTimer() *types.ActionTimer {
+func (p *Player) GetActionTimer() *battle.ActionTimer {
 	return p.actionTimer
 }
 
@@ -158,14 +160,14 @@ func (p *Player) IsReady() bool {
 }
 
 // GetStats returns the player's battle stats
-func (p *Player) GetStats() *types.EntityStats {
+func (p *Player) GetStats() *battle.EntityStats {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.stats
 }
 
 // SelectAction returns the player's selected action (from menu)
-func (p *Player) SelectAction() *types.Action {
+func (p *Player) SelectAction() *battle.Action {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -176,14 +178,14 @@ func (p *Player) SelectAction() *types.Action {
 }
 
 // SetSelectedAction sets the player's selected action from the menu
-func (p *Player) SetSelectedAction(actionType types.ActionType) {
+func (p *Player) SetSelectedAction(actionType battle.ActionType) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.selectedAction = actionType
 }
 
 // GetSelectedAction returns the player's currently selected action
-func (p *Player) GetSelectedAction() types.ActionType {
+func (p *Player) GetSelectedAction() battle.ActionType {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return p.selectedAction

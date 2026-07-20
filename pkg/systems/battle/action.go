@@ -2,13 +2,11 @@ package battle
 
 import (
 	"sync"
-
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // ActionQueue manages the queue of battle actions using channels
 type ActionQueue struct {
-	actions    chan *types.Action
+	actions    chan *Action
 	processing sync.Mutex
 	closed     bool
 }
@@ -16,13 +14,13 @@ type ActionQueue struct {
 // NewActionQueue creates a new action queue with a buffered channel
 func NewActionQueue(bufferSize int) *ActionQueue {
 	return &ActionQueue{
-		actions: make(chan *types.Action, bufferSize),
+		actions: make(chan *Action, bufferSize),
 		closed:  false,
 	}
 }
 
 // Enqueue adds an action to the queue
-func (aq *ActionQueue) Enqueue(action *types.Action) bool {
+func (aq *ActionQueue) Enqueue(action *Action) bool {
 	if aq.closed {
 		return false
 	}
@@ -37,7 +35,7 @@ func (aq *ActionQueue) Enqueue(action *types.Action) bool {
 }
 
 // Dequeue removes and returns an action from the queue
-func (aq *ActionQueue) Dequeue() (*types.Action, bool) {
+func (aq *ActionQueue) Dequeue() (*Action, bool) {
 	action, ok := <-aq.actions
 	return action, ok
 }
@@ -64,29 +62,29 @@ func (aq *ActionQueue) Size() int {
 }
 
 // AvailableActions returns the list of actions available to a player
-func AvailableActions() []types.ActionType {
-	return []types.ActionType{
-		types.ActionAttack,
-		types.ActionDefend,
-		types.ActionItem,
-		types.ActionRun,
+func AvailableActions() []ActionType {
+	return []ActionType{
+		ActionAttack,
+		ActionDefend,
+		ActionItem,
+		ActionRun,
 	}
 }
 
 // AvailableEnemyActions returns the list of actions available to enemies
-func AvailableEnemyActions() []types.ActionType {
-	return []types.ActionType{
-		types.ActionHaunt,
+func AvailableEnemyActions() []ActionType {
+	return []ActionType{
+		ActionHaunt,
 	}
 }
 
 // CreatePlayerAction creates an action for a player based on the selected action type
-func CreatePlayerAction(actionType types.ActionType, actor, target types.BattleEntity) *types.Action {
+func CreatePlayerAction(actionType ActionType, actor, target BattleEntity) *Action {
 	switch actionType {
-	case types.ActionAttack:
+	case ActionAttack:
 		// Simple attack: 5-8 damage
-		damage := types.GetRandomDamage(5, 8)
-		return types.NewAction(
+		damage := GetRandomDamage(5, 8)
+		return NewAction(
 			actionType,
 			actor,
 			target,
@@ -94,9 +92,9 @@ func CreatePlayerAction(actionType types.ActionType, actor, target types.BattleE
 			1.0, // 1 second animation
 			"attacks",
 		)
-	case types.ActionDefend:
+	case ActionDefend:
 		// Defend: no damage, but reduces incoming damage
-		return types.NewAction(
+		return NewAction(
 			actionType,
 			actor,
 			target,
@@ -104,10 +102,10 @@ func CreatePlayerAction(actionType types.ActionType, actor, target types.BattleE
 			0.5, // 0.5 second animation
 			"defends",
 		)
-	case types.ActionItem:
+	case ActionItem:
 		// Item: heal for 10-15 HP
-		heal := types.GetRandomDamage(10, 15)
-		return types.NewAction(
+		heal := GetRandomDamage(10, 15)
+		return NewAction(
 			actionType,
 			actor,
 			actor, // Target self for healing
@@ -115,9 +113,9 @@ func CreatePlayerAction(actionType types.ActionType, actor, target types.BattleE
 			1.0,
 			"uses an item",
 		)
-	case types.ActionRun:
+	case ActionRun:
 		// Run: attempt to flee (no damage)
-		return types.NewAction(
+		return NewAction(
 			actionType,
 			actor,
 			nil, // No target for running
@@ -131,12 +129,12 @@ func CreatePlayerAction(actionType types.ActionType, actor, target types.BattleE
 }
 
 // CreateEnemyAction creates an action for an enemy (random selection)
-func CreateEnemyAction(actor, target types.BattleEntity) *types.Action {
+func CreateEnemyAction(actor, target BattleEntity) *Action {
 	// For now, enemies only have the "Haunt" action
 	// In the future, this could be expanded with AI logic
-	damage := types.GetRandomDamage(9, 12) // Haunt attack: 9-12 damage
-	return types.NewAction(
-		types.ActionHaunt,
+	damage := GetRandomDamage(9, 12) // Haunt attack: 9-12 damage
+	return NewAction(
+		ActionHaunt,
 		actor,
 		target,
 		damage,

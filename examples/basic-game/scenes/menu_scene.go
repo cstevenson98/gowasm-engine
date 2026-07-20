@@ -5,7 +5,6 @@ import (
 
 	"example.com/basic-game/game/gamestate"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -72,12 +71,6 @@ func (s *MenuScene) Update(deltaTime float64) {
 	// Get input state using inherited method
 	inputState := s.GetInputState()
 
-	// Handle debug console toggle (F2)
-	if inputState.F2Pressed && !inputState.F2PressedLastFrame {
-		debug.Console.ToggleVisibility()
-		logger.Logger.Debugf("Debug console toggled via F2")
-	}
-
 	// Handle menu navigation based on current mode
 	if s.menuMode == "main" {
 		s.updateMainMenu(inputState)
@@ -85,10 +78,8 @@ func (s *MenuScene) Update(deltaTime float64) {
 		s.updateLoadMenu(inputState)
 	}
 
-	// Update debug console
-	if config.Global.Debug.Enabled {
-		debug.Console.Update(deltaTime)
-	}
+	// Drive shared behaviour (debug console toggle + aging).
+	s.BaseScene.Update(deltaTime)
 }
 
 // updateMainMenu handles input for the main menu
