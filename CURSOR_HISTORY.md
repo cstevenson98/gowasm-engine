@@ -2447,3 +2447,94 @@ Positions came from movers as float64 and were passed straight into GeoM.Transla
 - Sizes are unchanged (already integer from sprite config); only position is rounded.
 
 ---
+
+## [2026-07-20 11:50:54 BST] - Added pkg/ui immediate-mode facade; removed per-scene text plumbing
+
+**Prompt/Request**: Provide a global, opt-in text/UI API so scenes stop hand-rolling font loading, text renderers, and canvas access; keep the general overlay hook.
+
+**Changes Made**:
+- pkg/ui/ui.go (new): immediate-mode facade backed by one canvas + default font. API: Init, Ready, Text, TextColored, TextCentered, Rect, Measure, LineHeight, ScreenSize, plus a Color alias and common colors. All helpers are nil-safe no-ops before Init.
+- pkg/engine/engine.go: call ui.Init(canvas, config.Global.Debug.FontPath, screenW, screenH) during Initialize.
+- examples/basic-game/scenes/menu_scene.go, battle_scene.go, player_menu_scene.go: removed menuFont/menuTextRenderer fields, InitializeMenuText, textWidth helper, dead GetMenuFont/GetExtraTexturePaths; all text now via ui.* and layout via ui.LineHeight()/ui.Measure()/ui.TextCentered().
+
+**Reasoning**:
+Text/UI was drawn imperatively in each scene, forcing every scene to load a font, build a text renderer, and hold the canvas (a low-level leak). Centralizing in pkg/ui removes that boilerplate and keeps the canvas dependency inside one package, while the general SceneOverlayRenderer hook stays intact (scenes opt in by calling ui.* in RenderOverlays).
+
+**Impact**:
+- Scenes no longer import pkg/text or touch the canvas for UI.
+- Single source of truth for font, spacing, centering (kills duplicated textWidth).
+- Debug console still uses BaseScene's own font/renderer (unchanged).
+
+**Testing**:
+- go build ./... (engine + example), go vet ./..., go test ./pkg/... all pass; no lints.
+
+**Notes**:
+- Immediate-mode: ui.* must be called during the render phase (RenderOverlays). A deferred command-queue variant could later make it callable from Update.
+
+---
+
+## [2026-07-20 12:27:16 BST] - Made UI engine-owned and injected (dropped global)
+
+**Prompt/Request**: Rather than a global UI, have it owned by the engine.
+
+**Changes Made**:
+- pkg/ui/ui.go: converted the package global into an exported UI type with methods (New constructor; Text/TextColored/TextCentered/Rect/Measure/LineHeight/ScreenSize/Ready). All methods tolerate a nil receiver. Removed Init/global and the package-level function wrappers; Color + color vars stay package-level.
+- pkg/types/scene_extras.go: added GetUI() interface{} to DependencyProvider.
+- pkg/engine/engine.go: Engine owns a *ui.UI (created via ui.New in Initialize); added to EngineDependencies + GetUI().
+- pkg/scene/base_scene.go: store injected *ui.UI, assert it in InjectDependencies, expose UI() accessor.
+- examples/basic-game/scenes/{menu,battle,player_menu}_scene.go: call s.UI().* instead of package-level ui.* (colors still via ui.White etc.).
+
+**Reasoning**:
+The UI is a peer of canvas/input, so it should be an engine-owned dependency injected through the existing DI path rather than a process global. Passed as interface{} through DependencyProvider (like the canvas) to avoid a types->ui import cycle; BaseScene type-asserts it back to *ui.UI.
+
+**Impact**:
+- No global mutable UI state; testable by injecting a UI built on a mock canvas.
+- Scenes access UI via s.UI(); nil-safe methods keep pre-injection renders harmless.
+
+**Testing**:
+- go build ./... + go vet ./... (engine + example), go test ./pkg/... pass; no lints.
+
+---
+
+## [2026-07-20 12:48:45 BST] - UI injected as a generic types.UIManager interface
+
+**Prompt/Request**: Make the engine-owned UI injected as a generic interface (GetUIManager-style) instead of a concrete type passed via interface{}.
+
+**Changes Made**:
+- pkg/types/ui.go (new): Color alias, common color vars, UIManager interface, and a NopUI no-op implementation.
+- pkg/types/scene_extras.go: DependencyProvider.GetUI() now returns types.UIManager (was interface{}).
+- pkg/ui/ui.go: *UI methods take types.Color; removed local Color/colors; added compile-time assertion var _ types.UIManager = (*UI)(nil).
+- pkg/engine/engine.go: Engine.ui and EngineDependencies.UI are types.UIManager; GetUI() typed; falls back to types.NopUI if ui.New fails.
+- pkg/scene/base_scene.go: b.ui is types.UIManager (default types.NopUI in constructor, direct assign in InjectDependencies, no type assertion); UI() returns types.UIManager; dropped pkg/ui import.
+- examples/basic-game/scenes/{menu,battle,player_menu}_scene.go: use types.White/Yellow/etc. and types.Color; dropped pkg/ui import entirely.
+
+**Reasoning**:
+UI was the odd dependency out: owned by the engine but passed as interface{} + type-asserted to a concrete *ui.UI. Unlike the canvas (whose interface lives in pkg/canvas, forcing interface{} to avoid a cycle), the UI interface can live in pkg/types since pkg/ui already imports types. Defining types.UIManager makes UI consistent with InputCapturer: scenes depend only on the interface, the interface{} cast is gone, and scenes no longer import pkg/ui at all. NopUI keeps calls safe before injection / on failure.
+
+**Impact**:
+- Cleaner DI: no interface{}/assertion for UI; scene->ui dependency removed.
+- Implementation (pkg/ui) fully hidden behind types.UIManager.
+
+**Testing**:
+- go build ./... + go vet ./... (engine + example), go test ./pkg/... pass; no lints.
+
+---
+
+## [2026-07-20 12:58:07 BST] - Migrate debug console to UIManager; remove canvas from BaseScene
+
+**Prompt/Request**: Migrate the debug console to the UIManager facade so BaseScene no longer depends on the canvas manager directly.
+
+**Changes Made**:
+- pkg/debug/console.go: Render now takes types.UIManager and draws via ui.Rect / ui.TextColored / ui.LineHeight. Dropped pkg/canvas and pkg/text imports.
+- pkg/scene/base_scene.go: Removed canvasManager, debugFont, debugTextRenderer, debugConsoleInitialized fields; removed SetCanvasManager, GetCanvasManager, initDebugConsole, GetDebugFont; RenderDebugConsole is now a one-liner delegating to debug.Console.Render(b.ui); InjectDependencies no longer asserts the canvas manager. Dropped pkg/canvas, pkg/text, pkg/logger imports.
+- examples/basic-game/scenes/*: Updated stale comments that referenced SetCanvasManager/GetDebugFont.
+
+**Reasoning**: Completes the UI facade migration so scenes render exclusively through the injected types.UIManager, closing the last raw-canvas leak in BaseScene.
+
+**Impact**: BaseScene no longer holds or injects a canvas manager. DependencyProvider.GetCanvasManager remains on the engine side as an escape hatch for advanced custom scenes.
+
+**Testing**: go build/vet/test on root and examples/basic-game modules - all pass. No lint errors.
+
+**Notes**: UIManager kept lean (no scaled-text method); debug FontScale defaults to 1.0 so line height matches prior output.
+
+---

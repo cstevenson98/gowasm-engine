@@ -68,6 +68,7 @@ type SceneGameStateUser interface {
 type DependencyProvider interface {
 	GetInputCapturer() InputCapturer
 	GetCanvasManager() interface{} // Returns canvas.CanvasManager (interface{} to avoid import)
+	GetUI() UIManager
 	GetStateChangeCallback() func(GameState) error
 	GetGameStateProvider() interface{}
 	GetScreenWidth() float64

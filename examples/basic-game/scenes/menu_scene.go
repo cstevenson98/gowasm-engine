@@ -8,7 +8,6 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
-	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
@@ -19,10 +18,6 @@ type MenuScene struct {
 
 	// Menu-specific fields
 	menuSystem *MainMenuSystem
-
-	// Text rendering
-	menuFont         text.Font
-	menuTextRenderer text.TextRenderer
 
 	// Menu mode: "main" or "load"
 	menuMode string
@@ -51,27 +46,8 @@ func NewMenuScene(screenWidth, screenHeight float64) *MenuScene {
 	}
 }
 
-// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, SetCanvasManager)
+// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState)
 // are inherited from BaseScene
-
-// InitializeMenuText initializes the menu text rendering system
-func (s *MenuScene) InitializeMenuText() error {
-	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.GetName())
-
-	// Create and load font metadata for menu text
-	s.menuFont = text.NewSpriteFont()
-	err := s.menuFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load menu font: %s", err)
-		return err
-	}
-
-	// Create text renderer for menu using inherited canvasManager
-	s.menuTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
-
-	logger.Logger.Debugf("Menu text rendering initialized successfully")
-	return nil
-}
 
 // GetRequiredAssets is inherited from BaseScene (set in constructor)
 
@@ -87,11 +63,6 @@ func (s *MenuScene) Initialize() error {
 	// Initialize menu system
 	s.menuSystem = NewMainMenuSystem(s.GetScreenWidth(), s.GetScreenHeight())
 	s.menuSystem.Initialize()
-
-	// Initialize menu text rendering
-	if err := s.InitializeMenuText(); err != nil {
-		logger.Logger.Warnf("Failed to initialize menu text: %s", err)
-	}
 
 	return nil
 }
@@ -243,55 +214,23 @@ func (s *MenuScene) RenderOverlays() error {
 	return s.BaseScene.RenderOverlays()
 }
 
-// textWidth returns the rendered width (in virtual pixels) of a single-line
-// string in the menu font, matching how BasicTextRenderer advances characters
-// (cell width reduced by the configured spacing).
-func (s *MenuScene) textWidth(str string) float64 {
-	cellWidth, _ := s.menuFont.GetCellSize()
-	advance := float64(cellWidth) - config.Global.Debug.CharacterSpacingReduction
-	return float64(len(str)) * advance
-}
-
 // renderMainMenu renders the main menu
 func (s *MenuScene) renderMainMenu() error {
-	if s.menuFont == nil || s.menuTextRenderer == nil {
-		return nil
-	}
-
 	menu := s.menuSystem.mainMenu
 	if menu == nil {
 		return nil
 	}
 
-	// Calculate centered position
-	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
-
+	lineHeight := s.UI().LineHeight()
 	totalHeight := float64(len(menu.options)) * lineHeight
 	startY := (s.GetScreenHeight() - totalHeight) / 2
-	centerX := s.GetScreenWidth() / 2
 
 	for i, option := range menu.options {
-		// Add selection indicator
-		displayText := option
+		displayText := "  " + option
 		if i == menu.selectedIndex {
 			displayText = "> " + option
-		} else {
-			displayText = "  " + option
 		}
-
-		// Center the text using the font's actual advance width.
-		x := centerX - s.textWidth(displayText)/2
-
-		err := s.menuTextRenderer.RenderText(
-			displayText,
-			types.Vector2{X: x, Y: startY + float64(i)*lineHeight},
-			s.menuFont,
-			[4]float32{1.0, 1.0, 1.0, 1.0}, // White text
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render menu item: %s", err)
-		}
+		s.UI().TextCentered(startY+float64(i)*lineHeight, types.White, displayText)
 	}
 
 	return nil
@@ -299,15 +238,8 @@ func (s *MenuScene) renderMainMenu() error {
 
 // renderLoadMenu renders the load game menu
 func (s *MenuScene) renderLoadMenu() error {
-	if s.menuFont == nil || s.menuTextRenderer == nil {
-		return nil
-	}
+	lineHeight := s.UI().LineHeight()
 
-	// Calculate centered position
-	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
-
-	// Title
 	title := "Load Game"
 	if len(s.loadGameSaves) == 0 {
 		title = "No Saves Available"
@@ -315,53 +247,19 @@ func (s *MenuScene) renderLoadMenu() error {
 
 	totalHeight := float64(len(s.loadGameSaves)+2) * lineHeight // +2 for title and spacing
 	startY := (s.GetScreenHeight() - totalHeight) / 2
-	centerX := s.GetScreenWidth() / 2
 
-	// Render title
-	titleX := centerX - s.textWidth(title)/2
-	err := s.menuTextRenderer.RenderText(
-		title,
-		types.Vector2{X: titleX, Y: startY},
-		s.menuFont,
-		[4]float32{1.0, 1.0, 0.0, 1.0}, // Yellow title
-	)
-	if err != nil {
-		logger.Logger.Tracef("Failed to render title: %s", err)
-	}
+	s.UI().TextCentered(startY, types.Yellow, title)
 
-	// Render saves
 	for i, save := range s.loadGameSaves {
 		displayText := fmt.Sprintf("  %s - Level %d, %d/%d HP", save.DisplayTime, save.PlayerLevel, save.PlayerHP, save.PlayerMaxHP)
 		if i == s.loadGameIndex {
 			displayText = "> " + displayText[2:] // Replace leading spaces with selection indicator
 		}
-
-		x := centerX - s.textWidth(displayText)/2
-
-		err := s.menuTextRenderer.RenderText(
-			displayText,
-			types.Vector2{X: x, Y: startY + float64(i+2)*lineHeight}, // +2 for title spacing
-			s.menuFont,
-			[4]float32{1.0, 1.0, 1.0, 1.0}, // White text
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render save item: %s", err)
-		}
+		s.UI().TextCentered(startY+float64(i+2)*lineHeight, types.White, displayText)
 	}
 
-	// Render "No saves" message if empty
 	if len(s.loadGameSaves) == 0 {
-		msg := "Press Enter to return"
-		msgX := centerX - s.textWidth(msg)/2
-		err := s.menuTextRenderer.RenderText(
-			msg,
-			types.Vector2{X: msgX, Y: startY + 2*lineHeight},
-			s.menuFont,
-			[4]float32{0.7, 0.7, 0.7, 1.0}, // Gray text
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render message: %s", err)
-		}
+		s.UI().TextCentered(startY+2*lineHeight, types.Gray, "Press Enter to return")
 	}
 
 	return nil

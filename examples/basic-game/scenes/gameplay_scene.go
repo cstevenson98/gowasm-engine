@@ -42,7 +42,7 @@ func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 }
 
 // All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState,
-// SetCanvasManager, GetRequiredAssets) are inherited from BaseScene
+// GetRequiredAssets) are inherited from BaseScene
 
 // Initialize sets up the gameplay scene and creates game objects (overrides BaseScene.Initialize)
 func (s *GameplayScene) Initialize() error {
@@ -235,5 +235,3 @@ func (s *GameplayScene) handleSaveGame() {
 		debug.Console.PostMessage("System", "Game saved successfully")
 	}
 }
-
-// GetDebugFont is inherited from BaseScene

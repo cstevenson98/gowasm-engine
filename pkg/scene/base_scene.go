@@ -3,11 +3,8 @@ package scene
 import (
 	"sync"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
@@ -58,16 +55,11 @@ type BaseScene struct {
 	// Optional interface fields (injected by engine)
 	inputCapturer       types.InputCapturer
 	stateChangeCallback func(state types.GameState) error
-	canvasManager       canvas.CanvasManager
+	ui                  types.UIManager
 	gameStateManager    interface{}
 
 	// Required assets (for SceneAssetProvider)
 	requiredAssets types.SceneAssets
-
-	// Debug console (engine feature, auto-initialized)
-	debugFont               text.Font
-	debugTextRenderer       text.TextRenderer
-	debugConsoleInitialized bool
 }
 
 // NewBaseScene creates a new BaseScene with the given name and screen dimensions.
@@ -83,6 +75,7 @@ func NewBaseScene(name string, width, height float64) *BaseScene {
 		name:         name,
 		screenWidth:  width,
 		screenHeight: height,
+		ui:           types.NopUI,
 		layers:       make(map[SceneLayer][]types.GameObject),
 		requiredAssets: types.SceneAssets{
 			TexturePaths: []string{},
@@ -231,18 +224,6 @@ func (b *BaseScene) GetGameState() interface{} {
 
 // ===== SceneTextureProvider Interface =====
 
-// SetCanvasManager sets the canvas manager for rendering.
-// Called automatically during scene initialization (via dependency injection).
-func (b *BaseScene) SetCanvasManager(cm canvas.CanvasManager) {
-	b.canvasManager = cm
-}
-
-// GetCanvasManager returns the canvas manager.
-// Returns nil if no canvas manager is set.
-func (b *BaseScene) GetCanvasManager() canvas.CanvasManager {
-	return b.canvasManager
-}
-
 // GetExtraTexturePaths returns additional texture paths to preload.
 // Default implementation returns an empty slice.
 // Override this if you need to preload extra textures.
@@ -295,59 +276,11 @@ func (b *BaseScene) RenderOverlays() error {
 
 // ===== Debug Console (Engine Feature) =====
 
-// initDebugConsole initializes the debug console for this scene.
-// Called automatically by Initialize() if debug mode is enabled.
-// Internal method - scenes should not call this directly.
-func (b *BaseScene) initDebugConsole() error {
-	if b.canvasManager == nil {
-		return nil // Canvas not yet available, will retry later
-	}
-
-	logger.Logger.Debugf("Initializing debug console for %s scene", b.name)
-
-	// Create and load font metadata
-	b.debugFont = text.NewSpriteFont()
-	err := b.debugFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load debug font: %s", err)
-		return err
-	}
-
-	// Create text renderer
-	b.debugTextRenderer = text.NewTextRenderer(b.canvasManager)
-	b.debugConsoleInitialized = true
-
-	logger.Logger.Debugf("Debug console initialized successfully for %s", b.name)
-	debug.Console.PostMessage("System", b.name+" scene ready")
-
-	return nil
-}
-
-// RenderDebugConsole renders the debug console overlay.
-// This is called automatically by RenderOverlays() if debug mode is enabled.
-// Scenes can override RenderOverlays() to customize rendering order.
+// RenderDebugConsole renders the debug console overlay through the injected UI
+// manager. Called automatically by RenderOverlays(). Scenes can override
+// RenderOverlays() to customize rendering order.
 func (b *BaseScene) RenderDebugConsole() error {
-	if !config.Global.Debug.Enabled {
-		return nil
-	}
-
-	// Lazy initialization if canvas wasn't available during Initialize()
-	if !b.debugConsoleInitialized && b.canvasManager != nil {
-		if err := b.initDebugConsole(); err != nil {
-			return err
-		}
-	}
-
-	if !b.debugConsoleInitialized || b.debugFont == nil || b.debugTextRenderer == nil {
-		return nil // Not yet initialized
-	}
-
-	return debug.Console.Render(b.canvasManager, b.debugTextRenderer, b.debugFont)
-}
-
-// GetDebugFont returns the debug font (for scenes that need direct access).
-func (b *BaseScene) GetDebugFont() text.Font {
-	return b.debugFont
+	return debug.Console.Render(b.ui)
 }
 
 // ===== Layer Management Helper Methods =====
@@ -455,10 +388,17 @@ func (b *BaseScene) InjectDependencies(deps types.DependencyProvider) {
 	b.screenWidth = deps.GetScreenWidth()
 	b.screenHeight = deps.GetScreenHeight()
 
-	// Canvas manager needs type assertion from interface{}
-	if cm, ok := deps.GetCanvasManager().(canvas.CanvasManager); ok {
-		b.canvasManager = cm
+	// UI facade is a named interface, so it can be assigned directly.
+	if u := deps.GetUI(); u != nil {
+		b.ui = u
 	}
+}
+
+// UI returns the engine-owned UI manager for drawing screen-space text and
+// primitives. Call it from RenderOverlays. Never nil: it defaults to a no-op
+// UIManager until the engine injects the real one.
+func (b *BaseScene) UI() types.UIManager {
+	return b.ui
 }
 
 // GetLayer returns the game objects in the specified layer (thread-safe read).

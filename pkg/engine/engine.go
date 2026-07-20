@@ -14,6 +14,7 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/scene"
 	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/gowasm-engine/pkg/ui"
 )
 
 // Engine manages the canvas, input, and game loop. It implements the
@@ -21,6 +22,7 @@ import (
 type Engine struct {
 	canvasManager *canvas.Canvas
 	inputCapturer *input.Input
+	ui            types.UIManager
 
 	running           bool
 	currentGameState  types.GameState
@@ -74,6 +76,17 @@ func (e *Engine) Initialize(canvasID string) error {
 	if err := e.inputCapturer.Initialize(); err != nil {
 		logger.Logger.Errorf("Failed to initialize input: %s", err.Error())
 		return err
+	}
+
+	// Create the shared immediate-mode UI facade so scenes can draw text and
+	// primitives without loading their own fonts or touching the canvas. It is
+	// injected into scenes (as a types.UIManager) alongside the other engine
+	// dependencies. On failure we fall back to a no-op so UI calls stay safe.
+	e.ui = types.NopUI
+	if uiFacade, err := ui.New(e.canvasManager, config.Global.Debug.FontPath, e.screenWidth, e.screenHeight); err != nil {
+		logger.Logger.Warnf("Failed to create UI facade: %s", err.Error())
+	} else {
+		e.ui = uiFacade
 	}
 
 	logger.Logger.Debugf("Engine initialized successfully")
@@ -348,6 +361,7 @@ func (e *Engine) GetGameState() types.GameState {
 type EngineDependencies struct {
 	InputCapturer       *input.Input
 	CanvasManager       *canvas.Canvas
+	UI                  types.UIManager
 	StateChangeCallback func(state types.GameState) error
 	GameStateProvider   interface{}
 	ScreenWidth         float64
@@ -359,6 +373,7 @@ func (e *Engine) GetDependencies() *EngineDependencies {
 	return &EngineDependencies{
 		InputCapturer:       e.inputCapturer,
 		CanvasManager:       e.canvasManager,
+		UI:                  e.ui,
 		StateChangeCallback: e.RequestStateChange,
 		GameStateProvider:   e.gameStateProvider,
 		ScreenWidth:         e.screenWidth,
@@ -376,6 +391,11 @@ func (d *EngineDependencies) GetInputCapturer() types.InputCapturer {
 // GetCanvasManager returns the canvas manager as interface{}.
 func (d *EngineDependencies) GetCanvasManager() interface{} {
 	return d.CanvasManager
+}
+
+// GetUI returns the UI facade.
+func (d *EngineDependencies) GetUI() types.UIManager {
+	return d.UI
 }
 
 // GetStateChangeCallback returns the state change callback.

@@ -9,7 +9,6 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
-	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
@@ -28,10 +27,6 @@ type BattleScene struct {
 	// Battle system
 	battleManager *battle.BattleManager
 	effectManager *battle.EffectManager
-
-	// Menu text rendering
-	menuFont         text.Font
-	menuTextRenderer text.TextRenderer
 }
 
 // NewBattleScene creates a new battle scene
@@ -56,7 +51,7 @@ func NewBattleScene(screenWidth, screenHeight float64) *BattleScene {
 	}
 }
 
-// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetCanvasManager)
+// All interface implementations (SetInputCapturer, SetStateChangeCallback)
 // are inherited from BaseScene
 
 // RenderOverlays implements types.SceneOverlayRenderer by delegating to existing methods
@@ -74,20 +69,6 @@ func (s *BattleScene) RenderOverlays() error {
 	return s.BaseScene.RenderOverlays()
 }
 
-// GetExtraTexturePaths implements types.SceneTextureProvider
-func (s *BattleScene) GetExtraTexturePaths() []string {
-	var paths []string
-	// Get debug font from BaseScene
-	debugFont := s.GetDebugFont()
-	if debugFont != nil && debugFont.IsLoaded() {
-		paths = append(paths, debugFont.GetTexturePath())
-	}
-	if s.menuFont != nil && s.menuFont.IsLoaded() {
-		paths = append(paths, s.menuFont.GetTexturePath())
-	}
-	return paths
-}
-
 // GetRequiredAssets is inherited from BaseScene (set in constructor)
 
 // Initialize sets up the battle scene and creates game objects (overrides BaseScene.Initialize)
@@ -98,15 +79,6 @@ func (s *BattleScene) Initialize() error {
 	if err := s.BaseScene.Initialize(); err != nil {
 		return err
 	}
-
-	// Initialize menu text rendering (battle-specific)
-	s.menuFont = text.NewSpriteFont()
-	err := s.menuFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load menu font: %s", err)
-		return err
-	}
-	s.menuTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
 
 	// Create background (BACKGROUND layer)
 	background := gameobject.NewBackground(
@@ -216,42 +188,22 @@ func (s *BattleScene) Update(deltaTime float64) {
 
 // RenderDamageEffects renders damage/healing numbers
 func (s *BattleScene) RenderDamageEffects() error {
-	if s.effectManager == nil || s.menuFont == nil || s.menuTextRenderer == nil {
+	if s.effectManager == nil {
 		return nil
 	}
 
-	effects := s.effectManager.GetActiveEffects()
-	for _, effect := range effects {
-		pos := effect.GetPosition()
-		value := effect.GetValue()
+	for _, effect := range s.effectManager.GetActiveEffects() {
 		alpha := effect.GetAlpha()
 
-		// Determine color based on effect type
-		var color [4]float32
+		color := types.Color{1, 0, 0, alpha} // Red for damage
+		sign := "-"
 		if effect.IsHealingEffect() {
-			color = [4]float32{0.0, 1.0, 0.0, alpha} // Green for healing
-		} else {
-			color = [4]float32{1.0, 0.0, 0.0, alpha} // Red for damage
+			color = types.Color{0, 1, 0, alpha} // Green for healing
+			sign = "+"
 		}
 
-		// Format the damage/healing text
-		var text string
-		if effect.IsHealingEffect() {
-			text = fmt.Sprintf("+%d", value)
-		} else {
-			text = fmt.Sprintf("-%d", value)
-		}
-
-		// Render the text
-		err := s.menuTextRenderer.RenderText(
-			text,
-			pos,
-			s.menuFont,
-			color,
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render damage effect: %s", err)
-		}
+		pos := effect.GetPosition()
+		s.UI().TextColored(pos.X, pos.Y, color, fmt.Sprintf("%s%d", sign, effect.GetValue()))
 	}
 
 	return nil
@@ -259,20 +211,12 @@ func (s *BattleScene) RenderDamageEffects() error {
 
 // RenderActionTimerBars renders action timer bars for player and enemy
 func (s *BattleScene) RenderActionTimerBars() error {
-	if s.menuFont == nil || s.menuTextRenderer == nil {
-		return nil
-	}
+	lineHeight := s.UI().LineHeight()
 
-	// Calculate line height accounting for pixel scale
-	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
-
-	// Render player timer bar
 	if s.player != nil {
 		s.renderEntityTimerBar(s.player, types.Vector2{X: 20, Y: 500}, "Player")
 	}
 
-	// Render enemy timer bar
 	if s.enemy != nil {
 		s.renderEntityTimerBar(s.enemy, types.Vector2{X: 20, Y: 500 + lineHeight}, "Enemy")
 	}
@@ -317,119 +261,53 @@ func (s *BattleScene) renderEntityTimerBar(entity types.BattleEntity, position t
 	fullText := fmt.Sprintf("%s: %s", label, bar)
 
 	// Determine color based on readiness
-	var color [4]float32
+	color := types.White // White when charging
 	if current >= 1.0 {
-		color = [4]float32{0.0, 1.0, 0.0, 1.0} // Green when ready
-	} else {
-		color = [4]float32{1.0, 1.0, 1.0, 1.0} // White when charging
+		color = types.Green // Green when ready
 	}
 
-	// Render the timer bar
-	err := s.menuTextRenderer.RenderText(
-		fullText,
-		position,
-		s.menuFont,
-		color,
-	)
-	if err != nil {
-		logger.Logger.Tracef("Failed to render timer bar: %s", err)
-	}
+	s.UI().TextColored(position.X, position.Y, color, fullText)
 }
 
 // RenderBattleMenu renders the battle menu UI
 func (s *BattleScene) RenderBattleMenu() error {
-	if s.menuSystem == nil || s.menuFont == nil || s.menuTextRenderer == nil {
+	if s.menuSystem == nil {
 		return nil
 	}
 
-	// Render battle log
-	battleLog := s.menuSystem.battleLog
-	if battleLog != nil {
-		// Calculate line height accounting for pixel scale
-		_, cellHeight := s.menuFont.GetCellSize()
-		lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
+	lineHeight := s.UI().LineHeight()
 
-		y := battleLog.GetPosition().Y
+	// Render battle log
+	if battleLog := s.menuSystem.battleLog; battleLog != nil {
+		pos := battleLog.GetPosition()
+		y := pos.Y
 		for i, message := range battleLog.GetMessages() {
 			if i >= battleLog.maxLines {
 				break
 			}
-			err := s.menuTextRenderer.RenderText(
-				message,
-				types.Vector2{X: battleLog.GetPosition().X, Y: y},
-				s.menuFont,
-				[4]float32{1.0, 1.0, 1.0, 1.0}, // White text
-			)
-			if err != nil {
-				logger.Logger.Tracef("Failed to render battle log message: %s", err)
-			}
-			y += lineHeight // Line spacing with pixel scale
+			s.UI().TextColored(pos.X, y, types.White, message)
+			y += lineHeight
 		}
 	}
 
 	// Render character status
-	characterStatus := s.menuSystem.characterStatus
-	if characterStatus != nil {
+	if characterStatus := s.menuSystem.characterStatus; characterStatus != nil {
 		pos := characterStatus.GetPosition()
-
-		// Calculate line height accounting for pixel scale
-		_, cellHeight := s.menuFont.GetCellSize()
-		lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
-
-		// Player status
-		playerText := fmt.Sprintf("Player: %d/%d HP", characterStatus.GetPlayerHP(), characterStatus.GetPlayerMaxHP())
-		err := s.menuTextRenderer.RenderText(
-			playerText,
-			types.Vector2{X: pos.X, Y: pos.Y},
-			s.menuFont,
-			[4]float32{0.0, 1.0, 0.0, 1.0}, // Green text for player
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render player status: %s", err)
-		}
-
-		// Enemy status
-		enemyText := fmt.Sprintf("Enemy: %d/%d HP", characterStatus.GetEnemyHP(), characterStatus.GetEnemyMaxHP())
-		err = s.menuTextRenderer.RenderText(
-			enemyText,
-			types.Vector2{X: pos.X, Y: pos.Y + lineHeight},
-			s.menuFont,
-			[4]float32{1.0, 0.0, 0.0, 1.0}, // Red text for enemy
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render enemy status: %s", err)
-		}
+		s.UI().TextColored(pos.X, pos.Y, types.Green,
+			fmt.Sprintf("Player: %d/%d HP", characterStatus.GetPlayerHP(), characterStatus.GetPlayerMaxHP()))
+		s.UI().TextColored(pos.X, pos.Y+lineHeight, types.Red,
+			fmt.Sprintf("Enemy: %d/%d HP", characterStatus.GetEnemyHP(), characterStatus.GetEnemyMaxHP()))
 	}
 
 	// Render action menu
-	actionMenu := s.menuSystem.actionMenu
-	if actionMenu != nil {
+	if actionMenu := s.menuSystem.actionMenu; actionMenu != nil {
 		pos := actionMenu.GetPosition()
-		actions := actionMenu.GetActions()
-		selectedIndex := actionMenu.GetSelectedIndex()
-
-		// Calculate line height accounting for pixel scale
-		_, cellHeight := s.menuFont.GetCellSize()
-		lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
-
-		for i, action := range actions {
-			// Add selection indicator
-			displayText := action
-			if i == selectedIndex {
+		for i, action := range actionMenu.GetActions() {
+			displayText := "  " + action
+			if i == actionMenu.GetSelectedIndex() {
 				displayText = "> " + action
-			} else {
-				displayText = "  " + action
 			}
-
-			err := s.menuTextRenderer.RenderText(
-				displayText,
-				types.Vector2{X: pos.X, Y: pos.Y + float64(i)*lineHeight},
-				s.menuFont,
-				[4]float32{1.0, 1.0, 0.0, 1.0}, // Yellow text for menu
-			)
-			if err != nil {
-				logger.Logger.Tracef("Failed to render action menu item: %s", err)
-			}
+			s.UI().TextColored(pos.X, pos.Y+float64(i)*lineHeight, types.Yellow, displayText)
 		}
 	}
 
@@ -502,11 +380,6 @@ func (s *BattleScene) GetPlayer() *gameobject.Player {
 // GetEnemy returns the enemy object
 func (s *BattleScene) GetEnemy() *gameobject.Enemy {
 	return s.enemy
-}
-
-// GetDebugFont and GetMenuFont return fonts for rendering (for texture loading)
-func (s *BattleScene) GetMenuFont() text.Font {
-	return s.menuFont
 }
 
 // EnqueuePlayerAction creates and enqueues a player action

@@ -9,7 +9,6 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/gameobject"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	pkscene "github.com/cstevenson98/gowasm-engine/pkg/scene"
-	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
@@ -23,10 +22,6 @@ type PlayerMenuScene struct {
 
 	// Menu system
 	menuSystem *PlayerMenuSystem
-
-	// Text rendering
-	menuFont         text.Font
-	menuTextRenderer text.TextRenderer
 }
 
 // NewPlayerMenuScene creates a new player menu scene
@@ -46,7 +41,7 @@ func NewPlayerMenuScene(screenWidth, screenHeight float64) *PlayerMenuScene {
 	}
 }
 
-// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, SetCanvasManager)
+// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState)
 // are inherited from BaseScene
 
 // updatePlayerReference updates the player reference from the game state manager
@@ -88,25 +83,6 @@ func (s *PlayerMenuScene) updatePlayerReference() {
 	}
 }
 
-// InitializeMenuText initializes the menu text rendering system
-func (s *PlayerMenuScene) InitializeMenuText() error {
-	logger.Logger.Debugf("Initializing menu text rendering for %s scene", s.GetName())
-
-	// Create and load font metadata for menu text
-	s.menuFont = text.NewSpriteFont()
-	err := s.menuFont.(*text.SpriteFont).LoadFont(config.Global.Debug.FontPath)
-	if err != nil {
-		logger.Logger.Errorf("Failed to load menu font: %s", err)
-		return err
-	}
-
-	// Create text renderer for menu
-	s.menuTextRenderer = text.NewTextRenderer(s.GetCanvasManager())
-
-	logger.Logger.Debugf("Menu text rendering initialized successfully")
-	return nil
-}
-
 // Initialize sets up the player menu scene (overrides BaseScene.Initialize)
 func (s *PlayerMenuScene) Initialize() error {
 	logger.Logger.Debugf("Initializing %s scene", s.GetName())
@@ -119,12 +95,6 @@ func (s *PlayerMenuScene) Initialize() error {
 	// Initialize menu system
 	s.menuSystem = NewPlayerMenuSystem(s.GetScreenWidth(), s.GetScreenHeight())
 	s.menuSystem.Initialize()
-
-	// Initialize menu text rendering
-	err := s.InitializeMenuText()
-	if err != nil {
-		logger.Logger.Warnf("Failed to initialize menu text: %s", err)
-	}
 
 	return nil
 }
@@ -266,50 +236,32 @@ func (s *PlayerMenuScene) RenderOverlays() error {
 
 // renderPlayerInfo renders player information on the left side
 func (s *PlayerMenuScene) renderPlayerInfo() error {
-	if s.menuFont == nil || s.menuTextRenderer == nil {
-		return nil
-	}
-
 	if s.player == nil {
 		return nil
 	}
 
-	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
+	lineHeight := s.UI().LineHeight()
 
 	// Left side position
 	startX := 50.0
 	startY := 100.0
 
 	// Player stats
-	var lines []string
-	lines = append(lines, "Player Info")
-	lines = append(lines, "-----------")
+	lines := []string{"Player Info", "-----------"}
 
-	// Position
 	if mover := s.player.GetMover(); mover != nil {
 		pos := mover.GetPosition()
 		lines = append(lines, fmt.Sprintf("Position: %.0f, %.0f", pos.X, pos.Y))
 	}
 
-	// Stats
 	if stats := s.player.GetStats(); stats != nil {
 		lines = append(lines, fmt.Sprintf("HP: %d / %d", stats.HP, stats.MaxHP))
 	} else {
 		lines = append(lines, fmt.Sprintf("HP: %d / %d", config.Global.Battle.PlayerHP, config.Global.Battle.PlayerMaxHP))
 	}
 
-	// Render each line
 	for i, line := range lines {
-		err := s.menuTextRenderer.RenderText(
-			line,
-			types.Vector2{X: startX, Y: startY + float64(i)*lineHeight},
-			s.menuFont,
-			[4]float32{1.0, 1.0, 1.0, 1.0}, // White text
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render player info line: %s", err)
-		}
+		s.UI().Text(startX, startY+float64(i)*lineHeight, line)
 	}
 
 	return nil
@@ -317,40 +269,23 @@ func (s *PlayerMenuScene) renderPlayerInfo() error {
 
 // renderMenu renders the menu on the right side
 func (s *PlayerMenuScene) renderMenu() error {
-	if s.menuFont == nil || s.menuTextRenderer == nil {
-		return nil
-	}
-
 	menu := s.menuSystem.playerMenu
 	if menu == nil {
 		return nil
 	}
 
-	_, cellHeight := s.menuFont.GetCellSize()
-	lineHeight := float64(cellHeight) * config.Global.Rendering.UILineSpacing
+	lineHeight := s.UI().LineHeight()
 
 	// Right side position
 	startX := s.GetScreenWidth() - 250.0
 	startY := 100.0
 
 	for i, option := range menu.options {
-		// Add selection indicator
-		displayText := option
+		displayText := "  " + option
 		if i == menu.selectedIndex {
 			displayText = "> " + option
-		} else {
-			displayText = "  " + option
 		}
-
-		err := s.menuTextRenderer.RenderText(
-			displayText,
-			types.Vector2{X: startX, Y: startY + float64(i)*lineHeight},
-			s.menuFont,
-			[4]float32{1.0, 1.0, 0.0, 1.0}, // Yellow text for menu
-		)
-		if err != nil {
-			logger.Logger.Tracef("Failed to render menu item: %s", err)
-		}
+		s.UI().TextColored(startX, startY+float64(i)*lineHeight, types.Yellow, displayText)
 	}
 
 	return nil
