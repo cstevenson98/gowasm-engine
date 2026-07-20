@@ -25,30 +25,28 @@ func main() {
 	// Register game state manager with engine
 	gameEngine.RegisterGameStateProvider(stateManager)
 
-	// Create and register scenes
+	// Create and register scenes. The engine injects the canvas manager (and
+	// other dependencies) into each scene when it becomes active, so no manual
+	// wiring is needed here.
 	menuScene := exts.NewMenuScene(
 		config.Global.Screen.Width,
 		config.Global.Screen.Height,
 	)
-	menuScene.SetCanvasManager(gameEngine.GetCanvasManager())
 
 	gameplayScene := exts.NewGameplayScene(
 		config.Global.Screen.Width,
 		config.Global.Screen.Height,
 	)
-	gameplayScene.SetCanvasManager(gameEngine.GetCanvasManager())
 
 	battleScene := exts.NewBattleScene(
 		config.Global.Screen.Width,
 		config.Global.Screen.Height,
 	)
-	battleScene.SetCanvasManager(gameEngine.GetCanvasManager())
 
 	playerMenuScene := exts.NewPlayerMenuScene(
 		config.Global.Screen.Width,
 		config.Global.Screen.Height,
 	)
-	playerMenuScene.SetCanvasManager(gameEngine.GetCanvasManager())
 
 	// Register all scenes with the engine
 	gameEngine.RegisterScene(types.MENU, menuScene)

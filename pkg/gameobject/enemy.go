@@ -62,13 +62,11 @@ func NewEnemy(position, size types.Vector2, texturePath string) *Enemy {
 	}
 }
 
-// Update updates the enemy's state (overrides BaseGameObject.Update)
+// Update updates the enemy's state (overrides BaseGameObject.Update).
+// Enemies don't move in battle, but BaseGameObject.Update still advances the
+// sprite animation (and the static mover, which is a no-op).
 func (e *Enemy) Update(deltaTime float64) {
-	// Enemy doesn't do much in battle for now
-	// Just update sprite animation
-	if e.GetSprite() != nil {
-		e.GetSprite().Update(deltaTime)
-	}
+	e.BaseGameObject.Update(deltaTime)
 }
 
 // BattleEntity interface implementation

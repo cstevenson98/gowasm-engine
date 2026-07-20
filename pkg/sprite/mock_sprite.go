@@ -24,20 +24,14 @@ func NewMockSprite(texturePath string, size types.Vector2) *MockSprite {
 	}
 }
 
-// GetSpriteRenderData returns mock render data at a given position
-func (m *MockSprite) GetSpriteRenderData(position types.Vector2) types.SpriteRenderData {
-	return types.SpriteRenderData{
-		TexturePath: m.texturePath,
-		Position:    position,
-		Size:        m.size,
-		UV: types.UVRect{
-			U: 0.0,
-			V: 0.0,
-			W: 1.0,
-			H: 1.0,
-		},
-		Visible: m.visible,
-	}
+// GetTexturePath returns the mock sprite's texture path.
+func (m *MockSprite) GetTexturePath() string {
+	return m.texturePath
+}
+
+// GetUV returns a full-texture UV rectangle.
+func (m *MockSprite) GetUV() types.UVRect {
+	return types.UVRect{U: 0.0, V: 0.0, W: 1.0, H: 1.0}
 }
 
 // GetSize returns the sprite's size

@@ -52,28 +52,24 @@ func NewSpriteSheet(texturePath string, size Vector2, columns, rows int) *Sprite
 	}
 }
 
-// GetSpriteRenderData returns the data needed to render this sprite at a given position
-func (s *SpriteSheet) GetSpriteRenderData(position types.Vector2) types.SpriteRenderData {
-	// Calculate UV coordinates for the current frame
+// GetTexturePath returns the path to the sprite sheet texture.
+func (s *SpriteSheet) GetTexturePath() string {
+	return s.texturePath
+}
+
+// GetUV returns the UV rectangle for the current animation frame.
+func (s *SpriteSheet) GetUV() types.UVRect {
 	frameWidth := 1.0 / float64(s.columns)
 	frameHeight := 1.0 / float64(s.rows)
 
 	frameX := s.currentFrame % s.columns
 	frameY := s.currentFrame / s.columns
 
-	uv := types.UVRect{
+	return types.UVRect{
 		U: float64(frameX) * frameWidth,
 		V: float64(frameY) * frameHeight,
 		W: frameWidth,
 		H: frameHeight,
-	}
-
-	return types.SpriteRenderData{
-		TexturePath: s.texturePath,
-		Position:    position,
-		Size:        types.Vector2{X: s.size.X, Y: s.size.Y},
-		UV:          uv,
-		Visible:     s.visible,
 	}
 }
 

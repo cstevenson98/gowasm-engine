@@ -1,4 +1,3 @@
-
 package scenes
 
 import (
@@ -25,14 +24,6 @@ type MenuScene struct {
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
 
-	// Debug console toggle state
-	f2PressedLastFrame bool
-
-	// Input state tracking
-	upPressedLastFrame    bool
-	downPressedLastFrame  bool
-	enterPressedLastFrame bool
-
 	// Menu mode: "main" or "load"
 	menuMode string
 
@@ -45,12 +36,9 @@ type MenuScene struct {
 func NewMenuScene(screenWidth, screenHeight float64) *MenuScene {
 	baseScene := pkscene.NewBaseScene("Menu", screenWidth, screenHeight)
 
-	// Set required assets
-	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
+	// Declare required assets. The font texture is loaded automatically from
+	// FontPaths, so it doesn't need to be listed under TexturePaths.
 	baseScene.SetRequiredAssets(types.SceneAssets{
-		TexturePaths: []string{
-			fontTexturePath, // Font texture needed for menu text rendering
-		},
 		FontPaths: []string{
 			config.Global.Debug.FontPath,
 		},
@@ -114,11 +102,10 @@ func (s *MenuScene) Update(deltaTime float64) {
 	inputState := s.GetInputState()
 
 	// Handle debug console toggle (F2)
-	if inputState.F2Pressed && !s.f2PressedLastFrame {
+	if inputState.F2Pressed && !inputState.F2PressedLastFrame {
 		debug.Console.ToggleVisibility()
 		logger.Logger.Debugf("Debug console toggled via F2")
 	}
-	s.f2PressedLastFrame = inputState.F2Pressed
 
 	// Handle menu navigation based on current mode
 	if s.menuMode == "main" {
@@ -138,23 +125,21 @@ func (s *MenuScene) updateMainMenu(inputState types.InputState) {
 	menu := s.menuSystem.mainMenu
 
 	// Navigation
-	if inputState.UpPressed && !s.upPressedLastFrame {
+	if inputState.UpPressed && !inputState.UpPressedLastFrame {
 		menu.selectedIndex--
 		if menu.selectedIndex < 0 {
 			menu.selectedIndex = len(menu.options) - 1
 		}
 	}
-	if inputState.DownPressed && !s.downPressedLastFrame {
+	if inputState.DownPressed && !inputState.DownPressedLastFrame {
 		menu.selectedIndex++
 		if menu.selectedIndex >= len(menu.options) {
 			menu.selectedIndex = 0
 		}
 	}
-	s.upPressedLastFrame = inputState.UpPressed
-	s.downPressedLastFrame = inputState.DownPressed
 
 	// Selection
-	if inputState.EnterPressed && !s.enterPressedLastFrame {
+	if inputState.EnterPressed && !inputState.EnterPressedLastFrame {
 		selected := menu.options[menu.selectedIndex]
 		if selected == "New Game" {
 			gameState := s.GetGameState()
@@ -191,29 +176,26 @@ func (s *MenuScene) updateMainMenu(inputState types.InputState) {
 			}
 		}
 	}
-	s.enterPressedLastFrame = inputState.EnterPressed
 }
 
 // updateLoadMenu handles input for the load game menu
 func (s *MenuScene) updateLoadMenu(inputState types.InputState) {
 	// Navigation
-	if inputState.UpPressed && !s.upPressedLastFrame {
+	if inputState.UpPressed && !inputState.UpPressedLastFrame {
 		s.loadGameIndex--
 		if s.loadGameIndex < 0 {
 			s.loadGameIndex = len(s.loadGameSaves) - 1
 		}
 	}
-	if inputState.DownPressed && !s.downPressedLastFrame {
+	if inputState.DownPressed && !inputState.DownPressedLastFrame {
 		s.loadGameIndex++
 		if s.loadGameIndex >= len(s.loadGameSaves) {
 			s.loadGameIndex = 0
 		}
 	}
-	s.upPressedLastFrame = inputState.UpPressed
-	s.downPressedLastFrame = inputState.DownPressed
 
 	// Selection or back
-	if inputState.EnterPressed && !s.enterPressedLastFrame {
+	if inputState.EnterPressed && !inputState.EnterPressedLastFrame {
 		if s.loadGameIndex < len(s.loadGameSaves) {
 			// Load selected save
 			save := s.loadGameSaves[s.loadGameIndex]
@@ -236,14 +218,12 @@ func (s *MenuScene) updateLoadMenu(inputState types.InputState) {
 		}
 	}
 
-	// Back to main menu (Escape or special key - for now, if no saves, Enter goes back)
+	// Back to main menu (for now, if no saves, Enter goes back)
 	if len(s.loadGameSaves) == 0 {
-		if inputState.EnterPressed && !s.enterPressedLastFrame {
+		if inputState.EnterPressed && !inputState.EnterPressedLastFrame {
 			s.menuMode = "main"
-			s.enterPressedLastFrame = inputState.EnterPressed
 		}
 	}
-	s.enterPressedLastFrame = inputState.EnterPressed
 }
 
 // RenderOverlays implements types.SceneOverlayRenderer
@@ -261,6 +241,19 @@ func (s *MenuScene) RenderOverlays() error {
 
 	// Then render debug console (inherited from BaseScene)
 	return s.BaseScene.RenderOverlays()
+}
+
+// textWidth returns the rendered width (in screen pixels) of a single-line
+// string in the menu font, matching how BasicTextRenderer advances characters
+// (cell width, reduced by the configured spacing, scaled by the pixel scale).
+func (s *MenuScene) textWidth(str string) float64 {
+	cellWidth, _ := s.menuFont.GetCellSize()
+	pixelScale := 1.0
+	if config.Global.Rendering.PixelPerfectScaling && config.Global.Rendering.PixelScale > 1 {
+		pixelScale = float64(config.Global.Rendering.PixelScale)
+	}
+	advance := (float64(cellWidth) - config.Global.Debug.CharacterSpacingReduction) * pixelScale
+	return float64(len(str)) * advance
 }
 
 // renderMainMenu renders the main menu
@@ -295,9 +288,8 @@ func (s *MenuScene) renderMainMenu() error {
 			displayText = "  " + option
 		}
 
-		// Calculate text width for centering (approximate - could be improved)
-		textWidth := float64(len(displayText)) * float64(cellHeight) * 0.6 // Rough estimate
-		x := centerX - textWidth/2
+		// Center the text using the font's actual advance width.
+		x := centerX - s.textWidth(displayText)/2
 
 		err := s.menuTextRenderer.RenderText(
 			displayText,
@@ -338,8 +330,7 @@ func (s *MenuScene) renderLoadMenu() error {
 	centerX := s.GetScreenWidth() / 2
 
 	// Render title
-	titleWidth := float64(len(title)) * float64(cellHeight) * 0.6
-	titleX := centerX - titleWidth/2
+	titleX := centerX - s.textWidth(title)/2
 	err := s.menuTextRenderer.RenderText(
 		title,
 		types.Vector2{X: titleX, Y: startY},
@@ -357,8 +348,7 @@ func (s *MenuScene) renderLoadMenu() error {
 			displayText = "> " + displayText[2:] // Replace leading spaces with selection indicator
 		}
 
-		textWidth := float64(len(displayText)) * float64(cellHeight) * 0.6
-		x := centerX - textWidth/2
+		x := centerX - s.textWidth(displayText)/2
 
 		err := s.menuTextRenderer.RenderText(
 			displayText,
@@ -374,8 +364,7 @@ func (s *MenuScene) renderLoadMenu() error {
 	// Render "No saves" message if empty
 	if len(s.loadGameSaves) == 0 {
 		msg := "Press Enter to return"
-		msgWidth := float64(len(msg)) * float64(cellHeight) * 0.6
-		msgX := centerX - msgWidth/2
+		msgX := centerX - s.textWidth(msg)/2
 		err := s.menuTextRenderer.RenderText(
 			msg,
 			types.Vector2{X: msgX, Y: startY + 2*lineHeight},

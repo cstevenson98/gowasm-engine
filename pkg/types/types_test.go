@@ -48,7 +48,6 @@ func TestSpriteRenderData(t *testing.T) {
 			H: 1.0,
 		},
 		Visible: true,
-		Frame:   0,
 	}
 
 	if renderData.TexturePath != "test.png" {

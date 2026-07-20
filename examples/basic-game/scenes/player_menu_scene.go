@@ -1,4 +1,3 @@
-
 package scenes
 
 import (
@@ -28,29 +27,20 @@ type PlayerMenuScene struct {
 	// Text rendering
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
-
-	// Input state tracking
-	upPressedLastFrame    bool
-	downPressedLastFrame  bool
-	enterPressedLastFrame bool
-	mPressedLastFrame     bool // M key to close menu
 }
 
 // NewPlayerMenuScene creates a new player menu scene
 func NewPlayerMenuScene(screenWidth, screenHeight float64) *PlayerMenuScene {
 	baseScene := pkscene.NewBaseScene("PlayerMenu", screenWidth, screenHeight)
-	
-	// Set required assets
-	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
+
+	// Declare required assets. The font texture is loaded automatically from
+	// FontPaths, so it doesn't need to be listed under TexturePaths.
 	baseScene.SetRequiredAssets(types.SceneAssets{
-		TexturePaths: []string{
-			fontTexturePath,
-		},
 		FontPaths: []string{
 			config.Global.Debug.FontPath,
 		},
 	})
-	
+
 	return &PlayerMenuScene{
 		BaseScene: baseScene,
 	}
@@ -117,20 +107,6 @@ func (s *PlayerMenuScene) InitializeMenuText() error {
 	return nil
 }
 
-// GetRequiredAssets implements types.SceneAssetProvider
-func (s *PlayerMenuScene) GetRequiredAssets() types.SceneAssets {
-	// Font texture path is basePath + ".sheet.png"
-	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
-	return types.SceneAssets{
-		TexturePaths: []string{
-			fontTexturePath, // Font texture needed for menu text rendering
-		},
-		FontPaths: []string{
-			config.Global.Debug.FontPath,
-		},
-	}
-}
-
 // Initialize sets up the player menu scene (overrides BaseScene.Initialize)
 func (s *PlayerMenuScene) Initialize() error {
 	logger.Logger.Debugf("Initializing %s scene", s.GetName())
@@ -158,51 +134,41 @@ func (s *PlayerMenuScene) Update(deltaTime float64) {
 	// Update player reference from game state (player is part of game state)
 	s.updatePlayerReference()
 
-	if s.GetInputState().UpPressed == false && s.GetInputState().DownPressed == false {
-		return
-	}
-
 	inputState := s.GetInputState()
 
-	// Handle menu close (M key)
-	if inputState.MPressed && !s.mPressedLastFrame {
+	// Handle menu close (M key). The engine defers the switch to the next frame.
+	if inputState.MPressed && !inputState.MPressedLastFrame {
 		logger.Logger.Debugf("M key pressed: closing player menu")
-		err := s.RequestStateChange(types.GAMEPLAY)
-		if err != nil {
+		if err := s.RequestStateChange(types.GAMEPLAY); err != nil {
 			logger.Logger.Errorf("Failed to switch back to gameplay: %s", err.Error())
 		}
-		s.mPressedLastFrame = inputState.MPressed
 		return
 	}
-	s.mPressedLastFrame = inputState.MPressed
 
 	// Handle menu navigation
 	menu := s.menuSystem.playerMenu
 
 	// Navigation
-	if inputState.UpPressed && !s.upPressedLastFrame {
+	if inputState.UpPressed && !inputState.UpPressedLastFrame {
 		menu.selectedIndex--
 		if menu.selectedIndex < 0 {
 			menu.selectedIndex = len(menu.options) - 1
 		}
 	}
-	if inputState.DownPressed && !s.downPressedLastFrame {
+	if inputState.DownPressed && !inputState.DownPressedLastFrame {
 		menu.selectedIndex++
 		if menu.selectedIndex >= len(menu.options) {
 			menu.selectedIndex = 0
 		}
 	}
-	s.upPressedLastFrame = inputState.UpPressed
-	s.downPressedLastFrame = inputState.DownPressed
 
 	// Selection
-	if inputState.EnterPressed && !s.enterPressedLastFrame {
+	if inputState.EnterPressed && !inputState.EnterPressedLastFrame {
 		selected := menu.options[menu.selectedIndex]
 		if selected == "Save Game" {
 			s.handleSaveGame()
 		}
 	}
-	s.enterPressedLastFrame = inputState.EnterPressed
 
 	// Update debug console
 	if config.Global.Debug.Enabled {
@@ -411,7 +377,7 @@ func (s *PlayerMenuScene) Cleanup() {
 	// Clear menu-specific state
 	s.menuSystem = nil
 	s.player = nil
-	
+
 	// Call base cleanup (clears layers)
 	s.BaseScene.Cleanup()
 }

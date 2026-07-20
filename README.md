@@ -316,6 +316,23 @@ make test-all   # ./...
 make tidy
 ```
 
+## Documentation
+
+Every package under `pkg/` carries a package-level overview (in its `doc.go`)
+explaining what the component is, its role in the engine, and how it fits
+together. You can browse this generated API documentation locally:
+
+```bash
+make docs        # serve browsable docs at http://localhost:6060 (override DOCS_PORT)
+make docs-cli    # print every package's overview to the terminal
+```
+
+`make docs` starts a local documentation server, preferring an installed
+`pkgsite` or `godoc`, and otherwise falling back to
+`go run golang.org/x/tools/cmd/godoc@latest` (which builds against your local Go
+toolchain). Start reading at the `engine` package for the architectural
+overview.
+
 Examples (multi-example orchestrator):
 
 ```bash

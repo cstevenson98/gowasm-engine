@@ -2326,3 +2326,77 @@ Desktop builds use filesystem paths relative to the binary's working directory, 
 **Notes**: Docs still referencing `internal/`, WASM, or WebGPU (e.g. `docs/ARCHITECTURE.md`, `.cursor/rules/gameEngine.mdc`, `README_EBITEN.md`) were not exhaustively rewritten. `examples/ebiten-demo/` retained as a minimal smoke test. Module rename and collapsing the three modules into one were deferred by choice.
 
 ---
+
+## [2026-07-20 08:33:51 BST] - Documented engine concepts + added docs server
+
+**Prompt/Request**: Check docstrings across the codebase, improve them so they explain the engine concepts (what each component is and does), then add functionality to serve the docs easily.
+
+**Changes Made**:
+- Added package-level overview docs (`doc.go`) to all 13 `pkg/` packages: types, engine, scene, canvas, gameobject, sprite, mover, input, text, battle, config, debug, logger. Each explains the component, its role in the architecture, and its key types; `engine/doc.go` serves as the architectural hub (component diagram + frame lifecycle + DI model).
+- Improved thin type docstrings: `types.Vector2`, `types.UVRect`, `types.ObjectState`.
+- Added `scripts/serve-docs.sh`: starts a browsable docs server, preferring installed `pkgsite`, then `godoc`, then `go run golang.org/x/tools/cmd/godoc@latest` (local toolchain, no upgrade). Prints the correct URL for whichever backend runs.
+- Added Makefile `docs` (serve, DOCS_PORT overridable, default 6060) and `docs-cli` (print all overviews via `go doc`) targets under a new Documentation section.
+- Added a Documentation section to `README.md`.
+
+**Reasoning**: Method-level docstrings were already decent, but no package had a package comment, so `go doc`/pkgsite showed empty conceptual overviews. Package docs are the highest-value place to explain engine concepts. Chose godoc as the go-run fallback because `pkgsite@latest` (v0.3.0) forces a Go 1.26 toolchain download; godoc builds against the existing 1.24.3 toolchain.
+
+**Impact**: Documentation-only + tooling; no runtime/behaviour changes. Public API unchanged.
+
+**Testing**: `go build ./...` OK; `go vet ./pkg/...` clean; `gofmt -l pkg/` clean; `make test` (all pkg tests) pass; verified `go doc ./pkg/engine`, `make docs-cli`, and `./scripts/serve-docs.sh` (served HTTP 200 with new content via godoc).
+
+**Notes**: README still contains some pre-Ebiten WebGPU/WASM references elsewhere; left untouched as out of scope.
+
+---
+
+## [2026-07-20 08:49:45 BST] - Concept docs for core packages + runnable example
+
+**Prompt/Request**: "Is it really easier to keep these docs in docstrings like this?" — decide the docs approach and produce servable docs that explain concepts with examples.
+
+**Changes Made**:
+- Added concept-narrative package docs (Go 1.19 doc-comment formatting: headings, lists, code blocks, links):
+  - pkg/engine/doc.go (hub overview: mental model, game loop, scene lifecycle, DI, textures, quick start)
+  - pkg/scene/doc.go (layers, BaseScene, DI, assets, state save/restore)
+  - pkg/gameobject/doc.go (composition = sprite + mover, BaseGameObject, ready-made objects)
+  - pkg/sprite/doc.go (sprite sheets, UV, animation, visibility)
+- Added pkg/engine/example_test.go: compile-checked runnable Example with a custom scene (no // Output so it is verified by the compiler but not executed, correct for a game-loop example).
+- Docs are served via the existing 'make docs' (scripts/serve-docs.sh -> pkgsite/godoc) and README Documentation section (both pre-existing from prior session).
+
+**Reasoning**:
+Chose the Go-native path (doc.go narratives + Example functions + pkgsite) over a standalone markdown site: pretty + servable at near-zero cost, single source of truth next to the code, and examples are compiler-checked so they cannot rot. Package-level doc.go narratives cover "concepts, not just per-symbol docstrings"; Example functions cover "with examples".
+
+**Impact**:
+- No runtime/behavior changes; docs only.
+- Fills in the core packages the prior session had not yet covered (engine, scene, gameobject, sprite).
+
+**Testing**:
+- go build ./... — ok
+- go vet ./pkg/... — clean
+- go test ./pkg/... — pass; engine reports "no tests to run" confirming the Example compiled but is not executed.
+
+**Notes**:
+Go doc comments cannot render tables/images/diagrams; if architecture diagrams or long tutorials are needed later, add a small markdown site alongside. Uncommitted on branch pure-ebiten.
+
+---
+
+## [2026-07-20 10:24:00 BST] - Scene setup review fixes (component update, input, DI, deferred switch)
+
+**Prompt/Request**: Act on a scene-setup review: (1) fix double player update by making objects self-advance; (2) use InputState last-frame flags instead of per-scene tracking; (3) drop redundant manual SetCanvasManager wiring; (4) simplify player-position resolution; (5) misc redundancies; (6) explain/address scene-switch reentrancy and remove cross-scene persistence to simplify.
+
+**Changes Made**:
+- #1 `BaseGameObject.Update` now advances its own mover + sprite (was a no-op); `Player.Update`/`Enemy.Update` call `BaseGameObject.Update`. Scenes no longer pump mover/sprite by hand, fixing the double player update.
+- #2 Removed all per-scene `*PressedLastFrame` fields; scenes now edge-detect via `types.InputState` last-frame flags (already populated by the input poller).
+- #3 Removed the four redundant `scene.SetCanvasManager(...)` calls in `cmd/ebiten-game/main.go` (canvas is injected via DI on activation).
+- #4 Replaced the 4x-duplicated player-position if/else in `GameplayScene.Initialize` with `resolvePlayerPosition()` + `stateManager()` helpers.
+- #5 Dropped redundant font `.sheet.png` entries from `TexturePaths` (loaded via `FontPaths`); removed `PlayerMenuScene` duplicate `GetRequiredAssets` override; replaced the rough menu text-centering estimate with a `textWidth()` helper matching the renderer advance; removed a buggy early-return in `PlayerMenuScene.Update` that blocked M/Enter unless Up/Down were held.
+- #6 Engine now performs a DEFERRED scene switch: scenes call `RequestStateChange` (injected callback) which records a pending state applied at the start of the next frame, so a scene is never cleaned up mid-Update. `SetGameState` remains for the immediate startup activation. Removed the `SceneStateful` interface and all Save/Restore machinery (engine hooks, `BaseScene` savedState). Cross-scene player-position persistence is now a single source of truth: `GameplayScene.Cleanup` writes the live position into the global game state via new `GameStateManager.UpdatePlayerPosition`, and `Initialize` reads it back.
+- Updated package docs (engine, scene, types) to describe the deferred switch and drop `SceneStateful` references.
+
+**Reasoning**: The component model had no consistent place to advance mover/sprite, causing a double update and inconsistent animation. InputState already carried previous-frame state, making per-scene tracking dead weight. Immediate state changes during Update caused reentrant Cleanup, forcing fragile nil-guards; deferring the switch removes that class of bug and the guards. Consolidating persistence to the global game state removes the generic SceneStateful layer while preserving behaviour (position kept across menu/battle round-trips).
+
+**Impact**: Simpler scenes and engine; `types.SceneStateful` removed (API change, but unused outside the example). Behaviour preserved: player position survives gameplay<->menu and pre/post battle.
+
+**Testing**: `go build ./...` (root + cmd + examples) OK; `go vet ./pkg/...` clean; `go test ./...` pass (all modules); `gofmt` clean on edited files; `cd cmd/ebiten-game && go build` produces the desktop binary.
+
+**Notes**: `battle_menu.go` had pre-existing gofmt drift (unrelated) - left as-is. `GameplayScene.handleSaveGame` is retained (Ctrl+S path) though currently uncalled. `BaseScene.SetCanvasManager` kept as a public helper.
+
+---

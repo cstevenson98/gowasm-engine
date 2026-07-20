@@ -1,4 +1,3 @@
-
 package gamestate
 
 import (
@@ -97,6 +96,19 @@ func (gsm *GameStateManager) UpdateStateFromPlayer(playerPosition types.Vector2,
 	gsm.currentState.PlayerPosition = playerPosition
 	gsm.currentState.PlayerStats = playerStats
 	logger.Logger.Debugf("Updated game state - Position: (%.2f, %.2f), HP: %d/%d", playerPosition.X, playerPosition.Y, playerStats.HP, playerStats.MaxHP)
+}
+
+// UpdatePlayerPosition updates only the player's position in the current game
+// state (thread-safe). Used to keep the player's live position in the global
+// game state when switching scenes, so it survives without an explicit save.
+func (gsm *GameStateManager) UpdatePlayerPosition(playerPosition types.Vector2) {
+	gsm.mu.Lock()
+	defer gsm.mu.Unlock()
+
+	if gsm.currentState == nil {
+		return
+	}
+	gsm.currentState.PlayerPosition = playerPosition
 }
 
 // SaveCurrentGame saves the current game state to localStorage

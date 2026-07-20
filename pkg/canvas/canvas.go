@@ -83,7 +83,12 @@ func (c *Canvas) DrawTexturedRect(texturePath string, position types.Vector2, si
 
 	img, exists := c.loadedTextures[texturePath]
 	if !exists {
-		return &CanvasError{Message: fmt.Sprintf("Texture not loaded: %s", texturePath)}
+		// Lazy-load on first use so dynamically spawned objects render without
+		// needing to be pre-declared. Loaded textures are cached thereafter.
+		if err := c.LoadTexture(texturePath); err != nil {
+			return err
+		}
+		img = c.loadedTextures[texturePath]
 	}
 
 	texWidth := float64(img.Bounds().Dx())

@@ -1,4 +1,3 @@
-
 package scenes
 
 import (
@@ -33,33 +32,25 @@ type BattleScene struct {
 	// Menu text rendering
 	menuFont         text.Font
 	menuTextRenderer text.TextRenderer
-
-	// Debug console toggle state
-	f2PressedLastFrame bool
-
-	// Key press state tracking
-	key1PressedLastFrame bool
-	key2PressedLastFrame bool
 }
 
 // NewBattleScene creates a new battle scene
 func NewBattleScene(screenWidth, screenHeight float64) *BattleScene {
 	baseScene := pkscene.NewBaseScene("Battle", screenWidth, screenHeight)
-	
-	// Set required assets
-	fontTexturePath := config.Global.Debug.FontPath + ".sheet.png"
+
+	// Declare required assets. Font textures are loaded automatically from
+	// FontPaths, so they don't need to be listed under TexturePaths.
 	baseScene.SetRequiredAssets(types.SceneAssets{
 		TexturePaths: []string{
 			"assets/art/test-background.png",
 			config.Global.Player.TexturePath,
 			config.Global.Battle.EnemyTexture,
-			fontTexturePath,
 		},
 		FontPaths: []string{
 			config.Global.Debug.FontPath,
 		},
 	})
-	
+
 	return &BattleScene{
 		BaseScene: baseScene,
 	}
@@ -174,81 +165,48 @@ func (s *BattleScene) Initialize() error {
 
 // Update updates all game objects in the scene
 func (s *BattleScene) Update(deltaTime float64) {
-	// Update battle system
+	// Update battle system and visual effects.
 	if s.battleManager != nil {
 		s.battleManager.Update(deltaTime)
 	}
-
-	// Update effect manager
 	if s.effectManager != nil {
 		s.effectManager.Update(deltaTime)
 	}
 
-	// Update player (no input handling in battle - menu handles input)
+	// Advance the battle participants. They're held as fields (not in layers),
+	// so they're pumped explicitly; BaseGameObject.Update animates the sprite
+	// (they don't move in battle).
 	if s.player != nil {
-		// Update player sprite (animation only, no movement)
-		if sprite := s.player.GetSprite(); sprite != nil {
-			sprite.Update(deltaTime)
-		}
 		s.player.Update(deltaTime)
 	}
-
-	// Update enemy (animation only)
 	if s.enemy != nil {
-		if sprite := s.enemy.GetSprite(); sprite != nil {
-			sprite.Update(deltaTime)
-		}
 		s.enemy.Update(deltaTime)
 	}
 
-	// Update all game objects in all layers
-	for _, layer := range []pkscene.SceneLayer{pkscene.BACKGROUND, pkscene.ENTITIES, pkscene.UI} {
-		for _, gameObject := range s.GetLayer(layer) {
-			if mover := gameObject.GetMover(); mover != nil {
-				mover.Update(deltaTime)
-			}
+	// Advance objects held in layers (the background).
+	s.BaseScene.Update(deltaTime)
 
-			if sprite := gameObject.GetSprite(); sprite != nil {
-				sprite.Update(deltaTime)
-			}
-
-			gameObject.Update(deltaTime)
-		}
-	}
-
-	// Update battle menu system
+	// Battle menu input.
 	if s.menuSystem != nil {
 		s.menuSystem.Update(deltaTime, s.GetInputCapturer())
 	}
 
-	// Handle debug console toggle (F2) and scene switching (Key 1)
 	inputState := s.GetInputState()
-	// Debug logging to see what keys are being pressed
-	if inputState.F2Pressed {
-		logger.Logger.Debugf("F2 key detected: %t, LastFrame: %t", inputState.F2Pressed, s.f2PressedLastFrame)
-	}
-	// Check for F2 key press using local state
-	if inputState.F2Pressed && !s.f2PressedLastFrame {
+
+	// Debug console toggle (F2).
+	if inputState.F2Pressed && !inputState.F2PressedLastFrame {
 		debug.Console.ToggleVisibility()
 		logger.Logger.Debugf("Debug console toggled via F2")
 	}
-	// Update local state
-	s.f2PressedLastFrame = inputState.F2Pressed
 
-	// Handle scene switching: Key 1 switches to gameplay scene, Key 2 to battle (no-op, already in battle)
-	if inputState.Key1Pressed && !s.key1PressedLastFrame {
+	// Scene switching: Key 1 returns to gameplay. The engine defers the switch
+	// to the next frame, so it is safe to continue this Update.
+	if inputState.Key1Pressed && !inputState.Key1PressedLastFrame {
 		logger.Logger.Debugf("Key 1 pressed: switching to gameplay scene")
-		err := s.RequestStateChange(types.GAMEPLAY)
-		if err != nil {
+		if err := s.RequestStateChange(types.GAMEPLAY); err != nil {
 			logger.Logger.Errorf("Failed to switch to gameplay scene: %s", err.Error())
 		}
-		// Return early - scene may have been cleaned up during state change
-		s.key1PressedLastFrame = inputState.Key1Pressed
-		s.key2PressedLastFrame = inputState.Key2Pressed
-		return
 	}
-	s.key1PressedLastFrame = inputState.Key1Pressed
-	s.key2PressedLastFrame = inputState.Key2Pressed
 
 	// Update debug console
 	if config.Global.Debug.Enabled {
@@ -590,4 +548,3 @@ func (s *BattleScene) GetBattleManager() *battle.BattleManager {
 func (s *BattleScene) GetEffectManager() *battle.EffectManager {
 	return s.effectManager
 }
-

@@ -1,4 +1,3 @@
-
 package scenes
 
 import (
@@ -20,17 +19,12 @@ type GameplayScene struct {
 
 	// Gameplay-specific fields
 	player *gameobject.Player
-
-	// Key press state tracking
-	key1PressedLastFrame bool
-	key2PressedLastFrame bool
-	mPressedLastFrame    bool // M key for player menu
 }
 
 // NewGameplayScene creates a new gameplay scene
 func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 	baseScene := pkscene.NewBaseScene("Gameplay", screenWidth, screenHeight)
-	
+
 	// Set required assets
 	baseScene.SetRequiredAssets(types.SceneAssets{
 		TexturePaths: []string{
@@ -41,13 +35,13 @@ func NewGameplayScene(screenWidth, screenHeight float64) *GameplayScene {
 			config.Global.Debug.FontPath,
 		},
 	})
-	
+
 	return &GameplayScene{
 		BaseScene: baseScene,
 	}
 }
 
-// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState, 
+// All interface implementations (SetInputCapturer, SetStateChangeCallback, SetGameState,
 // SetCanvasManager, GetRequiredAssets) are inherited from BaseScene
 
 // Initialize sets up the gameplay scene and creates game objects (overrides BaseScene.Initialize)
@@ -68,49 +62,11 @@ func (s *GameplayScene) Initialize() error {
 	s.AddBackground(background)
 	logger.Logger.Debugf("Created Background in %s scene", s.GetName())
 
-	// Create player - use saved position from global game state if available,
-	// otherwise use scene-level saved position (for scene switching),
-	// otherwise use spawn position
-	var playerPos types.Vector2
-
-	// First, check if we have a global game state with saved position (from load game)
-	if gameState := s.GetGameState(); gameState != nil {
-		if manager, ok := gameState.(*gamestate.GameStateManager); ok {
-			globalState := manager.GetState()
-			if globalState != nil && globalState.Timestamp > 0 {
-				// Use position from loaded game state
-				playerPos = globalState.PlayerPosition
-				logger.Logger.Debugf("Creating Player at loaded position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
-			} else if savedPos, ok := s.GetSavedState()["playerPosition"].(types.Vector2); ok {
-				// Fallback to scene-level saved position (for scene switching)
-				playerPos = savedPos
-				logger.Logger.Debugf("Creating Player at saved scene position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
-			} else {
-				// Default to spawn position
-				spawnX, spawnY := config.GetPlayerSpawnPosition()
-				playerPos = types.Vector2{X: spawnX, Y: spawnY}
-				logger.Logger.Debugf("Creating Player at spawn position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
-			}
-		} else if savedPos, ok := s.GetSavedState()["playerPosition"].(types.Vector2); ok {
-			// Fallback: scene-level saved position
-			playerPos = savedPos
-			logger.Logger.Debugf("Creating Player at saved scene position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
-		} else {
-			// Default to spawn position
-			spawnX, spawnY := config.GetPlayerSpawnPosition()
-			playerPos = types.Vector2{X: spawnX, Y: spawnY}
-			logger.Logger.Debugf("Creating Player at spawn position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
-		}
-	} else if savedPos, ok := s.GetSavedState()["playerPosition"].(types.Vector2); ok {
-		// Fallback: scene-level saved position
-		playerPos = savedPos
-		logger.Logger.Debugf("Creating Player at saved scene position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
-	} else {
-		// Default to spawn position
-		spawnX, spawnY := config.GetPlayerSpawnPosition()
-		playerPos = types.Vector2{X: spawnX, Y: spawnY}
-		logger.Logger.Debugf("Creating Player at spawn position (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
-	}
+	// Create the player at the position held in the global game state (set on
+	// new game / load, and kept up to date when leaving this scene), falling
+	// back to the configured spawn point.
+	playerPos := s.resolvePlayerPosition()
+	logger.Logger.Debugf("Creating Player at (%.2f, %.2f) in %s scene", playerPos.X, playerPos.Y, s.GetName())
 
 	s.player = gameobject.NewPlayer(
 		playerPos,
@@ -122,75 +78,61 @@ func (s *GameplayScene) Initialize() error {
 	s.AddEntity(s.player)
 
 	// Update game state manager with player reference (player is part of game state)
-	if gameState := s.GetGameState(); gameState != nil {
-		if manager, ok := gameState.(*gamestate.GameStateManager); ok {
-			manager.SetPlayer(s.player)
-			logger.Logger.Debugf("Updated game state manager with player reference")
-		}
+	if manager := s.stateManager(); manager != nil {
+		manager.SetPlayer(s.player)
+		logger.Logger.Debugf("Updated game state manager with player reference")
 	}
-
-	// Note: Full state restoration happens in RestoreState() after Initialize() completes
-	// This ensures the player is fully created before we restore state
 
 	return nil
 }
 
+// stateManager returns the game's state manager, or nil if unavailable.
+func (s *GameplayScene) stateManager() *gamestate.GameStateManager {
+	if gameState := s.GetGameState(); gameState != nil {
+		if manager, ok := gameState.(*gamestate.GameStateManager); ok {
+			return manager
+		}
+	}
+	return nil
+}
+
+// resolvePlayerPosition returns where the player should spawn: the position in
+// the global game state if one exists, otherwise the configured spawn point.
+func (s *GameplayScene) resolvePlayerPosition() types.Vector2 {
+	if manager := s.stateManager(); manager != nil {
+		if state := manager.GetState(); state != nil {
+			return state.PlayerPosition
+		}
+	}
+	spawnX, spawnY := config.GetPlayerSpawnPosition()
+	return types.Vector2{X: spawnX, Y: spawnY}
+}
+
 // Update updates all game objects in the scene (overrides BaseScene.Update)
 func (s *GameplayScene) Update(deltaTime float64) {
-	// Update player with input
+	inputState := s.GetInputState()
+
+	// Feed input to the player before objects are advanced.
 	if s.player != nil {
-		// Get input state using inherited method
-		inputState := s.GetInputState()
 		s.player.HandleInput(inputState)
-
-		// Handle scene switching: Key 2 switches to battle scene
-		if inputState.Key2Pressed && !s.key2PressedLastFrame {
-			logger.Logger.Debugf("Key 2 pressed: switching to battle scene")
-			err := s.RequestStateChange(types.BATTLE)
-			if err != nil {
-				logger.Logger.Errorf("Failed to switch to battle scene: %s", err.Error())
-			}
-			// Return early - scene may have been cleaned up during state change
-			s.key1PressedLastFrame = inputState.Key1Pressed
-			s.key2PressedLastFrame = inputState.Key2Pressed
-			return
-		}
-		s.key1PressedLastFrame = inputState.Key1Pressed
-		s.key2PressedLastFrame = inputState.Key2Pressed
-
-		// Handle player menu (M key)
-		if inputState.MPressed && !s.mPressedLastFrame {
-			logger.Logger.Debugf("M key pressed: opening player menu")
-			err := s.RequestStateChange(types.PLAYER_MENU)
-			if err != nil {
-				logger.Logger.Errorf("Failed to switch to player menu: %s", err.Error())
-			}
-			// Return early - scene may have been cleaned up during state change
-			s.mPressedLastFrame = inputState.MPressed
-			return
-		}
-		s.mPressedLastFrame = inputState.MPressed
-
-		// Re-check player exists (may have been cleaned up during state change)
-		if s.player == nil {
-			return
-		}
-
-		// Update player mover (position)
-		if mover := s.player.GetMover(); mover != nil {
-			mover.Update(deltaTime)
-		}
-
-		// Update player sprite (animation)
-		if sprite := s.player.GetSprite(); sprite != nil {
-			sprite.Update(deltaTime)
-		}
-
-		// Update player game logic
-		s.player.Update(deltaTime)
 	}
 
-	// Update all game objects in all layers using BaseScene method
+	// Scene switching (edge-detected using the input snapshot's last-frame flags).
+	// The engine defers the switch to the next frame, so it is safe to continue.
+	if inputState.Key2Pressed && !inputState.Key2PressedLastFrame {
+		logger.Logger.Debugf("Key 2 pressed: switching to battle scene")
+		if err := s.RequestStateChange(types.BATTLE); err != nil {
+			logger.Logger.Errorf("Failed to switch to battle scene: %s", err.Error())
+		}
+	} else if inputState.MPressed && !inputState.MPressedLastFrame {
+		logger.Logger.Debugf("M key pressed: opening player menu")
+		if err := s.RequestStateChange(types.PLAYER_MENU); err != nil {
+			logger.Logger.Errorf("Failed to switch to player menu: %s", err.Error())
+		}
+	}
+
+	// Advance every object in the scene (player included: BaseGameObject.Update
+	// moves the mover and animates the sprite).
 	s.BaseScene.Update(deltaTime)
 
 	// Update debug console
@@ -205,57 +147,25 @@ func (s *GameplayScene) RenderOverlays() error {
 	return s.BaseScene.RenderOverlays()
 }
 
-// Cleanup overrides BaseScene.Cleanup to also clear player reference
+// Cleanup overrides BaseScene.Cleanup. Before tearing down, it writes the
+// player's live position back into the global game state so that returning to
+// gameplay (e.g. after the player menu) resumes from where the player was.
 func (s *GameplayScene) Cleanup() {
 	logger.Logger.Debugf("Cleaning up %s scene", s.GetName())
-	
+
+	if s.player != nil {
+		if manager := s.stateManager(); manager != nil {
+			if mover := s.player.GetMover(); mover != nil {
+				manager.UpdatePlayerPosition(mover.GetPosition())
+			}
+		}
+	}
+
 	// Clear player reference
 	s.player = nil
-	
+
 	// Call base cleanup (clears all layers)
 	s.BaseScene.Cleanup()
-}
-
-// SaveState implements types.SceneStateful (overrides BaseScene.SaveState)
-// Saves the current player position and state before cleanup
-func (s *GameplayScene) SaveState() {
-	if s.player != nil {
-		// Save player position in BaseScene's saved state map
-		if mover := s.player.GetMover(); mover != nil {
-			pos := mover.GetPosition()
-			s.GetSavedState()["playerPosition"] = pos
-			logger.Logger.Debugf("Saved player position: (%.2f, %.2f)", pos.X, pos.Y)
-		}
-
-		// Save full player state
-		playerState := s.player.GetState()
-		if playerState != nil {
-			savedState := types.CopyObjectState(*playerState)
-			s.GetSavedState()["playerState"] = savedState
-			logger.Logger.Debugf("Saved player state for %s scene", s.GetName())
-		}
-	}
-}
-
-// RestoreState implements types.SceneStateful (overrides BaseScene.RestoreState)
-// Restores the previously saved player position and state after initialization
-func (s *GameplayScene) RestoreState() {
-	if s.player == nil {
-		return
-	}
-
-	// Player position is already restored during Initialize() using saved state
-	// Here we restore the full state if it was saved
-	if savedPlayerState, ok := s.GetSavedState()["playerState"].(types.ObjectState); ok {
-		s.player.SetState(savedPlayerState)
-		logger.Logger.Debugf("Restored player state in %s scene", s.GetName())
-	} else if savedPos, ok := s.GetSavedState()["playerPosition"].(types.Vector2); ok {
-		// If we have position but no full state, at least restore position
-		if mover := s.player.GetMover(); mover != nil {
-			mover.SetPosition(savedPos)
-			logger.Logger.Debugf("Restored player position to: (%.2f, %.2f)", savedPos.X, savedPos.Y)
-		}
-	}
 }
 
 // handleSaveGame handles saving the current game state

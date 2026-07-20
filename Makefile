@@ -2,7 +2,7 @@
 
 .PHONY: help test test-all test-verbose test-coverage tidy fmt lint \
         build-desktop build-all run-desktop run-desktop-from-assets \
-        dev clean clean-all
+        dev clean clean-all docs docs-cli
 
 .DEFAULT_GOAL := help
 
@@ -84,6 +84,21 @@ tidy: ## Tidy and verify dependencies
 	@go mod tidy
 	@cd cmd/ebiten-game && go mod tidy
 	@echo "$(GREEN)✓ Dependencies tidied$(NC)"
+
+##@ Documentation
+
+DOCS_PORT ?= 6060
+
+docs: ## Serve browsable API docs at http://localhost:6060 (override DOCS_PORT)
+	@echo "$(CYAN)Starting documentation server (port $(DOCS_PORT))...$(NC)"
+	@./scripts/serve-docs.sh $(DOCS_PORT)
+
+docs-cli: ## Print package overviews to the terminal (via go doc)
+	@for pkg in $$(go list ./pkg/...); do \
+		printf "$(CYAN)========== %s ==========$(NC)\n" "$$pkg"; \
+		go doc $$pkg; \
+		echo ""; \
+	done
 
 ##@ Cleaning
 

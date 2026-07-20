@@ -2,8 +2,6 @@ package sprite
 
 import (
 	"testing"
-
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 func TestNewSpriteSheet(t *testing.T) {
@@ -147,26 +145,20 @@ func TestSpriteSheetSingleFrameNoAnimation(t *testing.T) {
 	}
 }
 
-func TestSpriteSheetGetSpriteRenderData(t *testing.T) {
+func TestSpriteSheetAppearance(t *testing.T) {
 	sprite := NewSpriteSheet("texture.png", Vector2{X: 128, Y: 128}, 2, 2)
-	position := types.Vector2{X: 100, Y: 200}
 
-	renderData := sprite.GetSpriteRenderData(position)
-
-	if renderData.TexturePath != "texture.png" {
-		t.Errorf("Expected texture path 'texture.png', got '%s'", renderData.TexturePath)
+	if sprite.GetTexturePath() != "texture.png" {
+		t.Errorf("Expected texture path 'texture.png', got '%s'", sprite.GetTexturePath())
 	}
 
-	if renderData.Position.X != 100 || renderData.Position.Y != 200 {
-		t.Errorf("Expected position (100, 200), got (%f, %f)", renderData.Position.X, renderData.Position.Y)
+	size := sprite.GetSize()
+	if size.X != 128 || size.Y != 128 {
+		t.Errorf("Expected size (128, 128), got (%f, %f)", size.X, size.Y)
 	}
 
-	if renderData.Size.X != 128 || renderData.Size.Y != 128 {
-		t.Errorf("Expected size (128, 128), got (%f, %f)", renderData.Size.X, renderData.Size.Y)
-	}
-
-	if !renderData.Visible {
-		t.Error("Expected render data to be visible")
+	if !sprite.IsVisible() {
+		t.Error("Expected sprite to be visible")
 	}
 }
 
@@ -238,8 +230,7 @@ func TestSpriteSheetUVCalculation(t *testing.T) {
 			sprite := NewSpriteSheet("test.png", Vector2{X: 64, Y: 64}, tt.columns, tt.rows)
 			sprite.SetCurrentFrame(tt.frame)
 
-			renderData := sprite.GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
-			uv := renderData.UV
+			uv := sprite.GetUV()
 
 			if !floatEquals(uv.U, tt.expectedU, 0.0001) {
 				t.Errorf("Expected U=%f, got %f", tt.expectedU, uv.U)
@@ -254,16 +245,6 @@ func TestSpriteSheetUVCalculation(t *testing.T) {
 				t.Errorf("Expected H=%f, got %f", tt.expectedH, uv.H)
 			}
 		})
-	}
-}
-
-func TestSpriteSheetInvisibleRenderData(t *testing.T) {
-	sprite := NewSpriteSheet("test.png", Vector2{X: 64, Y: 64}, 2, 2)
-	sprite.SetVisible(false)
-
-	renderData := sprite.GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
-	if renderData.Visible {
-		t.Error("Expected render data to be invisible")
 	}
 }
 
@@ -285,12 +266,11 @@ func BenchmarkSpriteSheetUpdate(b *testing.B) {
 	}
 }
 
-func BenchmarkSpriteSheetGetRenderData(b *testing.B) {
+func BenchmarkSpriteSheetGetUV(b *testing.B) {
 	sprite := NewSpriteSheet("test.png", Vector2{X: 64, Y: 64}, 4, 4)
-	pos := types.Vector2{X: 100, Y: 200}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = sprite.GetSpriteRenderData(pos)
+		_ = sprite.GetUV()
 	}
 }

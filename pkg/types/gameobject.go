@@ -4,6 +4,10 @@ import (
 	"fmt"
 )
 
+// ObjectState is the serialisable, per-object bookkeeping carried by every
+// GameObject: its unique ID, last known position, visibility flag, and current
+// animation frame. It is the piece of a GameObject that can be copied, saved,
+// or restored independently of its Sprite and Mover components.
 type ObjectState struct {
 	ID       string
 	Position Vector2
@@ -26,6 +30,10 @@ type GameObject interface {
 
 	// GetMover returns the mover component, or nil if this object doesn't move
 	GetMover() Mover
+
+	// GetRenderData returns everything the renderer needs to draw this object
+	// this frame, combining the sprite's appearance with the mover's position.
+	GetRenderData() SpriteRenderData
 
 	// Update updates the game object's state and its sprite
 	Update(deltaTime float64)

@@ -20,7 +20,6 @@ import (
 //   - SceneChangeRequester
 //   - SceneGameStateUser
 //   - SceneAssetProvider
-//   - SceneStateful
 //   - SceneOverlayRenderer
 //   - SceneTextureProvider
 //
@@ -62,9 +61,6 @@ type BaseScene struct {
 	canvasManager       canvas.CanvasManager
 	gameStateManager    interface{}
 
-	// Saved state (for SceneStateful)
-	savedState map[string]interface{}
-
 	// Required assets (for SceneAssetProvider)
 	requiredAssets types.SceneAssets
 
@@ -88,7 +84,6 @@ func NewBaseScene(name string, width, height float64) *BaseScene {
 		screenWidth:  width,
 		screenHeight: height,
 		layers:       make(map[SceneLayer][]types.GameObject),
-		savedState:   make(map[string]interface{}),
 		requiredAssets: types.SceneAssets{
 			TexturePaths: []string{},
 			FontPaths:    fontPaths,
@@ -281,32 +276,6 @@ func (b *BaseScene) AddRequiredTexture(texturePath string) {
 // Convenience method for adding fonts one at a time.
 func (b *BaseScene) AddRequiredFont(fontPath string) {
 	b.requiredAssets.FontPaths = append(b.requiredAssets.FontPaths, fontPath)
-}
-
-// ===== SceneStateful Interface =====
-
-// SaveState saves the current scene state before cleanup.
-// Default implementation returns the internal saved state map.
-// Override this to save custom state.
-// Implements SceneStateful interface.
-func (b *BaseScene) SaveState() {
-	// Default: no-op
-	// Subclasses can override to populate b.savedState
-}
-
-// RestoreState restores the previously saved scene state after initialization.
-// Default implementation is a no-op.
-// Override this to restore custom state.
-// Implements SceneStateful interface.
-func (b *BaseScene) RestoreState() {
-	// Default: no-op
-	// Subclasses can override to read from b.savedState
-}
-
-// GetSavedState returns the internal saved state map.
-// Use this in your custom SaveState/RestoreState implementations.
-func (b *BaseScene) GetSavedState() map[string]interface{} {
-	return b.savedState
 }
 
 // ===== SceneOverlayRenderer Interface =====

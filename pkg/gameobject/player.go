@@ -79,8 +79,13 @@ func NewPlayer(position types.Vector2, size types.Vector2, moveSpeed float64) *P
 	}
 }
 
-// Update updates the Player's state (overrides BaseGameObject.Update)
+// Update updates the Player's state (overrides BaseGameObject.Update).
+// It advances the shared components via BaseGameObject.Update, then runs
+// player-specific logic.
 func (p *Player) Update(deltaTime float64) {
+	// Advance mover (position) and sprite (animation).
+	p.BaseGameObject.Update(deltaTime)
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

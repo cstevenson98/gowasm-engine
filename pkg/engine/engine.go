@@ -31,7 +31,11 @@ type Engine struct {
 	screenHeight      float64
 	gameStateProvider interface{}
 
-	tickCount uint64
+	// Pending scene switch. Requests made during a scene's Update are recorded
+	// here and applied at the start of the next frame, so a scene is never torn
+	// down while it is still running its own Update (see RequestStateChange).
+	pendingState    types.GameState
+	hasPendingState bool
 }
 
 // NewEngine creates a new game engine instance.
@@ -93,12 +97,14 @@ func (e *Engine) Update() error {
 		return nil
 	}
 
-	e.tickCount++
-
 	// Fixed timestep: Ebiten runs at 60 TPS by default
 	deltaTime := 1.0 / 60.0
 
 	e.inputCapturer.PollInput()
+
+	// Apply any scene switch requested during the previous frame before running
+	// the current scene's Update, so switches never happen mid-Update.
+	e.applyPendingStateChange()
 
 	e.stateLock.Lock()
 	currentScene := e.currentScene
@@ -107,8 +113,6 @@ func (e *Engine) Update() error {
 	if currentScene != nil {
 		currentScene.Update(deltaTime)
 	}
-
-	e.loadSpriteTextures()
 
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
 		return ebiten.Termination
@@ -131,13 +135,7 @@ func (e *Engine) Draw(screen *ebiten.Image) {
 
 	// Render all game objects in layer order.
 	for _, gameObject := range currentScene.GetRenderables() {
-		var renderData types.SpriteRenderData
-		if mover := gameObject.GetMover(); mover != nil {
-			renderData = gameObject.GetSprite().GetSpriteRenderData(mover.GetPosition())
-		} else {
-			renderData = gameObject.GetSprite().GetSpriteRenderData(types.Vector2{X: 0, Y: 0})
-		}
-
+		renderData := gameObject.GetRenderData()
 		if !renderData.Visible {
 			continue
 		}
@@ -162,34 +160,6 @@ func (e *Engine) Draw(screen *ebiten.Image) {
 // Layout implements ebiten.Game - returns the virtual screen size.
 func (e *Engine) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeight int) {
 	return int(e.screenWidth), int(e.screenHeight)
-}
-
-// loadSpriteTextures loads textures for all game objects in the current scene.
-func (e *Engine) loadSpriteTextures() {
-	e.stateLock.Lock()
-	currentScene := e.currentScene
-	e.stateLock.Unlock()
-
-	if currentScene == nil {
-		return
-	}
-
-	for _, gameObject := range currentScene.GetRenderables() {
-		pos := types.Vector2{X: 0, Y: 0}
-		if mover := gameObject.GetMover(); mover != nil {
-			pos = mover.GetPosition()
-		}
-		renderData := gameObject.GetSprite().GetSpriteRenderData(pos)
-		_ = e.canvasManager.LoadTexture(renderData.TexturePath)
-	}
-
-	if textureProvider, ok := currentScene.(types.SceneTextureProvider); ok {
-		for _, path := range textureProvider.GetExtraTexturePaths() {
-			if path != "" {
-				_ = e.canvasManager.LoadTexture(path)
-			}
-		}
-	}
 }
 
 // Stop stops the game loop.
@@ -223,8 +193,52 @@ func (e *Engine) RegisterGameStateProvider(provider interface{}) {
 	logger.Logger.Debugf("Registered game state provider with engine")
 }
 
-// SetGameState changes the current game state and switches the active scene.
+// SetGameState changes the current game state and switches the active scene
+// immediately. Use this to activate the starting scene before the game loop
+// runs. Scenes should not call this from within Update - use the injected
+// state-change callback (RequestStateChange) instead, which defers the switch.
 func (e *Engine) SetGameState(state types.GameState) error {
+	return e.applyGameState(state)
+}
+
+// RequestStateChange asks the engine to switch to state on the next frame. It
+// is the callback injected into scenes, so a scene can request a switch from
+// within its own Update without being torn down mid-Update. The switch is
+// applied by applyPendingStateChange at the start of the next frame.
+func (e *Engine) RequestStateChange(state types.GameState) error {
+	e.stateLock.Lock()
+	defer e.stateLock.Unlock()
+
+	if _, exists := e.registeredScenes[state]; !exists {
+		return fmt.Errorf("no scene registered for game state: %s", state.String())
+	}
+
+	e.pendingState = state
+	e.hasPendingState = true
+	logger.Logger.Debugf("Requested game state change to: %s", state.String())
+	return nil
+}
+
+// applyPendingStateChange performs a deferred scene switch, if one was
+// requested. Called by Update at the start of each frame.
+func (e *Engine) applyPendingStateChange() {
+	e.stateLock.Lock()
+	if !e.hasPendingState {
+		e.stateLock.Unlock()
+		return
+	}
+	state := e.pendingState
+	e.hasPendingState = false
+	e.stateLock.Unlock()
+
+	if err := e.applyGameState(state); err != nil {
+		logger.Logger.Errorf("Failed to apply pending state change to %s: %s", state.String(), err.Error())
+	}
+}
+
+// applyGameState performs the actual scene switch: tear down the current scene,
+// preload the new scene's assets, inject dependencies, and initialize it.
+func (e *Engine) applyGameState(state types.GameState) error {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 
@@ -233,12 +247,8 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		return fmt.Errorf("no scene registered for game state: %s", state.String())
 	}
 
-	// Save state of old scene before cleanup if it's stateful.
+	// Tear down the outgoing scene.
 	if e.currentScene != nil {
-		if stateful, ok := e.currentScene.(types.SceneStateful); ok {
-			stateful.SaveState()
-			logger.Logger.Debugf("Saved state for scene: %s", e.currentScene.GetName())
-		}
 		e.currentScene.Cleanup()
 		e.currentScene = nil
 	}
@@ -248,12 +258,13 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		logger.Logger.Warnf("Some assets failed to preload for scene %s: %s", registeredScene.GetName(), err.Error())
 	}
 
-	// Inject dependencies.
+	// Inject dependencies. Scenes embed BaseScene (or otherwise implement
+	// SceneInjectable) to receive engine services in a single call.
 	if injectable, ok := registeredScene.(types.SceneInjectable); ok {
 		injectable.InjectDependencies(e.GetDependencies())
 		logger.Logger.Debugf("Injected dependencies into scene: %s", registeredScene.GetName())
 	} else {
-		e.manualInject(registeredScene)
+		logger.Logger.Warnf("Scene %s does not implement SceneInjectable; no dependencies injected", registeredScene.GetName())
 	}
 
 	// Initialize the registered scene.
@@ -261,39 +272,10 @@ func (e *Engine) SetGameState(state types.GameState) error {
 		return fmt.Errorf("failed to initialize scene: %w", err)
 	}
 
-	// Restore state if scene is stateful.
-	if stateful, ok := registeredScene.(types.SceneStateful); ok {
-		stateful.RestoreState()
-		logger.Logger.Debugf("Restored state for scene: %s", registeredScene.GetName())
-	}
-
 	e.currentScene = registeredScene
 	e.currentGameState = state
 	logger.Logger.Debugf("Game state changed to: %s", state.String())
 	return nil
-}
-
-// manualInject provides dependency injection for scenes that don't embed BaseScene.
-func (e *Engine) manualInject(s scene.Scene) {
-	logger.Logger.Debugf("Using manual dependency injection for scene: %s", s.GetName())
-
-	if inputProvider, ok := s.(types.SceneInputProvider); ok {
-		inputProvider.SetInputCapturer(e.inputCapturer)
-	}
-	if stateRequester, ok := s.(types.SceneStateChangeRequester); ok {
-		stateRequester.SetStateChangeCallback(e.SetGameState)
-	}
-	if gameStateUser, ok := s.(types.SceneGameStateUser); ok {
-		if e.gameStateProvider != nil {
-			gameStateUser.SetGameState(e.gameStateProvider)
-		}
-	}
-	type canvasManagerSetter interface {
-		SetCanvasManager(canvas.CanvasManager)
-	}
-	if cmSetter, ok := s.(canvasManagerSetter); ok {
-		cmSetter.SetCanvasManager(e.canvasManager)
-	}
 }
 
 // preloadSceneAssets loads all assets required by a scene before initialization.
@@ -377,7 +359,7 @@ func (e *Engine) GetDependencies() *EngineDependencies {
 	return &EngineDependencies{
 		InputCapturer:       e.inputCapturer,
 		CanvasManager:       e.canvasManager,
-		StateChangeCallback: e.SetGameState,
+		StateChangeCallback: e.RequestStateChange,
 		GameStateProvider:   e.gameStateProvider,
 		ScreenWidth:         e.screenWidth,
 		ScreenHeight:        e.screenHeight,
