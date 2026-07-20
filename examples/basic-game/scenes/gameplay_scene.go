@@ -57,7 +57,7 @@ func (s *GameplayScene) Initialize() error {
 	background := gameobject.NewBackground(
 		types.Vector2{X: 0, Y: 0}, // Top-left corner
 		types.Vector2{X: s.GetScreenWidth(), Y: s.GetScreenHeight()},
-		"art/test-background.png",
+		"assets/art/test-background.png",
 	)
 	s.AddBackground(background)
 	logger.Logger.Debugf("Created Background in %s scene", s.GetName())
