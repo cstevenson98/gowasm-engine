@@ -2653,3 +2653,28 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: UV() is a method on Sprite but is a pure data projection (no mutation), which is acceptable within ECS. Animation drives Sprite.Frame; static sprites (backgrounds) simply omit Animation.
 
 ---
+
+## [2026-07-22 19:05 BST] - ECS Adoption Phase 3: systems, renderer, prefabs
+
+**Prompt/Request**: Continue ECS migration - implement the built-in systems, the world renderer, and port the ready-made objects.
+
+**Changes Made**:
+- Extended pkg/ecs seam with Map5..Map8 (a Llama entity has 7 components).
+- New package `pkg/systems` (built-in ECS systems):
+  - `Movement`: integrates Position by Velocity (Filter2), then screen-wraps entities with a Wrap component using the ScreenBounds resource (Filter3), mirroring the old BasicMover wrapping.
+  - `Animation`: advances Sprite.Frame for entities with a Sprite+Animation (Filter2); static sprites (no Animation, or single frame) are ignored.
+- New package `pkg/render`:
+  - `Drawer` interface (subset of canvas: DrawTexturedRect) for testability.
+  - `Renderer` holds one Filter3[Position,Sprite,Order] per layer tag; Draw runs Background->Entities->UI, sorting each pass by Order.Z (stable) so draw order is deterministic despite archetype iteration order. Skips invisible sprites. Replaces GetRenderables/GetRenderData/SpriteRenderData.
+- New package `pkg/prefab`: `NewBackground` (static, BACKGROUND) and `NewLlama` (animated 2x3, wrapping, ENTITIES) builders that spawn entities and return handles. Port gameobject.Background/Llama.
+- Tests: movement integrate/wrap/no-wrap-without-bounds, animation cycle/static, render layer+Z ordering + invisible skip (mock drawer), prefab component sets + a movement+animation integration over a llama.
+
+**Reasoning**: Systems reproduce the exact behaviour of Mover/SpriteSheet so a later swap is behaviour-preserving. The renderer is engine-owned and generic so every State renders uniformly; a Drawer seam keeps ordering logic unit-testable without a real canvas.
+
+**Impact**: Additive only; old scene/gameobject/engine paths untouched. Engine wiring of the State+Renderer path was moved into Phase 6 (building a throwaway dual path then deleting it would be wasteful).
+
+**Testing**: go test ./pkg/... green, go vet clean, GOOS=js GOARCH=wasm build clean, no lint errors.
+
+**Notes**: Prefab builders create a mapper per call (fine for a handful of objects); bulk spawns should reuse a mapper. Renderer must be rebuilt when the active State's World changes.
+
+---

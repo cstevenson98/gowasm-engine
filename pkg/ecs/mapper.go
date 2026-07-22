@@ -60,3 +60,73 @@ func (m *Map4[A, B, C, D]) Add(e Entity, a *A, b *B, c *C, d *D) {
 	m.inner.Add(arkecs.Entity(e), a, b, c, d)
 }
 func (m *Map4[A, B, C, D]) Remove(e Entity) { m.inner.Remove(arkecs.Entity(e)) }
+
+// Map5 accesses 5 components.
+type Map5[A, B, C, D, E any] struct{ inner *arkecs.Map5[A, B, C, D, E] }
+
+func NewMap5[A, B, C, D, E any](w *World) *Map5[A, B, C, D, E] {
+	return &Map5[A, B, C, D, E]{inner: arkecs.NewMap5[A, B, C, D, E](w.inner)}
+}
+
+func (m *Map5[A, B, C, D, E]) NewEntity(a *A, b *B, c *C, d *D, e *E) Entity {
+	return Entity(m.inner.NewEntity(a, b, c, d, e))
+}
+func (m *Map5[A, B, C, D, E]) Get(e Entity) (*A, *B, *C, *D, *E) {
+	return m.inner.Get(arkecs.Entity(e))
+}
+func (m *Map5[A, B, C, D, E]) Has(e Entity) bool { return m.inner.HasAll(arkecs.Entity(e)) }
+func (m *Map5[A, B, C, D, E]) Remove(e Entity)   { m.inner.Remove(arkecs.Entity(e)) }
+
+// Map6 accesses 6 components.
+type Map6[A, B, C, D, E, F any] struct {
+	inner *arkecs.Map6[A, B, C, D, E, F]
+}
+
+func NewMap6[A, B, C, D, E, F any](w *World) *Map6[A, B, C, D, E, F] {
+	return &Map6[A, B, C, D, E, F]{inner: arkecs.NewMap6[A, B, C, D, E, F](w.inner)}
+}
+
+func (m *Map6[A, B, C, D, E, F]) NewEntity(a *A, b *B, c *C, d *D, e *E, f *F) Entity {
+	return Entity(m.inner.NewEntity(a, b, c, d, e, f))
+}
+func (m *Map6[A, B, C, D, E, F]) Get(e Entity) (*A, *B, *C, *D, *E, *F) {
+	return m.inner.Get(arkecs.Entity(e))
+}
+func (m *Map6[A, B, C, D, E, F]) Has(e Entity) bool { return m.inner.HasAll(arkecs.Entity(e)) }
+func (m *Map6[A, B, C, D, E, F]) Remove(e Entity)   { m.inner.Remove(arkecs.Entity(e)) }
+
+// Map7 accesses 7 components.
+type Map7[A, B, C, D, E, F, G any] struct {
+	inner *arkecs.Map7[A, B, C, D, E, F, G]
+}
+
+func NewMap7[A, B, C, D, E, F, G any](w *World) *Map7[A, B, C, D, E, F, G] {
+	return &Map7[A, B, C, D, E, F, G]{inner: arkecs.NewMap7[A, B, C, D, E, F, G](w.inner)}
+}
+
+func (m *Map7[A, B, C, D, E, F, G]) NewEntity(a *A, b *B, c *C, d *D, e *E, f *F, g *G) Entity {
+	return Entity(m.inner.NewEntity(a, b, c, d, e, f, g))
+}
+func (m *Map7[A, B, C, D, E, F, G]) Get(e Entity) (*A, *B, *C, *D, *E, *F, *G) {
+	return m.inner.Get(arkecs.Entity(e))
+}
+func (m *Map7[A, B, C, D, E, F, G]) Has(e Entity) bool { return m.inner.HasAll(arkecs.Entity(e)) }
+func (m *Map7[A, B, C, D, E, F, G]) Remove(e Entity)   { m.inner.Remove(arkecs.Entity(e)) }
+
+// Map8 accesses 8 components.
+type Map8[A, B, C, D, E, F, G, H any] struct {
+	inner *arkecs.Map8[A, B, C, D, E, F, G, H]
+}
+
+func NewMap8[A, B, C, D, E, F, G, H any](w *World) *Map8[A, B, C, D, E, F, G, H] {
+	return &Map8[A, B, C, D, E, F, G, H]{inner: arkecs.NewMap8[A, B, C, D, E, F, G, H](w.inner)}
+}
+
+func (m *Map8[A, B, C, D, E, F, G, H]) NewEntity(a *A, b *B, c *C, d *D, e *E, f *F, g *G, h *H) Entity {
+	return Entity(m.inner.NewEntity(a, b, c, d, e, f, g, h))
+}
+func (m *Map8[A, B, C, D, E, F, G, H]) Get(e Entity) (*A, *B, *C, *D, *E, *F, *G, *H) {
+	return m.inner.Get(arkecs.Entity(e))
+}
+func (m *Map8[A, B, C, D, E, F, G, H]) Has(e Entity) bool { return m.inner.HasAll(arkecs.Entity(e)) }
+func (m *Map8[A, B, C, D, E, F, G, H]) Remove(e Entity)   { m.inner.Remove(arkecs.Entity(e)) }
