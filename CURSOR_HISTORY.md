@@ -2601,3 +2601,29 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: Clean layering now: types (generic) <- gameobject/systems/battle <- game entities <- scenes. This is the reference shape for future systems + game entities.
 
 ---
+
+## [2026-07-22 18:30:10 BST] - ECS Adoption Phase 0-1: Ark spike + pkg/ecs seam
+
+**Prompt/Request**: Plan and begin migrating the engine to an Entity Component System (renaming Scene -> State later), using the Ark library behind an internal interface so the backend can be swapped. Work on a new branch.
+
+**Changes Made**:
+- New branch `feat/ecs-state-refactor`.
+- Added dependency `github.com/mlange-42/ark v0.8.3` (archetype-based ECS, pure Go).
+- Phase 0 spike (throwaway, since deleted): confirmed Ark compiles to js/wasm, measured size (~2.7MB standalone wasm / 0.77MB gzipped; negligible atop the ~19MB Ebiten binary), and verified Ark's resource API.
+- Phase 1: created `pkg/ecs`, the sole backend seam. Ark is imported ONLY here.
+  - `world.go`: opaque `Entity`, `World` (Remove/Alive/Reset), resource helpers (Set/Get/Has/Remove).
+  - `component.go`: `Comp` + `C[T]()` for filter refinement.
+  - `mapper.go`: `Map1..Map4` (NewEntity/Get/Has/Add/Remove).
+  - `filter.go`: `Filter1..Filter4` with `Each`/`With`/`Without`/`Exclusive`/`Count`; `Each` hides Ark's query cursor and enforces pointer-lifetime safety.
+  - `system.go`: `System`, `SystemFunc`, ordered `Schedule`.
+  - `ecs_test.go`: map/filter, With/Without, entity lifecycle, resources, schedule ordering.
+
+**Reasoning**: Go generics can't be expressed on interface methods, so the swap-out boundary is a package (pkg/ecs) that re-exports thin generic wrappers over Ark, not a single Go interface. Everything else depends on pkg/ecs, never on Ark.
+
+**Impact**: Additive only. No existing package changed except go.mod. Old Scene/GameObject path untouched. Later phases (2-6) introduce components/state, systems, resources, migrate battle (removing its Ark-unsafe goroutine), and delete the old object model.
+
+**Testing**: `go test ./pkg/...` green, `go vet ./pkg/ecs/...` clean, `GOOS=js GOARCH=wasm go build ./pkg/...` clean, gofmt applied.
+
+**Notes**: Findings for later phases: (1) the browser wasm build is currently broken (examples Makefile builds ./game but no main.go exists there) -> restore in Phase 6; (2) .cursor/rules/gameEngine.mdc is stale (describes the removed WebGPU stack) -> fix in Phase 7. Decisions locked: layer tag components (with intra-layer tiebreak), one World per State, full migration.
+
+---
