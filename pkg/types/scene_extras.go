@@ -67,7 +67,6 @@ type SceneGameStateUser interface {
 // This avoids circular imports while maintaining type safety.
 type DependencyProvider interface {
 	GetInputCapturer() InputCapturer
-	GetCanvasManager() interface{} // Returns canvas.CanvasManager (interface{} to avoid import)
 	GetUI() UIManager
 	GetStateChangeCallback() func(GameState) error
 	GetGameStateProvider() interface{}
