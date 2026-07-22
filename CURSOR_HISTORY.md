@@ -2797,3 +2797,20 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Testing**: go build ./pkg/... + go test ./pkg/... green; cmd/ebiten-game desktop build OK; examples/basic-game build OK; grep confirms no dangling references to any deleted file.
 
 ---
+
+## [2026-07-22 22:51 BST] - Delete dead global debug-poster seam (pkg/types/gameobject.go)
+
+**Prompt/Request**: pkg/types/gameobject.go no longer has anything to do with GameObject (gutted by the ECS migration). Traced its remaining contents (DebugMessagePoster, SetGlobalDebugPoster, PostDebugMessageSimple) and found the whole mechanism was dead: engine.Initialize set the global poster but nothing ever called PostDebugMessageSimple (the only reader) - every real call site already imports pkg/debug directly and calls debug.Console.PostMessage(...). User confirmed: remove it.
+
+**Changes Made**:
+- Deleted pkg/types/gameobject.go entirely.
+- pkg/engine/engine.go: removed the `types.SetGlobalDebugPoster(debug.Console)` call in Initialize and the now-unused pkg/debug import.
+- pkg/types/doc.go: dropped the DebugMessagePoster bullet from the package scope list.
+
+**Reasoning**: The comment on DebugMessagePoster claimed it existed "to avoid circular dependencies", but pkg/debug doesn't import anything that would make a direct dependency cyclic for its actual callers (states already import pkg/debug directly). The indirection had no live callers, so it was pure dead code left over from the pre-ECS GameObject/Scene design.
+
+**Impact**: None functionally - PostMessage still works via direct debug.Console.PostMessage calls, unaffected by this removal.
+
+**Testing**: go build/vet/test ./pkg/... green; cmd/ebiten-game desktop build OK; examples/basic-game build OK; no lint errors.
+
+---

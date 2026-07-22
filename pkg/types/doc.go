@@ -18,8 +18,6 @@
 //     interface the engine polls each frame.
 //   - GameState - the enum used to key registered states.
 //   - UIManager - the immediate-mode overlay drawing facade.
-//   - DebugMessagePoster - a tiny seam used to post debug-console messages
-//     without a hard dependency on the debug package.
 //
 // The ECS building blocks live elsewhere: pure-data components and resources in
 // [github.com/cstevenson98/gowasm-engine/pkg/components], the World/entity/query

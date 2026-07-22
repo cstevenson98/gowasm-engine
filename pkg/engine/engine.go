@@ -9,7 +9,6 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/input"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
@@ -69,9 +68,6 @@ func (e *Engine) RegisterState(gs types.GameState, s state.State) {
 // Initialize sets up the engine.
 func (e *Engine) Initialize(canvasID string) error {
 	logger.Logger.Debugf("Engine initializing")
-
-	// Register debug console as global debug poster
-	types.SetGlobalDebugPoster(debug.Console)
 
 	if err := e.canvasManager.Initialize(canvasID); err != nil {
 		logger.Logger.Errorf("Engine initialization failed: %s", err.Error())
