@@ -22,7 +22,7 @@ type Wrap struct{ SpriteW, SpriteH float64 }
 
 // Sprite is the render-facing appearance of an entity: which texture (or sprite
 // sheet) to draw, its display size, the sheet grid, the current frame, and
-// visibility. Replaces the types.Sprite interface as plain data.
+// visibility. It is plain data; the animation and render systems act on it.
 type Sprite struct {
 	TexturePath string
 	Size        types.Vector2

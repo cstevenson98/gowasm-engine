@@ -88,7 +88,6 @@ func (s *BattleState) Enter(deps state.Deps) error {
 	s.battleManager.AddEntity(s.playerPart)
 	s.battleManager.AddEntity(s.enemyPart)
 	s.effectManager = s.battleManager.GetEffectManager()
-	s.battleManager.StartProcessing()
 
 	// Animate the character sprites.
 	s.Schedule().Add(systems.NewAnimation(w))
@@ -118,12 +117,9 @@ func (s *BattleState) Update(dt float64) {
 	}
 }
 
-// Exit stops the battle system and tears down the world.
+// Exit tears down the battle system and world.
 func (s *BattleState) Exit() {
-	if s.battleManager != nil {
-		s.battleManager.StopProcessing()
-		s.battleManager = nil
-	}
+	s.battleManager = nil
 	s.effectManager = nil
 	s.playerPart = nil
 	s.enemyPart = nil

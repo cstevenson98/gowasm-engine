@@ -31,8 +31,8 @@ type BattleEntity interface {
 	// GetID returns the entity's unique identifier.
 	GetID() string
 
-	// GetMover returns the mover component for position access.
-	GetMover() types.Mover
+	// GetPosition returns the entity's world position (used to place effects).
+	GetPosition() types.Vector2
 }
 
 // EntityStats represents the battle statistics of an entity.

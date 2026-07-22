@@ -85,17 +85,6 @@ func TestGameStateString(t *testing.T) {
 	}
 }
 
-func TestSpriteInterface(t *testing.T) {
-	// This test verifies that the Sprite interface is correctly defined
-	// We can't instantiate an interface, but we can check it compiles
-	var _ Sprite = nil // Should compile
-}
-
-func TestMoverInterface(t *testing.T) {
-	// This test verifies that the Mover interface is correctly defined
-	var _ Mover = nil // Should compile
-}
-
 func TestInputCapturerInterface(t *testing.T) {
 	// This test verifies that the InputCapturer interface is correctly defined
 	var _ InputCapturer = nil // Should compile

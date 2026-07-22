@@ -4,60 +4,55 @@ import (
 	"sync"
 )
 
-// ActionQueue manages the queue of battle actions using channels
+// ActionQueue is a bounded FIFO of battle actions. It is drained synchronously
+// by BattleManager.Update on the main loop (the battle system no longer runs a
+// background goroutine, so it is safe to touch ECS/engine state from actions).
 type ActionQueue struct {
-	actions    chan *Action
-	processing sync.Mutex
-	closed     bool
+	mu       sync.Mutex
+	actions  []*Action
+	capacity int
 }
 
-// NewActionQueue creates a new action queue with a buffered channel
+// NewActionQueue creates a new action queue bounded to bufferSize entries.
 func NewActionQueue(bufferSize int) *ActionQueue {
+	if bufferSize < 1 {
+		bufferSize = 1
+	}
 	return &ActionQueue{
-		actions: make(chan *Action, bufferSize),
-		closed:  false,
+		actions:  make([]*Action, 0, bufferSize),
+		capacity: bufferSize,
 	}
 }
 
-// Enqueue adds an action to the queue
+// Enqueue appends an action, returning false if the queue is full.
 func (aq *ActionQueue) Enqueue(action *Action) bool {
-	if aq.closed {
-		return false
-	}
+	aq.mu.Lock()
+	defer aq.mu.Unlock()
 
-	select {
-	case aq.actions <- action:
-		return true
-	default:
-		// Channel is full, action is dropped
+	if len(aq.actions) >= aq.capacity {
 		return false
 	}
+	aq.actions = append(aq.actions, action)
+	return true
 }
 
-// Dequeue removes and returns an action from the queue
+// Dequeue removes and returns the oldest action; ok is false when empty.
 func (aq *ActionQueue) Dequeue() (*Action, bool) {
-	action, ok := <-aq.actions
-	return action, ok
-}
+	aq.mu.Lock()
+	defer aq.mu.Unlock()
 
-// Close closes the action queue
-func (aq *ActionQueue) Close() {
-	aq.processing.Lock()
-	defer aq.processing.Unlock()
-
-	if !aq.closed {
-		close(aq.actions)
-		aq.closed = true
+	if len(aq.actions) == 0 {
+		return nil, false
 	}
+	action := aq.actions[0]
+	aq.actions = aq.actions[1:]
+	return action, true
 }
 
-// IsClosed returns true if the queue is closed
-func (aq *ActionQueue) IsClosed() bool {
-	return aq.closed
-}
-
-// Size returns the current number of actions in the queue
+// Size returns the current number of queued actions.
 func (aq *ActionQueue) Size() int {
+	aq.mu.Lock()
+	defer aq.mu.Unlock()
 	return len(aq.actions)
 }
 

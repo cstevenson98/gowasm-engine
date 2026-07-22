@@ -119,7 +119,7 @@ func TestParticipantBattleEntity(t *testing.T) {
 	if p.IsReady() {
 		t.Fatal("participant should not be ready after reset")
 	}
-	if pos := p.GetMover().GetPosition(); pos.X != 5 || pos.Y != 6 {
-		t.Fatalf("mover position = %+v, want (5,6)", pos)
+	if pos := p.GetPosition(); pos.X != 5 || pos.Y != 6 {
+		t.Fatalf("position = %+v, want (5,6)", pos)
 	}
 }

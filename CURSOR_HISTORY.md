@@ -2705,3 +2705,30 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: gamestate.SetPlayer/GetPlayer/UpdateStateFromPlayer are now unused (player is an ECS entity) - left in place, can be pruned later. Doc comments in pkg/engine|mover|sprite|types still mention the old model; Phase 7 will refresh them. The example wasm entry (examples/.../game) is still absent - restored in chunk 2.
 
 ---
+
+## [2026-07-22 19:15 BST] - ECS Adoption Phase 5 (chunk 2): sync battle system, delete Mover/Sprite, restore wasm entry
+
+**Prompt/Request**: Chunk 2 of the full migration: rewrite the battle subsystem to be goroutine-free, drop the last dependencies on the old Mover/Sprite types, and restore the browser (wasm) entry point.
+
+**Changes Made (battle subsystem)**:
+- pkg/systems/battle/action.go: replaced the channel-based ActionQueue with a bounded slice+mutex FIFO (Enqueue/Dequeue/Size). Removed Close/IsClosed.
+- pkg/systems/battle/manager.go: removed the background processActions goroutine, ctx/cancel/processingDone, and StartProcessing/StopProcessing. Update now charges timers, lets ready entities act, then drains and processes the whole action queue synchronously on the main loop - so action handlers may safely touch ECS/engine state (Ark is not concurrency-safe).
+- pkg/systems/battle/entity.go: BattleEntity.GetMover() types.Mover -> GetPosition() types.Vector2 (the only thing the manager needed a mover for was effect placement).
+- manager damage/heal effects now read action.Target.GetPosition() directly.
+
+**Changes Made (type/package removal)**:
+- Deleted types.Mover, types.Sprite, pkg/mover (BasicMover/mock/tests), pkg/sprite (SpriteSheet/mock/tests) - nothing references them anymore. Removed the two interface-compile tests from pkg/types/types_test.go and refreshed the components.Sprite doc comment.
+- entities.Participant no longer wraps a Mover: it stores a plain position and returns it from GetPosition().
+
+**Changes Made (wasm entry)**:
+- Added examples/basic-game/game/main.go (package main) mirroring cmd/ebiten-game, so `GOOS=js GOARCH=wasm go build ./game` works again. Tidied the example go.mod (mover/sprite deps dropped).
+
+**Reasoning**: With rendering already ECS-driven and states single-threaded, the battle goroutine was the last Ark-unsafe mutation source and the last consumer of Mover/Sprite. Draining the queue synchronously each frame removes the concurrency hazard and lets combat effects be spawned inline.
+
+**Impact**: The engine is now fully single-threaded and ECS-only; Mover/Sprite/GameObject/Scene are all gone. Battle behaviour is unchanged from the player's perspective (timers charge, actions resolve, effects float).
+
+**Testing**: go test ./pkg/... green; examples/basic-game build+test green; wasm build ./game (20M) restored; cmd/ebiten-game desktop build OK; go vet clean on all modules; gofmt applied; no lint errors.
+
+**Notes**: Participant.mu still guards timer access even though everything is now single-threaded - harmless, can be dropped later. Phase 7 (docs: gameEngine.mdc rule, README, stale doc comments) is still pending.
+
+---

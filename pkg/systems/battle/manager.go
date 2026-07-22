@@ -1,24 +1,21 @@
 package battle
 
 import (
-	"context"
 	"sync"
-	"time"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// BattleManager manages the battle system including action queue processing
+// BattleManager manages the battle system including action queue processing.
+// Actions are processed synchronously on the main loop (see Update); there is
+// no background goroutine, so action handlers may safely touch ECS/engine state.
 type BattleManager struct {
-	actionQueue    *ActionQueue
-	entities       []BattleEntity
-	mu             sync.RWMutex
-	ctx            context.Context
-	cancel         context.CancelFunc
-	processingDone chan bool
-	effectManager  *EffectManager
-	cfg            Config
-	log            Logger
+	actionQueue   *ActionQueue
+	entities      []BattleEntity
+	mu            sync.RWMutex
+	effectManager *EffectManager
+	cfg           Config
+	log           Logger
 }
 
 // NewBattleManager creates a new battle manager configured by cfg. All engine
@@ -27,17 +24,12 @@ type BattleManager struct {
 // sensible defaults - pass battle.Config{} for an all-default manager.
 func NewBattleManager(cfg Config) *BattleManager {
 	cfg = cfg.normalize()
-	ctx, cancel := context.WithCancel(context.Background())
 	return &BattleManager{
-		actionQueue:    NewActionQueue(cfg.ActionQueueSize),
-		entities:       make([]BattleEntity, 0),
-		mu:             sync.RWMutex{},
-		ctx:            ctx,
-		cancel:         cancel,
-		processingDone: make(chan bool, 1),
-		effectManager:  NewEffectManager(),
-		cfg:            cfg,
-		log:            cfg.Logger,
+		actionQueue:   NewActionQueue(cfg.ActionQueueSize),
+		entities:      make([]BattleEntity, 0),
+		effectManager: NewEffectManager(),
+		cfg:           cfg,
+		log:           cfg.Logger,
 	}
 }
 
@@ -64,26 +56,6 @@ func (bm *BattleManager) RemoveEntity(entity BattleEntity) {
 	}
 }
 
-// StartProcessing starts the action queue processing goroutine
-func (bm *BattleManager) StartProcessing() {
-	go bm.processActions()
-	bm.log.Debugf("Started battle manager action processing")
-}
-
-// StopProcessing stops the action queue processing
-func (bm *BattleManager) StopProcessing() {
-	bm.cancel()
-	bm.actionQueue.Close()
-
-	// Wait for processing to complete
-	select {
-	case <-bm.processingDone:
-		bm.log.Debugf("Battle manager processing stopped")
-	case <-time.After(5 * time.Second):
-		bm.log.Warnf("Battle manager stop timeout")
-	}
-}
-
 // EnqueueAction adds an action to the queue
 func (bm *BattleManager) EnqueueAction(action *Action) bool {
 	if action == nil {
@@ -99,7 +71,8 @@ func (bm *BattleManager) EnqueueAction(action *Action) bool {
 	return success
 }
 
-// Update updates the battle manager (charges timers, processes actions)
+// Update charges timers, lets ready entities act, and processes all queued
+// actions synchronously. Called once per frame from the game loop.
 func (bm *BattleManager) Update(deltaTime float64) {
 	bm.mu.Lock()
 	defer bm.mu.Unlock()
@@ -107,8 +80,17 @@ func (bm *BattleManager) Update(deltaTime float64) {
 	// Always charge timers for all entities (no animation blocking)
 	bm.chargeAllTimers(deltaTime)
 
-	// Check for entities ready to act
+	// Check for entities ready to act (may enqueue enemy actions)
 	bm.checkForReadyEntities()
+
+	// Drain and process the action queue on the main loop.
+	for {
+		action, ok := bm.actionQueue.Dequeue()
+		if !ok {
+			break
+		}
+		bm.processAction(action)
+	}
 }
 
 // IsAnimating returns false (no animation blocking in dynamic battle)
@@ -129,28 +111,6 @@ func (bm *BattleManager) GetEntities() []BattleEntity {
 // GetEffectManager returns the effect manager
 func (bm *BattleManager) GetEffectManager() *EffectManager {
 	return bm.effectManager
-}
-
-// processActions runs in a goroutine to process the action queue
-func (bm *BattleManager) processActions() {
-	defer func() {
-		bm.processingDone <- true
-	}()
-
-	for {
-		select {
-		case <-bm.ctx.Done():
-			bm.log.Debugf("Battle manager processing stopped by context")
-			return
-		case action, ok := <-bm.actionQueue.actions:
-			if !ok {
-				bm.log.Debugf("Action queue closed")
-				return
-			}
-
-			bm.processAction(action)
-		}
-	}
 }
 
 // processAction executes a single action
@@ -193,15 +153,11 @@ func (bm *BattleManager) executeDamage(action *Action) {
 		stats.HP = 0
 	}
 
-	// Create damage effect
-	// Get target position (assuming it has a mover)
-	if mover := action.Target.GetMover(); mover != nil {
-		pos := mover.GetPosition()
-		// Offset slightly above the entity
-		effectPos := types.Vector2{X: pos.X, Y: pos.Y - 20}
-		damageEffect := NewDamageEffect(effectPos, action.Damage, bm.cfg.DamageEffectDuration, false)
-		bm.effectManager.AddEffect(damageEffect)
-	}
+	// Create damage effect, offset slightly above the target.
+	pos := action.Target.GetPosition()
+	effectPos := types.Vector2{X: pos.X, Y: pos.Y - 20}
+	damageEffect := NewDamageEffect(effectPos, action.Damage, bm.cfg.DamageEffectDuration, false)
+	bm.effectManager.AddEffect(damageEffect)
 
 	bm.log.Debugf("%s deals %d damage to %s (HP: %d/%d)",
 		action.Actor.GetID(), action.Damage, action.Target.GetID(),
@@ -228,14 +184,11 @@ func (bm *BattleManager) executeHeal(action *Action) {
 		stats.HP = stats.MaxHP
 	}
 
-	// Create healing effect
-	if mover := action.Target.GetMover(); mover != nil {
-		pos := mover.GetPosition()
-		// Offset slightly above the entity
-		effectPos := types.Vector2{X: pos.X, Y: pos.Y - 20}
-		healEffect := NewDamageEffect(effectPos, healAmount, bm.cfg.DamageEffectDuration, true)
-		bm.effectManager.AddEffect(healEffect)
-	}
+	// Create healing effect, offset slightly above the target.
+	pos := action.Target.GetPosition()
+	effectPos := types.Vector2{X: pos.X, Y: pos.Y - 20}
+	healEffect := NewDamageEffect(effectPos, healAmount, bm.cfg.DamageEffectDuration, true)
+	bm.effectManager.AddEffect(healEffect)
 
 	bm.log.Debugf("%s heals %d HP to %s (HP: %d/%d)",
 		action.Actor.GetID(), healAmount, action.Target.GetID(),
