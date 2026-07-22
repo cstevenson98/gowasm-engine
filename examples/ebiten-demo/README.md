@@ -31,16 +31,6 @@ go run main.go
 - ✅ Game loop (60 FPS update, variable render)
 - ✅ Window resizing support
 
-## Code Size
-
-**Total: 70 lines of Go code**
-
-Compare to WebGPU implementation:
-- No shaders required
-- No manual batching
-- No WebGPU pipeline setup
-- No syscall/js bridge
-
 ## Next Steps
 
 To add more features:

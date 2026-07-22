@@ -16,9 +16,24 @@ Example games live under `examples/` and consume the engine as a Go module.
 
 Prerequisites:
 - Go 1.24+
-- A C toolchain and the Ebiten system dependencies (GLFW/X11/OpenGL on Linux —
-  see `shell.nix`)
+- A C toolchain and the Ebiten system dependencies (see below)
 - Git LFS (for image assets — see below)
+
+### Desktop system dependencies
+
+Ebiten needs OpenGL/X11 (or Wayland) development libraries to build the desktop
+binary:
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install build-essential libgl1-mesa-dev xorg-dev
+
+# NixOS — a ready-made shell is provided
+nix-shell examples/ebiten-demo/shell.nix
+```
+
+The `shell.nix` also sets `LD_LIBRARY_PATH` for OpenGL, which fixes
+`libGL.so: cannot open shared object file` at runtime.
 
 ### Git LFS
 
@@ -32,14 +47,23 @@ git lfs install
 git lfs pull
 ```
 
-### Build and run
+### Build and run (desktop)
 
 ```bash
 make build-desktop   # build the Ebiten desktop binary -> build/game-desktop
 make run-desktop     # build and run the example game
-
-cd examples && make serve   # build the browser (wasm) build and serve it
 ```
+
+### Browser (WebAssembly)
+
+The engine and example compile cleanly to `GOOS=js GOARCH=wasm`
+(`cd examples && make serve`), but the browser target is **not yet fully wired
+for assets**: textures are loaded via `ebitenutil.NewImageFromFile`, which on the
+web becomes an HTTP fetch relative to the page, and the example currently has no
+`index.html` bootstrap and serves assets without the `assets/` path prefix the
+code expects. For a robust dual desktop/web build, embed assets with `go:embed`
+and load them through an `fs.FS`. Until that lands, treat the wasm build as
+compile-only and run the game on the desktop.
 
 ## Architecture
 

@@ -3,6 +3,10 @@ build/
 dist/
 *.wasm
 
+# Compiled game binaries (extensionless, built in-place)
+/cmd/ebiten-game/ebiten-game
+/examples/ebiten-demo/ebiten-demo
+
 # Go build artifacts
 *.exe
 *.exe~

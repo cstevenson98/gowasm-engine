@@ -2770,3 +2770,30 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Testing**: go test ./pkg/... green; examples/basic-game build+vet+test green; cmd/ebiten-game desktop build OK; wasm build ./game (20M) OK; no lint errors. `find . -type d -empty` now reports none (outside .git).
 
 ---
+
+## [2026-07-22 22:44 BST] - Markdown/docs cleanup: delete stale plans, refresh READMEs, untrack binaries
+
+**Prompt/Request**: Update all the .md files - delete old plans, update READMEs, etc. User chose (via prompts): delete completed plans, delete docs/ARCHITECTURE.md, delete the whole .devcontainer/, and also do the related non-md cleanup.
+
+**Changes Made (deleted - completed/superseded, all pre-ECS / WebGPU-era)**:
+- EBITEN_MIGRATION_PLAN.md (self-marked COMPLETE), README_EBITEN.md (dual-backend/build-tag era; useful NixOS bits folded into README), TEST_SUMMARY.md (stale coverage snapshot), pkg/README_TESTING.md (internal/ + wasmbrowsertest guide).
+- Entire docs/ folder: ARCHITECTURE.md + its two .puml sources (WebGPU/Scene/GameObject diagrams), EASE_OF_USE_IMPROVEMENTS.md, EASE_OF_USE_IMPROVEMENTS_REPORT_1.md, IMPLEMENTATION_CONCERNS.md, IMPROVEMENTS_SUMMARY.md, RENDERING_OPTIMIZATIONS_RING_BUFFER.md (WebGPU-pipeline optimization, N/A under Ebiten).
+- Entire .devcontainer/ folder (README/BUILD_DETAILS/QUICK_START/TROUBLESHOOTING + devcontainer.json/Dockerfile/scripts) - described a WASM+WebGPU container no longer used.
+- test.sh (stale "webgpu-triangle" runner; testing is now `go test ./pkg/...` / the Makefile).
+
+**Changes Made (updated)**:
+- README.md: folded in desktop system-deps (apt-get + nix-shell) from README_EBITEN; replaced the overclaiming `make serve` line with an honest "Browser (WebAssembly)" note explaining the wasm target is compile-only until assets are embedded (go:embed) / an index.html bootstrap exists.
+- examples/ebiten-demo/README.md: removed the "Compare to WebGPU implementation / No syscall/js bridge" lines.
+
+**Changes Made (repo hygiene)**:
+- Untracked two committed compiled binaries (cmd/ebiten-game/ebiten-game, examples/ebiten-demo/ebiten-demo) via git rm --cached and added them to .gitignore. examples/build and examples/dist were already covered by the existing build//dist/ ignore rules.
+
+**Kept**: CURSOR_HISTORY.md (permanent dev log), scripts/README.md (font generator, still accurate), README.md, examples/ebiten-demo/README.md.
+
+**Reasoning**: The old planning/architecture docs described the removed WebGPU/Scene/GameObject design and were actively misleading; git history preserves them if ever needed. Committed build binaries bloat the repo and churn git status.
+
+**Impact**: Docs/hygiene only; no code change. Remaining markdown: README.md, CURSOR_HISTORY.md, scripts/README.md, examples/ebiten-demo/README.md.
+
+**Testing**: go build ./pkg/... + go test ./pkg/... green; cmd/ebiten-game desktop build OK; examples/basic-game build OK; grep confirms no dangling references to any deleted file.
+
+---
