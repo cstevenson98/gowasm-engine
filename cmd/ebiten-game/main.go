@@ -6,7 +6,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"example.com/basic-game/game/gamestate"
-	exts "example.com/basic-game/scenes"
+	"example.com/basic-game/states"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/engine"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
@@ -25,36 +25,15 @@ func main() {
 	// Register game state manager with engine
 	gameEngine.RegisterGameStateProvider(stateManager)
 
-	// Create and register scenes. The engine injects the canvas manager (and
-	// other dependencies) into each scene when it becomes active, so no manual
-	// wiring is needed here.
-	menuScene := exts.NewMenuScene(
-		config.Global.Screen.Width,
-		config.Global.Screen.Height,
-	)
+	// Create and register states. The engine injects dependencies (input, UI,
+	// screen size, state-change callback, game-state provider) into each state
+	// when it becomes active, so no manual wiring is needed here.
+	gameEngine.RegisterState(types.MENU, states.NewMenuState())
+	gameEngine.RegisterState(types.GAMEPLAY, states.NewGameplayState())
+	gameEngine.RegisterState(types.PLAYER_MENU, states.NewPlayerMenuState())
+	gameEngine.RegisterState(types.BATTLE, states.NewBattleState())
 
-	gameplayScene := exts.NewGameplayScene(
-		config.Global.Screen.Width,
-		config.Global.Screen.Height,
-	)
-
-	battleScene := exts.NewBattleScene(
-		config.Global.Screen.Width,
-		config.Global.Screen.Height,
-	)
-
-	playerMenuScene := exts.NewPlayerMenuScene(
-		config.Global.Screen.Width,
-		config.Global.Screen.Height,
-	)
-
-	// Register all scenes with the engine
-	gameEngine.RegisterScene(types.MENU, menuScene)
-	gameEngine.RegisterScene(types.GAMEPLAY, gameplayScene)
-	gameEngine.RegisterScene(types.PLAYER_MENU, playerMenuScene)
-	gameEngine.RegisterScene(types.BATTLE, battleScene)
-
-	logger.Logger.Info("Scenes registered: Menu, Gameplay, PlayerMenu, Battle")
+	logger.Logger.Info("States registered: Menu, Gameplay, PlayerMenu, Battle")
 
 	// Initialize the engine
 	err := gameEngine.Initialize("ebiten-canvas") // Canvas ID not used by Ebiten

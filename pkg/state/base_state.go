@@ -2,7 +2,11 @@ package state
 
 import (
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
+	"github.com/cstevenson98/gowasm-engine/pkg/logger"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
 // BaseState provides the boilerplate for a State: it owns the World and an
@@ -48,18 +52,34 @@ func (b *BaseState) Schedule() *ecs.Schedule { return b.sched }
 // Deps returns the engine services injected at Enter.
 func (b *BaseState) Deps() Deps { return b.deps }
 
-// Enter stores the injected deps and seeds the ScreenBounds resource. Concrete
-// states should call BaseState.Enter first, then build entities and add systems.
+// Enter stores the injected deps and seeds the ScreenBounds and Input
+// resources. Concrete states should call BaseState.Enter first, then build
+// entities and add systems.
 func (b *BaseState) Enter(deps Deps) error {
 	b.deps = deps
 	ecs.SetResource(b.world, &components.ScreenBounds{W: deps.ScreenWidth, H: deps.ScreenHeight})
+	ecs.SetResource(b.world, &components.Input{})
 	return nil
 }
 
-// Update runs the schedule against the world. Override only if a state needs
-// custom ordering beyond the schedule.
+// Update runs the schedule against the world, then drives the shared debug
+// console (toggle on key 3, message aging). Override to add custom logic, but
+// call BaseState.Update so the console keeps working everywhere.
 func (b *BaseState) Update(dt float64) {
 	b.sched.Run(b.world, dt)
+	b.updateDebugConsole(dt)
+}
+
+func (b *BaseState) updateDebugConsole(dt float64) {
+	if !config.Global.Debug.Enabled {
+		return
+	}
+	in := b.Input()
+	if in.Key3Pressed && !in.Key3PressedLastFrame {
+		debug.Console.ToggleVisibility()
+		logger.Logger.Debugf("Debug console toggled via key 3")
+	}
+	debug.Console.Update(dt)
 }
 
 // Exit resets the world, dropping all entities and resources. The World object
@@ -67,3 +87,44 @@ func (b *BaseState) Update(dt float64) {
 func (b *BaseState) Exit() {
 	b.world.Reset()
 }
+
+// DrawOverlays renders the debug console. Concrete states that show menus/HUD
+// override this and call BaseState.DrawOverlays() to keep the console.
+func (b *BaseState) DrawOverlays() error {
+	return debug.Console.Render(b.UI())
+}
+
+// ===== Dependency accessors =====
+
+// Input returns the latest input snapshot, or a zero value if no capturer is set.
+func (b *BaseState) Input() types.InputState {
+	if b.deps.Input != nil {
+		return b.deps.Input.GetInputState()
+	}
+	return types.InputState{}
+}
+
+// UI returns the engine UI manager for overlay drawing (never nil).
+func (b *BaseState) UI() types.UIManager {
+	if b.deps.UI != nil {
+		return b.deps.UI
+	}
+	return types.NopUI
+}
+
+// RequestState asks the engine to switch to another game state next frame.
+func (b *BaseState) RequestState(s types.GameState) error {
+	if b.deps.RequestState != nil {
+		return b.deps.RequestState(s)
+	}
+	return nil
+}
+
+// GameStateProvider returns the game-defined global state provider, or nil.
+func (b *BaseState) GameStateProvider() interface{} { return b.deps.GameState }
+
+// ScreenWidth returns the virtual screen width.
+func (b *BaseState) ScreenWidth() float64 { return b.deps.ScreenWidth }
+
+// ScreenHeight returns the virtual screen height.
+func (b *BaseState) ScreenHeight() float64 { return b.deps.ScreenHeight }

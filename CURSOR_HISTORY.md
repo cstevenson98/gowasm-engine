@@ -2678,3 +2678,30 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: Prefab builders create a mapper per call (fine for a handful of objects); bulk spawns should reuse a mapper. Renderer must be rebuilt when the active State's World changes.
 
 ---
+
+## [2026-07-22 19:45 BST] - ECS Adoption Phase 4+6 (chunk 1): engine->State, port menus/gameplay/battle, delete Scene/GameObject
+
+**Prompt/Request**: Full migration to State/ECS. Landed as two building commits; this is chunk 1 (engine + menus + gameplay + deletions; battle kept working via a shim). Battle subsystem rewrite + wasm entry are chunk 2.
+
+**Changes Made (engine/core)**:
+- Rewrote pkg/engine to be State-based: RegisterState, per-frame Input resource refresh, deferred state switches, render via render.Renderer over the active State's World, overlays via state.OverlayRenderer. Deleted the DependencyProvider/EngineDependencies injection triangle and RegisterScene path.
+- pkg/state: BaseState gained dependency accessors (Input/UI/RequestState/GameStateProvider/ScreenWidth/Height), a default DrawOverlays (debug console), debug-console toggle/aging in Update, and Input-resource seeding in Enter. Added state.Assets (replaces types.SceneAssets).
+- pkg/components: added Input resource (latest input snapshot).
+- Deleted pkg/scene (Scene/BaseScene/SceneLayer), pkg/gameobject (BaseGameObject/Background/Llama), pkg/types/scene_extras.go (all opt-in interfaces + DependencyProvider), and types.GameObject/ObjectState/CopyObjectState/SpriteRenderData/PostDebugMessage. Kept types.Mover/types.Sprite and pkg/mover/pkg/sprite (battle still needs them until chunk 2).
+- Rewrote pkg/engine/example_test.go to the State API.
+
+**Changes Made (example game)**:
+- Renamed examples/basic-game/scenes -> states; ported MenuState, GameplayState, PlayerMenuState, BattleState off BaseScene onto BaseState. Menus are immediate-mode UI (no entities); gameplay/battle spawn ECS entities and register systems.
+- Rewrote game/entities as ECS: components (PlayerControl, Stats), spawners (SpawnPlayer, SpawnCharacter), PlayerInputSystem (reads Input resource -> Velocity), and a battle.Participant adapter that keeps the existing battle.BattleManager working unchanged (chunk-1 shim; still uses its goroutine).
+- Per-World consequence: PlayerMenuState reads player position/stats from the persistent gamestate manager (its own world is empty); GameplayState writes the live position back on Exit.
+- Updated cmd/ebiten-game/main.go to RegisterState; tidied example + cmd go.mod for the transitive ark dependency.
+
+**Reasoning**: Everything is atomically entangled (Player/Enemy embedded gameobject AND implemented battle.BattleEntity), so the engine flip + example port + deletions had to land together. Battle logic is deferred to chunk 2 behind a thin adapter to keep this commit reviewable and green.
+
+**Impact**: The old Scene/GameObject object model is gone. Rendering is ECS-only (layer tag passes + Order). Battle still runs its action-queue goroutine (Ark-unsafe) via the adapter - to be removed in chunk 2.
+
+**Testing**: go test ./pkg/... green; examples/basic-game build+test green; cmd/ebiten-game desktop build (13M) + wasm build (20M) OK; go vet clean on all modules; gofmt applied; no lint errors.
+
+**Notes**: gamestate.SetPlayer/GetPlayer/UpdateStateFromPlayer are now unused (player is an ECS entity) - left in place, can be pruned later. Doc comments in pkg/engine|mover|sprite|types still mention the old model; Phase 7 will refresh them. The example wasm entry (examples/.../game) is still absent - restored in chunk 2.
+
+---

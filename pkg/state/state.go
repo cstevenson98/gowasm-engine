@@ -44,10 +44,18 @@ type State interface {
 	Exit()
 }
 
+// Assets declares the resources a state needs preloaded before Enter.
+type Assets struct {
+	// TexturePaths are texture files (.png, etc.) to load.
+	TexturePaths []string
+	// FontPaths are font sprite-sheet base paths (engine appends .sheet.json).
+	FontPaths []string
+}
+
 // AssetProvider is an optional interface a State may implement to declare assets
 // the engine must preload before Enter. Replaces SceneAssetProvider.
 type AssetProvider interface {
-	GetRequiredAssets() types.SceneAssets
+	GetRequiredAssets() Assets
 }
 
 // OverlayRenderer is an optional interface a State may implement to draw

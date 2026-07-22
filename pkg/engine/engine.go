@@ -7,18 +7,23 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
+	"github.com/cstevenson98/gowasm-engine/pkg/components"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
+	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/input"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/scene"
+	"github.com/cstevenson98/gowasm-engine/pkg/render"
+	"github.com/cstevenson98/gowasm-engine/pkg/state"
 	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 	"github.com/cstevenson98/gowasm-engine/pkg/ui"
 )
 
 // Engine manages the canvas, input, and game loop. It implements the
-// ebiten.Game interface (Update, Draw, Layout).
+// ebiten.Game interface (Update, Draw, Layout). Games register states.State
+// implementations against types.GameState values; the engine renders the active
+// state's ECS world and drives its Update.
 type Engine struct {
 	canvasManager *canvas.Canvas
 	inputCapturer *input.Input
@@ -26,15 +31,16 @@ type Engine struct {
 
 	running           bool
 	currentGameState  types.GameState
-	registeredScenes  map[types.GameState]scene.Scene
-	currentScene      scene.Scene
+	registeredStates  map[types.GameState]state.State
+	currentState      state.State
+	renderer          *render.Renderer
 	stateLock         sync.Mutex
 	screenWidth       float64
 	screenHeight      float64
 	gameStateProvider interface{}
 
-	// Pending scene switch. Requests made during a scene's Update are recorded
-	// here and applied at the start of the next frame, so a scene is never torn
+	// Pending state switch. Requests made during a state's Update are recorded
+	// here and applied at the start of the next frame, so a state is never torn
 	// down while it is still running its own Update (see RequestStateChange).
 	pendingState    types.GameState
 	hasPendingState bool
@@ -46,19 +52,19 @@ func NewEngine() *Engine {
 		canvasManager:    canvas.NewCanvas(),
 		inputCapturer:    input.NewInput(),
 		running:          false,
-		registeredScenes: make(map[types.GameState]scene.Scene),
+		registeredStates: make(map[types.GameState]state.State),
 		screenWidth:      config.Global.Screen.Width,
 		screenHeight:     config.Global.Screen.Height,
 	}
 }
 
-// RegisterScene registers a scene for a specific game state.
-func (e *Engine) RegisterScene(state types.GameState, s scene.Scene) {
+// RegisterState registers a state for a specific game state value.
+func (e *Engine) RegisterState(gs types.GameState, s state.State) {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 
-	e.registeredScenes[state] = s
-	logger.Logger.Debugf("Registered scene for game state: %s", state.String())
+	e.registeredStates[gs] = s
+	logger.Logger.Debugf("Registered state for game state: %s", gs.String())
 }
 
 // Initialize sets up the engine.
@@ -78,10 +84,9 @@ func (e *Engine) Initialize(canvasID string) error {
 		return err
 	}
 
-	// Create the shared immediate-mode UI facade so scenes can draw text and
-	// primitives without loading their own fonts or touching the canvas. It is
-	// injected into scenes (as a types.UIManager) alongside the other engine
-	// dependencies. On failure we fall back to a no-op so UI calls stay safe.
+	// Create the shared immediate-mode UI facade so states can draw text and
+	// primitives without loading their own fonts or touching the canvas. On
+	// failure we fall back to a no-op so UI calls stay safe.
 	e.ui = types.NopUI
 	if uiFacade, err := ui.New(e.canvasManager, config.Global.Debug.FontPath, e.screenWidth, e.screenHeight); err != nil {
 		logger.Logger.Warnf("Failed to create UI facade: %s", err.Error())
@@ -115,16 +120,20 @@ func (e *Engine) Update() error {
 
 	e.inputCapturer.PollInput()
 
-	// Apply any scene switch requested during the previous frame before running
-	// the current scene's Update, so switches never happen mid-Update.
+	// Apply any state switch requested during the previous frame before running
+	// the current state's Update, so switches never happen mid-Update.
 	e.applyPendingStateChange()
 
 	e.stateLock.Lock()
-	currentScene := e.currentScene
+	currentState := e.currentState
 	e.stateLock.Unlock()
 
-	if currentScene != nil {
-		currentScene.Update(deltaTime)
+	if currentState != nil {
+		// Refresh the per-world input resource so systems see this frame's input.
+		if in := ecs.GetResource[components.Input](currentState.World()); in != nil {
+			in.State = e.inputCapturer.GetInputState()
+		}
+		currentState.Update(deltaTime)
 	}
 
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
@@ -139,33 +148,23 @@ func (e *Engine) Draw(screen *ebiten.Image) {
 	e.canvasManager.SetScreen(screen)
 
 	e.stateLock.Lock()
-	currentScene := e.currentScene
+	currentState := e.currentState
+	renderer := e.renderer
 	e.stateLock.Unlock()
 
-	if currentScene == nil {
+	if currentState == nil {
 		return
 	}
 
-	// Render all game objects in layer order.
-	for _, gameObject := range currentScene.GetRenderables() {
-		renderData := gameObject.GetRenderData()
-		if !renderData.Visible {
-			continue
-		}
-
-		// Texture may not be loaded yet; skip on error.
-		_ = e.canvasManager.DrawTexturedRect(
-			renderData.TexturePath,
-			renderData.Position,
-			renderData.Size,
-			renderData.UV,
-		)
+	// Render the world (sprites, in layer + Order order).
+	if renderer != nil {
+		renderer.Draw(e.canvasManager)
 	}
 
-	// Render scene-specific overlays (menus, HUD, debug console).
-	if overlayRenderer, ok := currentScene.(types.SceneOverlayRenderer); ok {
-		if err := overlayRenderer.RenderOverlays(); err != nil {
-			logger.Logger.Tracef("Failed to render scene overlays: %s", err.Error())
+	// Render state-specific overlays (menus, HUD, debug console).
+	if overlay, ok := currentState.(state.OverlayRenderer); ok {
+		if err := overlay.DrawOverlays(); err != nil {
+			logger.Logger.Tracef("Failed to render state overlays: %s", err.Error())
 		}
 	}
 }
@@ -185,6 +184,11 @@ func (e *Engine) Stop() {
 func (e *Engine) Cleanup() error {
 	e.Stop()
 
+	if e.currentState != nil {
+		e.currentState.Exit()
+		e.currentState = nil
+	}
+
 	if e.inputCapturer != nil {
 		e.inputCapturer.Cleanup()
 	}
@@ -197,8 +201,8 @@ func (e *Engine) GetCanvasManager() canvas.CanvasManager {
 	return e.canvasManager
 }
 
-// RegisterGameStateProvider registers a game state provider that will be
-// injected into scenes that implement SceneGameStateUser.
+// RegisterGameStateProvider registers a game-defined global state provider that
+// is passed to states via Deps.GameState.
 func (e *Engine) RegisterGameStateProvider(provider interface{}) {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
@@ -206,33 +210,32 @@ func (e *Engine) RegisterGameStateProvider(provider interface{}) {
 	logger.Logger.Debugf("Registered game state provider with engine")
 }
 
-// SetGameState changes the current game state and switches the active scene
-// immediately. Use this to activate the starting scene before the game loop
-// runs. Scenes should not call this from within Update - use the injected
-// state-change callback (RequestStateChange) instead, which defers the switch.
-func (e *Engine) SetGameState(state types.GameState) error {
-	return e.applyGameState(state)
+// SetGameState changes the current game state and switches the active state
+// immediately. Use this to activate the starting state before the game loop
+// runs. States should not call this from within Update - use the injected
+// RequestState callback instead, which defers the switch.
+func (e *Engine) SetGameState(gs types.GameState) error {
+	return e.applyGameState(gs)
 }
 
-// RequestStateChange asks the engine to switch to state on the next frame. It
-// is the callback injected into scenes, so a scene can request a switch from
-// within its own Update without being torn down mid-Update. The switch is
-// applied by applyPendingStateChange at the start of the next frame.
-func (e *Engine) RequestStateChange(state types.GameState) error {
+// RequestStateChange asks the engine to switch to gs on the next frame. It is
+// the callback injected into states via Deps, so a state can request a switch
+// from within its own Update without being torn down mid-Update.
+func (e *Engine) RequestStateChange(gs types.GameState) error {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 
-	if _, exists := e.registeredScenes[state]; !exists {
-		return fmt.Errorf("no scene registered for game state: %s", state.String())
+	if _, exists := e.registeredStates[gs]; !exists {
+		return fmt.Errorf("no state registered for game state: %s", gs.String())
 	}
 
-	e.pendingState = state
+	e.pendingState = gs
 	e.hasPendingState = true
-	logger.Logger.Debugf("Requested game state change to: %s", state.String())
+	logger.Logger.Debugf("Requested game state change to: %s", gs.String())
 	return nil
 }
 
-// applyPendingStateChange performs a deferred scene switch, if one was
+// applyPendingStateChange performs a deferred state switch, if one was
 // requested. Called by Update at the start of each frame.
 func (e *Engine) applyPendingStateChange() {
 	e.stateLock.Lock()
@@ -240,104 +243,100 @@ func (e *Engine) applyPendingStateChange() {
 		e.stateLock.Unlock()
 		return
 	}
-	state := e.pendingState
+	gs := e.pendingState
 	e.hasPendingState = false
 	e.stateLock.Unlock()
 
-	if err := e.applyGameState(state); err != nil {
-		logger.Logger.Errorf("Failed to apply pending state change to %s: %s", state.String(), err.Error())
+	if err := e.applyGameState(gs); err != nil {
+		logger.Logger.Errorf("Failed to apply pending state change to %s: %s", gs.String(), err.Error())
 	}
 }
 
-// applyGameState performs the actual scene switch: tear down the current scene,
-// preload the new scene's assets, inject dependencies, and initialize it.
-func (e *Engine) applyGameState(state types.GameState) error {
+// applyGameState performs the actual state switch: tear down the current state,
+// preload the new state's assets, enter it, and build its renderer.
+func (e *Engine) applyGameState(gs types.GameState) error {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 
-	registeredScene, exists := e.registeredScenes[state]
+	registered, exists := e.registeredStates[gs]
 	if !exists {
-		return fmt.Errorf("no scene registered for game state: %s", state.String())
+		return fmt.Errorf("no state registered for game state: %s", gs.String())
 	}
 
-	// Tear down the outgoing scene.
-	if e.currentScene != nil {
-		e.currentScene.Cleanup()
-		e.currentScene = nil
+	// Tear down the outgoing state.
+	if e.currentState != nil {
+		e.currentState.Exit()
+		e.currentState = nil
+		e.renderer = nil
 	}
 
-	// Preload all scene assets BEFORE initialization.
-	if err := e.preloadSceneAssets(registeredScene); err != nil {
-		logger.Logger.Warnf("Some assets failed to preload for scene %s: %s", registeredScene.GetName(), err.Error())
+	// Preload all state assets BEFORE entering.
+	if err := e.preloadStateAssets(registered); err != nil {
+		logger.Logger.Warnf("Some assets failed to preload for state %s: %s", registered.Name(), err.Error())
 	}
 
-	// Inject dependencies. Scenes embed BaseScene (or otherwise implement
-	// SceneInjectable) to receive engine services in a single call.
-	if injectable, ok := registeredScene.(types.SceneInjectable); ok {
-		injectable.InjectDependencies(e.GetDependencies())
-		logger.Logger.Debugf("Injected dependencies into scene: %s", registeredScene.GetName())
-	} else {
-		logger.Logger.Warnf("Scene %s does not implement SceneInjectable; no dependencies injected", registeredScene.GetName())
+	// Enter the state with engine dependencies.
+	deps := state.Deps{
+		Input:        e.inputCapturer,
+		UI:           e.ui,
+		ScreenWidth:  e.screenWidth,
+		ScreenHeight: e.screenHeight,
+		RequestState: e.RequestStateChange,
+		GameState:    e.gameStateProvider,
+	}
+	if err := registered.Enter(deps); err != nil {
+		return fmt.Errorf("failed to enter state: %w", err)
 	}
 
-	// Initialize the registered scene.
-	if err := registeredScene.Initialize(); err != nil {
-		return fmt.Errorf("failed to initialize scene: %w", err)
-	}
-
-	e.currentScene = registeredScene
-	e.currentGameState = state
-	logger.Logger.Debugf("Game state changed to: %s", state.String())
+	e.currentState = registered
+	e.renderer = render.NewRenderer(registered.World())
+	e.currentGameState = gs
+	logger.Logger.Debugf("Game state changed to: %s", gs.String())
 	return nil
 }
 
-// preloadSceneAssets loads all assets required by a scene before initialization.
-func (e *Engine) preloadSceneAssets(s scene.Scene) error {
-	logger.Logger.Debugf("Preloading assets for scene: %s", s.GetName())
+// preloadStateAssets loads all assets declared by a state before it is entered.
+func (e *Engine) preloadStateAssets(s state.State) error {
+	provider, ok := s.(state.AssetProvider)
+	if !ok {
+		return nil
+	}
+
+	logger.Logger.Debugf("Preloading assets for state: %s", s.Name())
+	assets := provider.GetRequiredAssets()
 
 	var errs []error
-
-	if assetProvider, ok := s.(types.SceneAssetProvider); ok {
-		assets := assetProvider.GetRequiredAssets()
-
-		for _, texturePath := range assets.TexturePaths {
-			if texturePath != "" {
-				if err := e.canvasManager.LoadTexture(texturePath); err != nil {
-					errs = append(errs, err)
-				} else {
-					logger.Logger.Debugf("Preloaded texture: %s", texturePath)
-				}
-			}
+	for _, texturePath := range assets.TexturePaths {
+		if texturePath == "" {
+			continue
 		}
+		if err := e.canvasManager.LoadTexture(texturePath); err != nil {
+			errs = append(errs, err)
+		} else {
+			logger.Logger.Debugf("Preloaded texture: %s", texturePath)
+		}
+	}
 
-		for _, fontPath := range assets.FontPaths {
-			if fontPath == "" {
-				continue
-			}
-			tempFont := text.NewSpriteFont()
-			if err := tempFont.LoadFont(fontPath); err != nil {
-				errMsg := fmt.Errorf("failed to preload font %s: %w", fontPath, err)
+	for _, fontPath := range assets.FontPaths {
+		if fontPath == "" {
+			continue
+		}
+		tempFont := text.NewSpriteFont()
+		if err := tempFont.LoadFont(fontPath); err != nil {
+			errMsg := fmt.Errorf("failed to preload font %s: %w", fontPath, err)
+			logger.Logger.Warnf("%s", errMsg.Error())
+			errs = append(errs, errMsg)
+			continue
+		}
+		logger.Logger.Debugf("Preloaded font: %s (cached for reuse)", fontPath)
+
+		if fontTexturePath := tempFont.GetTexturePath(); fontTexturePath != "" {
+			if err := e.canvasManager.LoadTexture(fontTexturePath); err != nil {
+				errMsg := fmt.Errorf("failed to preload font texture %s: %w", fontTexturePath, err)
 				logger.Logger.Warnf("%s", errMsg.Error())
 				errs = append(errs, errMsg)
-				continue
-			}
-			logger.Logger.Debugf("Preloaded font: %s (cached for reuse)", fontPath)
-
-			if fontTexturePath := tempFont.GetTexturePath(); fontTexturePath != "" {
-				if err := e.canvasManager.LoadTexture(fontTexturePath); err != nil {
-					errMsg := fmt.Errorf("failed to preload font texture %s: %w", fontTexturePath, err)
-					logger.Logger.Warnf("%s", errMsg.Error())
-					errs = append(errs, errMsg)
-				} else {
-					logger.Logger.Debugf("Preloaded font texture: %s", fontTexturePath)
-				}
-			}
-		}
-	} else if textureProvider, ok := s.(types.SceneTextureProvider); ok {
-		for _, path := range textureProvider.GetExtraTexturePaths() {
-			if path != "" {
-				_ = e.canvasManager.LoadTexture(path)
-				logger.Logger.Debugf("Preloaded texture (fallback): %s", path)
+			} else {
+				logger.Logger.Debugf("Preloaded font texture: %s", fontTexturePath)
 			}
 		}
 	}
@@ -345,8 +344,7 @@ func (e *Engine) preloadSceneAssets(s scene.Scene) error {
 	if len(errs) > 0 {
 		return fmt.Errorf("preload completed with %d error(s)", len(errs))
 	}
-
-	logger.Logger.Debugf("Successfully preloaded all assets for scene: %s", s.GetName())
+	logger.Logger.Debugf("Successfully preloaded all assets for state: %s", s.Name())
 	return nil
 }
 
@@ -355,65 +353,4 @@ func (e *Engine) GetGameState() types.GameState {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
 	return e.currentGameState
-}
-
-// EngineDependencies holds all injectable dependencies from the engine.
-type EngineDependencies struct {
-	InputCapturer       *input.Input
-	CanvasManager       *canvas.Canvas
-	UI                  types.UIManager
-	StateChangeCallback func(state types.GameState) error
-	GameStateProvider   interface{}
-	ScreenWidth         float64
-	ScreenHeight        float64
-}
-
-// GetDependencies returns all injectable dependencies for scenes.
-func (e *Engine) GetDependencies() *EngineDependencies {
-	return &EngineDependencies{
-		InputCapturer:       e.inputCapturer,
-		CanvasManager:       e.canvasManager,
-		UI:                  e.ui,
-		StateChangeCallback: e.RequestStateChange,
-		GameStateProvider:   e.gameStateProvider,
-		ScreenWidth:         e.screenWidth,
-		ScreenHeight:        e.screenHeight,
-	}
-}
-
-// Implement types.DependencyProvider interface.
-
-// GetInputCapturer returns the input capturer.
-func (d *EngineDependencies) GetInputCapturer() types.InputCapturer {
-	return d.InputCapturer
-}
-
-// GetCanvasManager returns the canvas manager as interface{}.
-func (d *EngineDependencies) GetCanvasManager() interface{} {
-	return d.CanvasManager
-}
-
-// GetUI returns the UI facade.
-func (d *EngineDependencies) GetUI() types.UIManager {
-	return d.UI
-}
-
-// GetStateChangeCallback returns the state change callback.
-func (d *EngineDependencies) GetStateChangeCallback() func(types.GameState) error {
-	return d.StateChangeCallback
-}
-
-// GetGameStateProvider returns the game state provider.
-func (d *EngineDependencies) GetGameStateProvider() interface{} {
-	return d.GameStateProvider
-}
-
-// GetScreenWidth returns the screen width.
-func (d *EngineDependencies) GetScreenWidth() float64 {
-	return d.ScreenWidth
-}
-
-// GetScreenHeight returns the screen height.
-func (d *EngineDependencies) GetScreenHeight() float64 {
-	return d.ScreenHeight
 }

@@ -1,16 +1,5 @@
 package types
 
-// SpriteRenderData contains all data needed to render a sprite for one frame.
-// It is assembled by a GameObject (which combines its sprite's appearance with
-// its mover's position) and consumed by the renderer.
-type SpriteRenderData struct {
-	TexturePath string
-	Position    Vector2
-	Size        Vector2
-	UV          UVRect
-	Visible     bool
-}
-
 // Sprite describes the visual appearance of a game object.
 // Sprites handle texture, animation, and size - NOT position or movement.
 // A sprite reports its own appearance; positioning is the caller's concern.

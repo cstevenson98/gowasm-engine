@@ -1,0 +1,71 @@
+package entities
+
+import (
+	"github.com/cstevenson98/gowasm-engine/pkg/components"
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
+	"github.com/cstevenson98/gowasm-engine/pkg/types"
+)
+
+// SpawnPlayer creates the movable, animated player entity on the ENTITIES layer
+// and returns its handle. It carries PlayerControl (for input), Stats (for
+// save/load), and screen wrapping.
+func SpawnPlayer(w *ecs.World, pos, size types.Vector2, speed float64, stats Stats) ecs.Entity {
+	m := ecs.NewMap8[
+		components.Position,
+		components.Velocity,
+		components.Wrap,
+		components.Sprite,
+		components.Animation,
+		PlayerControl,
+		components.LayerEntities,
+		components.Order,
+	](w)
+
+	e := m.NewEntity(
+		&components.Position{X: pos.X, Y: pos.Y},
+		&components.Velocity{},
+		&components.Wrap{SpriteW: size.X, SpriteH: size.Y},
+		&components.Sprite{
+			TexturePath: config.Global.Player.TexturePath,
+			Size:        size,
+			Columns:     config.Global.Player.SpriteColumns,
+			Rows:        config.Global.Player.SpriteRows,
+			Visible:     true,
+		},
+		&components.Animation{FrameTime: config.Global.Animation.PlayerFrameTime},
+		&PlayerControl{Speed: speed},
+		&components.LayerEntities{},
+		&components.Order{Z: 0},
+	)
+
+	ecs.NewMap1[Stats](w).Add(e, &stats)
+	return e
+}
+
+// SpawnCharacter creates a static, animated character sprite entity on the
+// ENTITIES layer (used for battle participants, which don't move) and returns
+// its handle.
+func SpawnCharacter(w *ecs.World, pos, size types.Vector2, texturePath string, columns, rows int) ecs.Entity {
+	m := ecs.NewMap5[
+		components.Position,
+		components.Sprite,
+		components.Animation,
+		components.LayerEntities,
+		components.Order,
+	](w)
+
+	return m.NewEntity(
+		&components.Position{X: pos.X, Y: pos.Y},
+		&components.Sprite{
+			TexturePath: texturePath,
+			Size:        size,
+			Columns:     columns,
+			Rows:        rows,
+			Visible:     true,
+		},
+		&components.Animation{FrameTime: config.Global.Animation.DefaultFrameTime},
+		&components.LayerEntities{},
+		&components.Order{Z: 0},
+	)
+}
