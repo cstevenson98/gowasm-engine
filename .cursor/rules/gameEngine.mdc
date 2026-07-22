@@ -1,330 +1,242 @@
 ---
 alwaysApply: true
 ---
-# Go WASM WebGPU Game Engine Rules
+# Go Ebiten ECS Game Engine Rules
 
 ## Architecture Overview
 
-This is a 2D game engine built with Go and WebGPU, compiled to WebAssembly for browser execution. The engine follows a component-based architecture with clear separation of concerns.
+This is a 2D game engine written in Go. Rendering is done with **Ebiten**
+(`github.com/hajimehoshi/ebiten/v2`), which cross-compiles unchanged to desktop
+and to the browser (WebAssembly). Game logic uses an **Entity Component System
+(ECS)**: game flow is organised into **States**, each owning its own ECS
+**World**; behaviour lives in **Systems** that operate on pure-data
+**Components**.
 
-### Core Components
+There is no WebGPU, no `syscall/js`, and no `//go:build js` split: the same code
+builds for both targets because Ebiten abstracts the platform.
 
-1. **Engine** (`internal/engine/`) - Game loop orchestration, state management, scene coordination
-2. **Canvas** (`internal/canvas/`) - WebGPU rendering pipeline, texture management, batch rendering
-3. **GameObject** (`internal/gameobject/`) - Game entities (Player, Llama) with Update() and GetSprite()
-4. **Scene** (`internal/scene/`) - Scene management for organizing game objects and game states
-5. **Sprite** (`internal/sprite/`) - Sprite rendering, animation, UV calculations
-6. **Mover** (`internal/mover/`) - Movement, physics, screen wrapping
-7. **Input** (`internal/input/`) - Unified input system (keyboard & gamepad)
-8. **Types** (`internal/types/`) - Shared interfaces and type definitions
+### Module layout (multi-module workspace)
 
-## Go WASM Build Tags
+- **Root module** `github.com/cstevenson98/gowasm-engine` - the engine library,
+  everything under `pkg/`.
+- **`examples/basic-game`** (`example.com/basic-game`) - the example game
+  (states, game-specific entities, gamestate). Its `game/` subpackage is
+  `package main` and is the **browser (wasm) entry point**.
+- **`cmd/ebiten-game`** (`example.com/ebiten-game`) - the **desktop entry
+  point**.
 
-### Build Tag Pattern
+The two entry modules use `replace` directives to point at the local engine
+(and each other where needed). When dependencies change, run `go mod tidy` in
+each affected module, not just the root.
 
-**CRITICAL**: This project uses Go build tags to separate WASM-specific code from test/mock code.
+### Engine packages (`pkg/`)
 
-```go
-//go:build js
+1. **`engine`** - the game loop. Implements `ebiten.Game` (Update/Draw/Layout),
+   owns the active `state.State`, refreshes the per-frame `Input` resource,
+   applies deferred state switches, and renders the active World via `render`.
+2. **`ecs`** - the ECS abstraction and the **sole backend seam** (wraps
+   `github.com/mlange-42/ark`). Nothing else may import Ark.
+3. **`components`** - pure-data components + shared resource types.
+4. **`state`** - the `State` interface, `BaseState`, injected `Deps`, `Assets`,
+   and the optional `AssetProvider` / `OverlayRenderer` interfaces.
+5. **`systems`** - engine systems (movement, animation) and `systems/battle`
+   (the ATB battle subsystem).
+6. **`render`** - the `Renderer`: draws a World's sprites, one filtered pass per
+   layer, ordered by `Order.Z` within a layer.
+7. **`prefab`** - entity builder helpers (e.g. `NewBackground`).
+8. **`canvas`** - thin Ebiten drawing facade (textures, textured rects).
+9. **`input`** - keyboard/gamepad polling into `types.InputState`.
+10. **`ui`** - immediate-mode text/primitive overlay drawing.
+11. **`text`**, **`config`**, **`debug`**, **`logger`**, **`types`** - support.
 
-package main
-```
+## ECS Seam (`pkg/ecs`) — the most important rule
 
-- **Files with `//go:build js`**: WASM implementation files that run in the browser
-  - Example: `cmd/game/main.go`, `internal/canvas/canvas_webgpu.go`, `internal/engine/engine.go`
-  - These files have access to `syscall/js` and WebGPU APIs
-  - Only compiled when `GOOS=js GOARCH=wasm`
+`pkg/ecs` is the ONLY package permitted to import a concrete ECS library. All
+engine and game code depends on `pkg/ecs`, never on Ark directly, so the backend
+can be swapped by rewriting this one package.
 
-- **Files WITHOUT build tags**: Standard Go code, tests, and mocks
-  - Example: `internal/canvas/mock_canvas.go`, `*_test.go` files
-  - Can run on native Go (for fast unit testing)
-  - Mock implementations for testing without browser
-
-### Build Commands
-
-```bash
-# Build WASM binary
-GOOS=js GOARCH=wasm go build -o build/main.wasm ./cmd/game
-
-# Run standard tests (no build tag needed)
-go test ./...
-
-# Run WASM tests in browser
-GOOS=js GOARCH=wasm go test ./internal/gameobject -v
-
-# Use Makefile shortcuts
-make build      # Builds WASM
-make test       # Standard tests
-make test-wasm  # WASM browser tests
-```
-
-- If any of the following change, update this file:
-
-
-## WebGPU Wrapper Architecture
-
-### Minimizing Hardcoded JS Calls
-
-The project uses the **cogentcore/webgpu** library as a Go wrapper around WebGPU APIs. This design minimizes direct `syscall/js` calls by:
-
-1. **Using cogentcore/webgpu for GPU operations**
-   ```go
-   import "github.com/cogentcore/webgpu/wgpu"
-   
-   // Instead of direct JS calls:
-   // js.Global().Get("navigator").Get("gpu").Call("requestAdapter")
-   
-   // Use the wrapper:
-   w.instance = wgpu.CreateInstance(nil)
-   w.adapter = w.instance.RequestAdapter(&wgpu.RequestAdapterOptions{...})
-   w.device = w.adapter.RequestDevice(nil)
-   ```
-
-2. **Direct JS calls are limited to**:
-   - DOM manipulation (canvas element retrieval)
-   - Event listeners (DOMContentLoaded, requestAnimationFrame)
-   - Browser API access (window dimensions, input events)
-   
-   ```go
-   // Acceptable JS calls
-   canvas := js.Global().Get("document").Call("getElementById", canvasID)
-   width := canvas.Get("width").Int()
-   js.Global().Call("requestAnimationFrame", callback)
-   ```
-
-3. **All WebGPU operations go through the wrapper**:
-   - Pipeline creation
-   - Buffer management
-   - Texture operations
-   - Render pass execution
-   - Command encoding
-
-### Canvas Manager Pattern
-
-The `CanvasManager` interface abstracts rendering:
+Public API: `World`, `Entity` (opaque handle), `Map1..Map8` (component mappers /
+spawners), `Filter1..Filter4` (queries with `Each`), resources
+(`SetResource[T]` / `GetResource[T]`), and `System` / `Schedule`.
 
 ```go
-type CanvasManager interface {
-    Initialize(canvasID string) error
-    Render() error
-    DrawTexture(texture types.Texture, position types.Vector2, size types.Vector2, uv types.UVRect) error
-    BeginBatch() error
-    EndBatch() error
-    // ... more methods
+import "github.com/cstevenson98/gowasm-engine/pkg/ecs"
+
+type MoveSystem struct{ f *ecs.Filter2[components.Position, components.Velocity] }
+
+func NewMoveSystem(w *ecs.World) *MoveSystem {
+    return &MoveSystem{f: ecs.NewFilter2[components.Position, components.Velocity](w)}
+}
+
+func (s *MoveSystem) Update(w *ecs.World, dt float64) {
+    s.f.Each(func(_ ecs.Entity, p *components.Position, v *components.Velocity) {
+        p.X += v.DX * dt
+        p.Y += v.DY * dt
+    })
 }
 ```
 
-**Implementations**:
-- `WebGPUCanvasManager` - Real WebGPU implementation (build tag: js)
-- `MockCanvasManager` - Test implementation (no build tag)
+- Build mappers and filters ONCE (in a system constructor) and reuse them.
+- Component pointers from an `Each` callback are valid only inside that
+  callback. Never store them.
+- `Ark` is **not concurrency-safe**. Do not mutate a World from a goroutine; all
+  systems run synchronously on the game loop.
 
-## Code Patterns
+## Components (`pkg/components`)
 
-### 1. WASM Entry Point Pattern
+Components are plain data with no behaviour (the only methods allowed are pure
+projections of the component's own fields, e.g. `Sprite.UV()`).
 
-```go
-//go:build js
+Core components: `Position`, `Velocity`, `Wrap`, `Sprite`, `Animation`.
+Layer tags: `LayerBackground`, `LayerEntities`, `LayerUI` (zero-size markers
+selecting the render pass). `Order{Z}` is the intra-layer draw-order tiebreak
+(ECS iteration is archetype-ordered, not insertion-ordered, so a stable key is
+required).
 
-package main
+Resources (per-World singletons): `ScreenBounds{W,H}` and `Input{State}`. The
+engine refreshes `Input` each frame before running the active state's schedule.
 
-import (
-    "syscall/js"
-    "github.com/cstevenson98/gowasm-engine/internal/engine"
-)
+## States (`pkg/state`)
 
-var gameEngine *engine.Engine
-
-func main() {
-    gameEngine = engine.NewEngine()
-    
-    // Wait for DOM
-    js.Global().Call("addEventListener", "DOMContentLoaded", js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-        initializeEngine()
-        return nil
-    }))
-    
-    // Keep program running
-    <-make(chan bool)
-}
-```
-
-### 2. Component Interface Pattern
-
-All game components implement interfaces defined in `internal/types/`:
+A `State` is a top-level game flow node (Menu, Gameplay, Battle, ...). Each owns
+its own `ecs.World` and an ordered system `Schedule`. Embed `BaseState` and
+override `Enter` to build entities and register systems.
 
 ```go
-// GameObject interface
-type GameObject interface {
-    Update(deltaTime float64)
-    GetSprite() Sprite
-    SetVisibility(visible bool)
-    IsVisible() bool
-    GetID() string
+type GameplayState struct{ *state.BaseState }
+
+func NewGameplayState() *GameplayState {
+    return &GameplayState{BaseState: state.NewBaseState("Gameplay")}
 }
 
-// Sprite interface
-type Sprite interface {
-    Render(canvas CanvasManager) error
-    GetPosition() Vector2
-    Update(deltaTime float64)
-}
-
-// Mover interface
-type Mover interface {
-    Update(deltaTime float64)
-    GetPosition() Vector2
-    SetPosition(pos Vector2)
-}
-```
-
-### 3. Testing Pattern
-
-**Unit Tests** (no build tags):
-```go
-package canvas
-
-func TestMockCanvasManager_Initialize(t *testing.T) {
-    mock := NewMockCanvasManager()
-    err := mock.Initialize("test-canvas")
-    // Test mock behavior
-}
-```
-
-**WASM Browser Tests** (with js build tag):
-```go
-//go:build js
-
-package canvas
-
-func TestWebGPUCanvasManager_Initialize(t *testing.T) {
-    canvas := NewWebGPUCanvasManager()
-    err := canvas.Initialize("test-canvas")
-    // Tests run in real browser
-}
-```
-
-### 4. Resource Management Pattern
-
-Always cleanup WebGPU resources:
-
-```go
-func (w *WebGPUCanvasManager) Cleanup() error {
-    if w.vertexBuffer != nil {
-        w.vertexBuffer.Destroy()
+func (s *GameplayState) Enter(deps state.Deps) error {
+    if err := s.BaseState.Enter(deps); err != nil { // seeds ScreenBounds + Input
+        return err
     }
-    if w.device != nil {
-        w.device.Destroy()
-    }
+    // build entities via spawners/prefabs, then register systems in run order:
+    s.Schedule().
+        Add(entities.NewPlayerInputSystem(s.World())).
+        Add(systems.NewMovement(s.World())).
+        Add(systems.NewAnimation(s.World()))
     return nil
 }
 ```
 
-## File Naming Conventions
+- `Deps` (input, UI, screen size, `RequestState` callback, game-state provider)
+  are injected by the engine at `Enter`. Reach them via `BaseState` accessors
+  (`Input()`, `UI()`, `RequestState()`, `ScreenWidth()`, ...). Do NOT invent
+  bespoke injection interfaces.
+- To switch states from within `Update`, call `RequestState(...)` (deferred to
+  next frame). Never tear down a state mid-Update.
+- Optional interfaces: `AssetProvider.GetRequiredAssets()` (engine preloads
+  before `Enter`) and `OverlayRenderer.DrawOverlays()` (screen-space UI drawn
+  after the world; call `BaseState.DrawOverlays()` to keep the debug console).
+- Menus are immediate-mode UI with no entities; gameplay/battle spawn ECS
+  entities.
 
-- `*_webgpu.go` - WebGPU implementation (requires `//go:build js`)
-- `mock_*.go` - Mock implementations for testing (no build tag)
-- `*_test.go` - Test files
-- `interface.go` - Interface definitions
+## Systems
+
+A system is any type with `Update(w *ecs.World, dt float64)`. Register systems on
+a state's `Schedule` in the order they must run; the schedule runs them each
+frame. Keep ALL behaviour in systems, never on components.
+
+## Testing
+
+Everything is plain Go and runs natively (no browser, no build tags). Prefer
+unit tests over a fresh `ecs.NewWorld()`:
+
+```go
+func TestMovement(t *testing.T) {
+    w := ecs.NewWorld()
+    e := ecs.NewMap2[components.Position, components.Velocity](w).NewEntity(
+        &components.Position{}, &components.Velocity{DX: 10},
+    )
+    systems.NewMovement(w).Update(w, 1.0)
+    if p := ecs.NewMap1[components.Position](w).Get(e); p.X != 10 {
+        t.Fatalf("X = %v, want 10", p.X)
+    }
+}
+```
+
+## Build / Run / Test
+
+```bash
+# Engine tests (fast)
+make test              # go test ./pkg/...
+make test-all          # all modules
+
+# Desktop
+make build-desktop     # cmd/ebiten-game -> build/game-desktop
+make run-desktop
+
+# Browser (wasm) — from examples/
+cd examples && make serve   # builds basic-game/game -> main.wasm and serves
+
+# Quality
+make fmt
+make lint              # golangci-lint if installed
+make tidy              # tidies root + entry modules
+```
 
 ## Important Rules
 
-1. **ALWAYS use build tags for WASM-specific code**
-   - Add `//go:build js` at the top of files using `syscall/js` or WebGPU
-   
-2. **Prefer the cogentcore/webgpu wrapper over direct JS calls**
-   - Use wgpu types and methods for all GPU operations
-   - Only use `syscall/js` for DOM and browser APIs
-   
-3. **Implement interfaces from internal/types/**
-   - All components should implement their respective interfaces
-   - This enables mocking and testing
-   
-4. **Use the Mock pattern for testing**
-   - Create mock implementations without build tags
-   - Test business logic without browser dependencies
-   
-5. **Follow the component-based architecture**
-   - GameObjects have Sprites and Movers
-   - Engine orchestrates Scenes
-   - Scenes manage GameObjects
-   - Canvas handles all rendering
-   
-6. **Batch rendering for performance**
-   - Use BeginBatch/EndBatch for multiple sprites
-   - Minimize GPU state changes
-   
-7. **Error handling**
-   - Return errors, don't panic
-   - Use custom error types (e.g., CanvasError)
-   - Log errors with the logger package
+1. **Only `pkg/ecs` imports the ECS backend.** All other code uses the seam.
+2. **Components are pure data; behaviour lives in systems.**
+3. **Each State owns one World.** Data does not cross Worlds implicitly —
+   persist cross-state data (e.g. player position/stats) via the game-state
+   provider, not by reaching into another state's World.
+4. **Single-threaded.** No goroutines mutate a World; systems run on the loop.
+5. **Layer tag + `Order`** control draw order (Background -> Entities -> UI,
+   then by `Z`). Every renderable needs a layer tag and an `Order`.
+6. **Use `Deps` accessors, `RequestState` for deferred switches, and resources
+   for singletons.** No bespoke injection interfaces.
+7. **Reuse mappers/filters**; build them in constructors.
+8. **Error handling:** return errors, don't panic; log via `logger.Logger`.
+9. **Run `go mod tidy` in every affected module** when deps change.
 
 ## Dependencies
 
 ```go
 require (
-    github.com/cogentcore/webgpu v0.23.0  // WebGPU wrapper
-    github.com/google/uuid v1.6.0         // UUID generation
+    github.com/hajimehoshi/ebiten/v2 v2.6.3 // rendering (desktop + wasm)
+    github.com/mlange-42/ark v0.8.3         // ECS backend (only via pkg/ecs)
+    github.com/google/uuid v1.6.0           // IDs
 )
-```
-
-## Development Workflow
-
-1. **Make changes** to Go files
-2. **Run standard tests**: `make test` (fast, no browser)
-3. **Build WASM**: `make build`
-4. **Run WASM tests**: `make test-wasm` (if touching WASM code)
-5. **Test in browser**: `make serve` → http://localhost:8080
-
-## WebGPU Coordinate System
-
-- **NDC (Normalized Device Coordinates)**: X: [-1, 1], Y: [-1, 1]
-- **Screen coordinates**: X: [0, width], Y: [0, height]
-- **UV coordinates**: X: [0, 1], Y: [0, 1]
-
-Helper functions in canvas convert between coordinate systems:
-
-```go
-// Screen to NDC
-ndcX := (screenX / screenWidth) * 2.0 - 1.0
-ndcY := 1.0 - (screenY / screenHeight) * 2.0
 ```
 
 ## Common Tasks
 
-### Adding a New GameObject
-1. Create struct in `internal/gameobject/`
-2. Implement `types.GameObject` interface
-3. Add Sprite and Mover components
-4. Register in scene
+### Add a new component
+1. Add a plain struct to `pkg/components` (or a game's `entities` package for
+   game-specific data). Methods, if any, must be pure projections.
 
-### Adding a New Pipeline
-1. Create shader code in canvas manager
-2. Define pipeline in `SetupPipeline*` method
-3. Add to `types.PipelineType` enum
-4. Update pipeline switching logic
+### Add a new system
+1. Create a type with `Update(w *ecs.World, dt float64)`; build its filters in
+   the constructor.
+2. Register it on the relevant state's `Schedule` in the correct order.
 
-### Adding Input Support
-1. Extend `types.InputState`
-2. Update `internal/input/unified_input.go`
-3. Handle in GameObject's Update() method
+### Add a new entity kind
+1. Write a spawner that composes a mapper (`ecs.NewMapN[...]`) and returns the
+   `Entity`. Give renderables a `Sprite`, a layer tag, and an `Order`.
+
+### Add a new state
+1. Embed `*state.BaseState`; override `Enter` to build entities + register
+   systems; optionally implement `AssetProvider` / `OverlayRenderer`.
+2. Register it in both entry points (`cmd/ebiten-game` and
+   `examples/basic-game/game`) via `RegisterState`.
+
+### Add input
+1. Extend `types.InputState` and `pkg/input`; read the `Input` resource in a
+   system (`ecs.GetResource[components.Input](w)`).
 
 ## Debugging
 
-- **Browser Console**: Check JavaScript console for WASM logs
-- **Logger**: Use `logger.Logger.Debug/Info/Warn/Error` for Go logs
-- **WASM_HEADLESS=off**: Run tests in visible browser window
-- **Chrome DevTools**: Use for WebGPU debugging
+- **Logger:** `logger.Logger.Debug/Info/Warn/Error`.
+- **Debug console:** toggled with key 3 (rendered by `BaseState.DrawOverlays`).
+- **Browser:** check the JS console for wasm logs; desktop logs go to stdout.
 
-## Performance Considerations
+## Change History
 
-- Batch sprite rendering to reduce draw calls
-- Minimize pipeline switches per frame
-- Use texture atlases for multiple sprites
-- Implement object pooling for frequently created objects
-- Profile using browser DevTools Performance tab
-
-## Resources
-
-- WebGPU Spec: https://www.w3.org/TR/webgpu/
-- Go WASM: https://github.com/golang/go/wiki/WebAssembly
-- cogentcore/webgpu: https://github.com/cogentcore/webgpu
+This repo keeps a development log at `CURSOR_HISTORY.md` (see
+`.cursor/rules/history.mdc`). Read it before starting and append an entry after
+each task.

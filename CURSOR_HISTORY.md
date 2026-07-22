@@ -2732,3 +2732,22 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: Participant.mu still guards timer access even though everything is now single-threaded - harmless, can be dropped later. Phase 7 (docs: gameEngine.mdc rule, README, stale doc comments) is still pending.
 
 ---
+
+## [2026-07-22 19:15 BST] - ECS Adoption Phase 7: docs (rule, README, package doc comments)
+
+**Prompt/Request**: Final phase of the migration: bring the docs in line with the Ebiten + ECS + State reality.
+
+**Changes Made**:
+- Rewrote .cursor/rules/gameEngine.mdc (always-applied). It described a WebGPU/cogentcore/syscall.js/internal-package/GameObject/Scene project that no longer exists. New content documents: Ebiten (desktop + wasm, no build tags), the multi-module layout, the pkg/ecs seam rule (only importer of Ark), pure-data components, the State/BaseState/Deps model, systems/schedule, layer tags + Order, single-threaded rule, and updated build/test/common-task guidance.
+- Rewrote README.md end-to-end. The lower half was a leftover old README (WebGPU, internal/gameobject, wasmbrowsertest, WebGPU browser tests); the architecture sections still described Scenes. New README documents the ECS/State architecture, per-frame flow, module layout, library usage (RegisterState + a sample state), config, build/test/docs targets, directory layout, and trimmed troubleshooting (kept Git LFS + font generation + module-auth). Preserved the private-repo auth guidance.
+- Rewrote pkg/engine/doc.go and pkg/types/doc.go, which still described GameObject/Scene/Mover/Sprite/SpriteRenderData and the old injection interfaces. They now describe the State/World/Systems model, the deferred-switch loop, state.Deps injection, and the current scope of pkg/types.
+
+**Reasoning**: The always-applied rule and the README are the first things a developer (or an AI agent) reads; leaving them describing the deleted WebGPU/Scene/GameObject architecture is actively misleading.
+
+**Impact**: Docs only - no code behaviour change.
+
+**Testing**: gofmt clean; go build + go vet green on pkg, examples/basic-game, and cmd/ebiten-game (desktop). ECS migration (phases 0-7) complete.
+
+**Notes**: components/layers.go retains a one-line rationale comment mentioning the old "SceneLayer buckets" for historical context. gamestate.SetPlayer/GetPlayer/UpdateStateFromPlayer remain unused and could be pruned in a follow-up.
+
+---

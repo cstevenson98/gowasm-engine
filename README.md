@@ -1,760 +1,259 @@
 # Go 2D Game Engine (Library)
 
-A component-based 2D game engine written in Go and rendered with [Ebiten](https://ebiten.org/). It is designed as a reusable library with clear interfaces for scenes, sprites, movers, input, and rendering. Example games live under `examples/` and consume the engine as a module.
+A 2D game engine written in Go, rendered with [Ebiten](https://ebiten.org/) and
+built around an **Entity Component System (ECS)**. Game flow is organised into
+**States**, each owning its own ECS **World**; behaviour lives in **Systems**
+that operate on pure-data **Components**. The same code runs on the desktop and
+in the browser (WebAssembly), because Ebiten abstracts the platform — there is
+no WebGPU, no `syscall/js`, and no `//go:build js` split.
 
-> Note: this engine previously targeted WebAssembly + WebGPU. It has been migrated to a pure Ebiten backend for desktop. The module path (`github.com/cstevenson98/gowasm-engine`) is retained for now.
+Example games live under `examples/` and consume the engine as a Go module.
+
+> The module path (`github.com/cstevenson98/gowasm-engine`) predates the move to
+> Ebiten and is retained for compatibility.
 
 ## Quick Start
 
 Prerequisites:
 - Go 1.24+
-- A C toolchain and the Ebiten system dependencies (GLFW/X11/OpenGL on Linux — see `shell.nix`)
-- Git LFS (for image assets)
+- A C toolchain and the Ebiten system dependencies (GLFW/X11/OpenGL on Linux —
+  see `shell.nix`)
+- Git LFS (for image assets — see below)
 
-### Setting Up Git LFS
+### Git LFS
 
-This repository uses Git LFS (Large File Storage) for PNG images and other binary assets. You must install and configure Git LFS before building the examples:
+PNG images and other binary assets are stored with Git LFS. After cloning you
+**must** pull the real files, or you will only have small pointer files and asset
+loading will fail:
 
 ```bash
-# Install Git LFS (if not already installed)
-# Ubuntu/Debian:
-sudo apt-get install git-lfs
-
-# macOS:
-brew install git-lfs
-
-# Windows:
-# Download from https://git-lfs.github.com/
-
-# Initialize Git LFS in your repository
+sudo apt-get install git-lfs   # Ubuntu/Debian (or: brew install git-lfs)
 git lfs install
-
-# Pull the actual asset files (required after cloning)
 git lfs pull
 ```
 
-**Important:** After cloning this repository for the first time, you must run `git lfs pull` to download the actual image files. Without this step, you'll only have LFS pointer files (small ~130 byte text files) instead of the actual PNG images, and the examples will fail to load assets.
-
-### Build and Run Examples
+### Build and run
 
 ```bash
-make build-desktop   # build the Ebiten desktop binary
-make run-desktop      # build and run the example game
+make build-desktop   # build the Ebiten desktop binary -> build/game-desktop
+make run-desktop     # build and run the example game
+
+cd examples && make serve   # build the browser (wasm) build and serve it
 ```
 
-Use as a library in your own project (local dev with replace):
+## Architecture
+
+High-level per-frame flow:
+
+```
+input.Poll -> engine refreshes Input resource -> active State.Update
+  -> State.Schedule runs systems (input -> movement -> animation -> ...)
+  -> render.Renderer draws the World (Background -> Entities -> UI, by Order.Z)
+  -> State.DrawOverlays (menus / HUD / debug console)
+```
+
+- **Engine** owns the game loop and the active State, refreshes the per-frame
+  `Input` resource, applies deferred state switches, and renders the active
+  World.
+- **State** owns one ECS World and an ordered system Schedule; it builds
+  entities and registers systems in `Enter`.
+- **Systems** hold all behaviour and run synchronously on the loop.
+- **Components** are pure data. **Resources** are per-World singletons.
+
+### Modules (multi-module workspace)
+
+- **Root** `github.com/cstevenson98/gowasm-engine` — the engine library (`pkg/`).
+- **`examples/basic-game`** (`example.com/basic-game`) — the example game;
+  its `game/` package (`package main`) is the **browser (wasm) entry point**.
+- **`cmd/ebiten-game`** (`example.com/ebiten-game`) — the **desktop entry point**.
+
+The entry modules use `replace` directives to point at the local engine. When
+dependencies change, run `go mod tidy` in each affected module.
+
+### Engine packages (`pkg/`)
+
+- `engine` — game loop (`ebiten.Game`), State orchestration, Input refresh,
+  deferred state switches, asset preloading.
+- `ecs` — the ECS abstraction and the **sole backend seam** (wraps
+  `github.com/mlange-42/ark`). Nothing else imports Ark. Exposes `World`,
+  `Entity`, `Map1..8`, `Filter1..4`, resources, `System`/`Schedule`.
+- `components` — pure-data components (`Position`, `Velocity`, `Wrap`, `Sprite`,
+  `Animation`), layer tags (`LayerBackground/Entities/UI`), `Order`, and the
+  `ScreenBounds` / `Input` resources.
+- `state` — `State` interface, `BaseState`, injected `Deps`, `Assets`, and the
+  optional `AssetProvider` / `OverlayRenderer` interfaces.
+- `systems` — engine systems (`Movement`, `Animation`) and `systems/battle`
+  (the ATB battle subsystem).
+- `render` — the `Renderer`: one filtered pass per layer, ordered by `Order.Z`.
+- `prefab` — entity builder helpers (e.g. `NewBackground`).
+- `canvas` — thin Ebiten drawing facade. `input` — keyboard/gamepad polling.
+  `ui` — immediate-mode overlay drawing. `text`, `config`, `debug`, `logger`,
+  `types` — support.
+
+## Using as a Library
 
 ```go
-// go.mod (in your game)
+// main.go (desktop entry point)
+eng := engine.NewEngine()
+
+// A game-defined provider for cross-state data (optional).
+eng.RegisterGameStateProvider(myGameState)
+
+// Register states; the engine injects deps (input, UI, screen size,
+// state-change callback, game-state provider) into each state on activation.
+eng.RegisterState(types.MENU, states.NewMenuState())
+eng.RegisterState(types.GAMEPLAY, states.NewGameplayState())
+
+_ = eng.Initialize("")               // canvasID unused by the Ebiten backend
+_ = eng.SetGameState(types.MENU)     // activates the starting state
+eng.Start()
+if err := ebiten.RunGame(eng); err != nil {
+    log.Fatal(err)
+}
+```
+
+Writing a state:
+
+```go
+type GameplayState struct{ *state.BaseState }
+
+func NewGameplayState() *GameplayState {
+    return &GameplayState{BaseState: state.NewBaseState("Gameplay")}
+}
+
+func (s *GameplayState) Enter(deps state.Deps) error {
+    if err := s.BaseState.Enter(deps); err != nil { // seeds ScreenBounds + Input
+        return err
+    }
+    // build entities (spawners / prefabs) ...
+    s.Schedule().
+        Add(entities.NewPlayerInputSystem(s.World())).
+        Add(systems.NewMovement(s.World())).
+        Add(systems.NewAnimation(s.World()))
+    return nil
+}
+```
+
+Local development from your game's `go.mod`:
+
+```go
 require github.com/cstevenson98/gowasm-engine v0.0.0
 replace github.com/cstevenson98/gowasm-engine => ../path/to/engine/repo
 ```
 
-```go
-// main.go (desktop entrypoint)
-eng := engine.NewEngine()
-myScene := NewMyScene()  // Dependencies are injected automatically
-eng.RegisterScene(types.GAMEPLAY, myScene)
-_ = eng.Initialize("")                 // canvasID is unused by the Ebiten backend
-_ = eng.SetGameState(types.GAMEPLAY)   // deps injected here for scenes embedding BaseScene
-eng.Start()
-if err := ebiten.RunGame(eng); err != nil {
-	log.Fatal(err)
-}
-```
-
-## Using from a Private GitHub Repository
-
-Since this repository is private, using it as a Go module requires authentication configuration. Here are the options:
-
-### Option 1: Local Development with `replace` (Recommended for Development)
-
-For local development, use a `replace` directive in your project's `go.mod`:
-
-```go
-module your-game
-
-go 1.24
-
-require github.com/cstevenson98/gowasm-engine v0.0.0
-
-replace github.com/cstevenson98/gowasm-engine => ../path/to/gowasm-engine
-```
-
-This allows you to:
-- Work with local changes without committing
-- Test modifications immediately
-- Avoid authentication setup during development
-
-### Option 2: Authenticated Access (For CI/CD or Remote Use)
-
-For using the module from the actual GitHub repository (CI/CD, deployment, or when working from different machines):
-
-#### Step 1: Configure Go to Skip Public Proxy
-
-Set `GOPRIVATE` to tell Go not to use the public module proxy for this module:
-
-```bash
-# For this module only
-go env -w GOPRIVATE=github.com/cstevenson98/gowasm-engine
-
-# Or for all modules under your GitHub organization
-go env -w GOPRIVATE=github.com/cstevenson98/*
-```
-
-#### Step 2: Configure Git Authentication
-
-Choose one of the following authentication methods:
-
-**A. SSH Keys (Recommended)**
-
-1. Ensure you have an SSH key set up with GitHub:
-   ```bash
-   ssh -T git@github.com  # Test connection
-   ```
-
-2. Configure git to use SSH for GitHub:
-   ```bash
-   git config --global url."git@github.com:".insteadOf "https://github.com/"
-   ```
-
-3. Your `go.mod` will use the module normally:
-   ```go
-   require github.com/cstevenson98/gowasm-engine v0.1.0
-   ```
-
-**B. Personal Access Token (PAT)**
-
-1. Create a GitHub Personal Access Token with `repo` scope:
-   - Go to GitHub Settings → Developer settings → Personal access tokens
-   - Generate a token with `repo` permissions
-
-2. Configure git credentials:
-   ```bash
-   # Option 1: Store in netrc file (~/.netrc)
-   machine github.com
-   login your-username
-   password your-token
-   
-   # Option 2: Use git credential helper
-   git config --global credential.helper store
-   # Then on first clone/pull, enter username and token as password
-   ```
-
-3. Use HTTPS URLs in your `go.mod`:
-   ```go
-   require github.com/cstevenson98/gowasm-engine v0.1.0
-   ```
-
-**C. GitHub CLI Authentication**
-
-If you use GitHub CLI (`gh`):
-
-```bash
-gh auth login
-# This sets up authentication that Go will use
-```
-
-#### Step 3: Version Your Module
-
-To use specific versions, tag your repository:
-
-```bash
-# In the engine repository
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-Then in your game project:
-
-```go
-require github.com/cstevenson98/gowasm-engine v0.1.0
-```
-
-### Option 3: GONOPROXY and GONOSUMDB (Advanced)
-
-For complete control over module fetching:
-
-```bash
-# Don't use proxy for private modules
-go env -w GONOPROXY=github.com/cstevenson98/*
-
-# Don't verify checksums from public sumdb for private modules
-go env -w GONOSUMDB=github.com/cstevenson98/*
-```
-
-### Quick Setup Script
-
-For a quick setup, create a `.envrc` file (if using direnv) or a setup script:
-
-```bash
-#!/bin/bash
-# setup-private-module.sh
-
-# Configure Go for private module
-go env -w GOPRIVATE=github.com/cstevenson98/gowasm-engine
-
-# Ensure SSH is configured for GitHub
-git config --global url."git@github.com:".insteadOf "https://github.com/"
-
-echo "Private module configured! Run: go get github.com/cstevenson98/gowasm-engine@latest"
-```
-
-### Troubleshooting
-
-**Error: `go get` fails with authentication error**
-- Verify `GOPRIVATE` is set correctly: `go env GOPRIVATE`
-- Test git access: `git ls-remote git@github.com:cstevenson98/gowasm-engine.git`
-- For HTTPS, verify credentials: `git config --global credential.helper`
-
-**Error: `go mod tidy` fails**
-- Ensure you're authenticated with GitHub (test with `gh auth status`)
-- Verify the repository exists and you have access
-- Check that `GOPRIVATE` includes your module path
-
-**CI/CD Setup**
-- For GitHub Actions: Use the built-in `GITHUB_TOKEN` (automatically configured)
-- For other CI: Set up SSH keys or use PAT as secrets
-- Don't forget to set `GOPRIVATE` in your CI environment
-
-### Recommended Workflow
-
-1. **Development**: Use `replace` directive for fast iteration
-2. **Version control**: Commit `go.mod` with version pin (remove `replace` for releases)
-3. **CI/CD**: Use authenticated access with version tags
-4. **Teams**: Share SSH key setup or use GitHub PATs with team members
-
-## Architecture Overview
-
-High-level flow: Input → Scene.Update → Scene.GetRenderables → Canvas batching → WebGPU
-
-- WASM boundary: Files with `//go:build js` can access browser APIs (DOM, timing). All WebGPU calls go through the `cogentcore/webgpu` wrapper, minimizing direct `syscall/js` usage.
-- Engine owns the main loop, input, and scene orchestration; scenes own game state; canvas owns GPU details and batching.
-
-## Core Packages and Responsibilities
-
-- `pkg/engine`
-  - Game loop (requestAnimationFrame), delta time, render loop
-  - Engine state: current scene and pipelines by `types.GameState`
-  - Scene registration (`RegisterScene`) and state switching (`SetGameState`)
-  - Owns and initializes input; injects input into scenes via `SceneInputProvider` interface
-  - Loads textures required by current scene
-
-- `pkg/canvas`
-  - WebGPU abstraction (via `cogentcore/webgpu`)
-  - Pipeline setup (e.g., textured pipeline)
-  - Texture management and batched sprite rendering (batch per texture)
-  - Helpers to draw textured quads and begin/end batches
-
-- `pkg/scene`
-  - Scene interfaces and render layers (`SceneLayer`: BACKGROUND, ENTITIES, UI)
-  - Scenes implement: `Initialize()`, `Update(dt)`, `GetRenderables()`, `Cleanup()`, `GetName()`
-
-- `pkg/types`
-  - Shared interfaces and types: `GameObject`, `Sprite`, `Mover`, `InputCapturer`, `Vector2`, `UVRect`, `Pipeline`, `GameState`, etc.
-  - Optional scene extension interfaces:
-    - `SceneInputProvider` with `SetInputCapturer(inputCapturer)` (receive engine's input capturer)
-    - `SceneOverlayRenderer` with `RenderOverlays()` (HUD/menus/debug rendered inside batch)
-    - `SceneTextureProvider` with `GetExtraTexturePaths() []string` (extra textures to preload)
-
-- `pkg/sprite`
-  - Sprite sheet representation, UV calculations, animation frame management
-  - Produce `SpriteRenderData` (texture path, position, size, UV, visibility)
-
-- `pkg/mover`
-  - Movement integration (velocity, update per frame), screen bounds, wrapping
-
-- `pkg/input`
-  - Unified input for keyboard and gamepad
-  - Thread-safe state read via `GetInputState()`
-
-- `pkg/text`, `pkg/debug`
-  - Text rendering from sprite fonts and optional debug console overlay
-
-## Rendering Pipeline
-
-- Pipelines: the engine configures pipelines per `types.GameState` (e.g., `TexturedPipeline`).
-- Batching: draw calls are batched by texture to minimize bind group switches. When the texture changes, a new batch begins.
-- Vertex generation: positions/sizes are converted to NDC; for pixel art, integer snapping and scaling are applied in the canvas layer.
-- Texture loading: engine preloads textures used by renderables and any extra paths provided by the scene via `SceneTextureProvider`.
-
-## Input System
-
-- Engine owns the `InputCapturer` and initializes it during `Initialize()`.
-- Scenes receive the engine's input capturer automatically if they implement the `SceneInputProvider` interface. The engine injects it during scene initialization when `SetGameState()` is called.
-- This ensures listeners are registered once and input state is shared across scenes.
-
-## Scenes and Extensibility
-
-- Implement the `Scene` interface to define your game state. Typical lifecycle:
-  - `Initialize()`: create objects, layers, and resources
-  - `Update(dt)`: update movers, sprites, and gameplay logic; read input from `InputCapturer`
-  - `GetRenderables()`: return objects in render order (layered)
-  - `Cleanup()`: release references/resources
-- Register scenes with `engine.RegisterScene(state, scene)` and set the state with `engine.SetGameState(state)`.
-- Optional: implement `SceneInputProvider` to receive input from the engine, `SceneOverlayRenderer` for batched HUD/menus, and `SceneTextureProvider` for extra preloads (e.g., font textures).
-
 ## Configuration
 
-The global configuration lives in `pkg/config` as `config.Global` with:
-- `Screen`: virtual width/height, canvas width/height
-- `Player`: spawn, size, speed, texture, sprite grid
-- `Animation`: default frame times
-- `Rendering`: `PixelArtMode`, `TextureFiltering`, `PixelPerfectScaling`, `PixelScale`, `UILineSpacing`, `TextLineSpacing`
-- `Debug`: console toggle, font path/scale, colors, message settings
-- `Battle`: example game parameters (used in examples)
+Global configuration lives in `pkg/config` as `config.Global`:
+- `Screen` — virtual width/height and window/canvas size.
+- `Player` — spawn, size, speed, texture, sprite grid.
+- `Animation` — default frame times.
+- `Rendering` — `PixelArtMode`, scaling, line spacing, etc.
+- `Debug` — console toggle, font path/scale, colours, message settings.
+- `Battle` — example-game combat parameters.
 
-Canvas creation: examples create the canvas element at runtime and pass its `id` to `engine.Initialize(canvasID)`.
-
-## Build, Test, and Run
-
-Library (root):
+## Build, Test, and Docs
 
 ```bash
-make test       # pkg/...
-make test-all   # ./...
-make tidy
+# Tests (plain Go, no browser, no build tags)
+make test        # go test ./pkg/...
+make test-all    # all modules
+
+# Build / run
+make build-desktop
+make run-desktop
+cd examples && make serve   # wasm build + local server
+
+# Quality
+make fmt
+make lint        # golangci-lint if installed
+make tidy        # root + entry modules
+
+# Docs (package overviews from doc.go)
+make docs        # browsable docs at http://localhost:6060 (override DOCS_PORT)
+make docs-cli    # print overviews to the terminal
 ```
 
-## Documentation
-
-Every package under `pkg/` carries a package-level overview (in its `doc.go`)
-explaining what the component is, its role in the engine, and how it fits
-together. You can browse this generated API documentation locally:
-
-```bash
-make docs        # serve browsable docs at http://localhost:6060 (override DOCS_PORT)
-make docs-cli    # print every package's overview to the terminal
-```
-
-`make docs` starts a local documentation server, preferring an installed
-`pkgsite` or `godoc`, and otherwise falling back to
-`go run golang.org/x/tools/cmd/godoc@latest` (which builds against your local Go
-toolchain). Start reading at the `engine` package for the architectural
-overview.
-
-Examples (multi-example orchestrator):
-
-```bash
-make -C examples list
-make -C examples build
-make -C examples serve   # serves examples/dist on an available port
-```
-
-Notes:
-- WASM builds require `GOOS=js GOARCH=wasm` (handled by the examples Makefile).
-- Use a WebGPU-capable browser; ensure WebGPU is enabled.
+Start reading the generated docs at the `engine` and `ecs` packages.
 
 ## Directory Layout
 
 ```
 pkg/
-  battle/         # Battle system primitives (used by examples)
-  canvas/         # WebGPU wrapper integration, pipelines, batching
-  config/         # Global configuration (config.Global)
-  debug/          # Optional debug console
-  engine/         # Engine loop, scene orchestration, input ownership
-  gameobject/     # Example game objects (shareable components)
-  input/          # Unified input system
-  mover/          # Movement/physics helpers
-  scene/          # Scene interfaces and layers
-  sprite/         # Sprite sheet and animation
-  text/           # Text rendering
-  types/          # Shared types and interfaces
+  engine/       # Game loop, State orchestration
+  ecs/          # ECS seam (only importer of the Ark backend)
+  components/   # Pure-data components + resources
+  state/        # State interface, BaseState, Deps
+  systems/      # Movement/Animation systems + systems/battle
+  render/       # Renderer (layer passes, Order.Z)
+  prefab/       # Entity builder helpers
+  canvas/       # Ebiten drawing facade
+  input/        # Keyboard/gamepad input
+  ui/ text/     # Overlay + text rendering
+  config/ debug/ logger/ types/   # Support
 
 examples/
-  Makefile        # Builds all examples to examples/build, provisions examples/dist
+  Makefile      # Builds examples to wasm; serves examples/dist
   basic-game/
-    assets/       # Example-specific assets
-    game/         # WASM entrypoint
-    scenes/       # Game-specific scenes (moved out of the library)
-    go.mod        # Separate module importing the engine
+    assets/     # Example assets (Git LFS)
+    game/       # package main — browser (wasm) entry point
+    states/     # Game states (Menu, Gameplay, PlayerMenu, Battle)
+    game/entities/    # Game components, spawners, systems
+    game/gamestate/   # Persistent cross-state game data
+    go.mod
+cmd/
+  ebiten-game/  # package main — desktop entry point
 ```
 
-## Using as a Library
+## Using from a Private Repository
 
-Minimal pattern:
+This repository is private; consuming it as a module needs auth config.
 
-```go
-eng := engine.NewEngine()
-scene := NewMyScene()  // Input injected automatically if scene implements SceneInputProvider
-eng.RegisterScene(types.GAMEPLAY, scene)
-_ = eng.Initialize("canvas-id")
-_ = eng.SetGameState(types.GAMEPLAY)  // Input injected here
-eng.Start()
-```
-
-Local development with replace in your game’s `go.mod`:
-
-```go
-require github.com/cstevenson98/gowasm-engine v0.0.0
-replace github.com/cstevenson98/gowasm-engine => ../path/to/engine/repo
-```
-
-## Performance Notes
-
-- Batch by texture to minimize pipeline/bind group switches
-- Prefer texture atlases to increase batch sizes
-- Minimize per-frame allocations; consider object pooling
-- Use browser performance tools for profiling
-
-## Troubleshooting / FAQ
-
-- WebGPU not available: ensure you’re using a supported browser and WebGPU is enabled
-- Port in use: `make -C examples serve` auto-picks a free port
-- Assets missing in dist: ensure your example has `assets/` and the Makefile copied them
-- Input not registering: ensure your scene implements `SceneInputProvider` interface to receive input from the engine
-- Build tags: WASM files must include `//go:build js`
-
-## Examples
-
-Examples live under `examples/` and can be built and served with the examples Makefile. They are intentionally separate modules and are not explained in detail here.
-
-
-A 2D game engine built with Go and WebGPU, compiled to WebAssembly for browser execution.
-
-## Features
-
-- 🎮 **Player-controlled gameplay** with keyboard and gamepad support
-- 🎨 **WebGPU rendering** with sprite animation and batching
-- 🕹️ **Input system** supporting WASD keyboard and game controllers
-- 🏃 **Component-based architecture** with GameObjects, Sprites, and Movers
-- 🧪 **Comprehensive testing** including browser-based WASM tests
-- 📦 **Efficient batching** for rendering multiple sprites
-
-## Quick Start
-
-### Prerequisites
-
-- Go 1.21 or later
-- Chrome or Chromium browser (for WASM tests)
-- Make (optional, for convenience commands)
-
-### Build and Run
+- **Local dev (recommended):** use a `replace` directive (see above) — no auth
+  needed.
+- **CI/remote:** set `GOPRIVATE` and configure git auth:
 
 ```bash
-# Build the WASM binary
-make build
-
-# Serve and open in browser
-make serve
-
-# Or do both at once
-make quick
+go env -w GOPRIVATE=github.com/cstevenson98/*
+# SSH:
+git config --global url."git@github.com:".insteadOf "https://github.com/"
+# or a PAT via ~/.netrc / credential helper, or `gh auth login`.
 ```
 
-Then open your browser to `http://localhost:8080`
-
-### Controls
-
-- **WASD** - Move the llama player
-- **Game Controller** - Left stick or D-pad for movement
-- **1** - Switch to sprite rendering mode
-- **2** - Switch to triangle mode
-
-## Development
-
-### Project Structure
-
-```
-webgpu-triangle/
-├── cmd/game/           # Main application entry point
-├── internal/
-│   ├── canvas/         # WebGPU canvas management
-│   ├── engine/         # Game engine core
-│   ├── gameobject/     # GameObject implementations (Player, Llama)
-│   ├── input/          # Input capture (keyboard, gamepad)
-│   ├── mover/          # Movement and physics
-│   ├── sprite/         # Sprite rendering and animation
-│   └── types/          # Shared types and interfaces
-├── assets/             # Game assets (textures, etc.)
-└── dist/               # Built output for deployment
-```
-
-### Architecture
-
-The engine follows a component-based architecture:
-
-- **GameObject** - Game entities with Update() and GetSprite()
-- **Sprite** - Handles texture, animation, and UV calculations
-- **Mover** - Manages position, velocity, and screen wrapping
-- **InputCapturer** - Captures keyboard and gamepad input
-- **Engine** - Orchestrates game loop, rendering, and state
-
-## Testing
-
-### Standard Tests
-
-Run all unit tests:
-```bash
-make test
-```
-
-Or with coverage:
-```bash
-./test.sh -c
-```
-
-Generate HTML coverage report:
-```bash
-./test.sh -h
-```
-
-### WASM Browser Tests
-
-We use [wasmbrowsertest](https://github.com/agnivade/wasmbrowsertest) to run tests that require the browser environment.
-
-**Setup (one-time):**
-```bash
-# Install wasmbrowsertest
-go install github.com/agnivade/wasmbrowsertest@latest
-
-# Rename to go_js_wasm_exec
-mv $(go env GOPATH)/bin/wasmbrowsertest $(go env GOPATH)/bin/go_js_wasm_exec
-```
-
-**Run WASM tests:**
-```bash
-# Using Make
-make test-wasm
-
-# Or directly
-GOOS=js GOARCH=wasm go test ./internal/gameobject -v
-```
-
-**Debug in browser (visible window):**
-```bash
-WASM_HEADLESS=off GOOS=js GOARCH=wasm go test ./internal/gameobject -v
-```
-
-### WebGPU Browser Testing
-
-The `canvas_webgpu.go` implementation has comprehensive browser tests that verify WebGPU functionality in a real browser environment.
-
-**Check WebGPU Support:**
-```bash
-# Open the WebGPU capability checker
-make serve
-# Then navigate to: http://localhost:8080/test-webgpu-support.html
-```
-
-**Run WebGPU Tests:**
-```bash
-# Run WebGPU tests in a visible Chrome window
-make test-webgpu-browser
-
-# This will:
-# 1. Open Chrome with WebGPU flags enabled
-# 2. Run canvas_webgpu tests in the browser
-# 3. Tests will skip gracefully if WebGPU is unavailable
-```
-
-**WebGPU Test Coverage:**
-- Canvas initialization and configuration
-- Pipeline creation (triangle, sprite, textured)
-- Pipeline switching and management
-- Batch rendering and vertex buffering
-- Texture loading and binding
-- Coordinate system transformations (NDC)
-- Resource cleanup and lifecycle
-
-**Limitations in WSL2:**
-WebGPU may not work in WSL2 without GPU passthrough. To enable:
-1. Ensure you have WSLg installed (Windows 11 or WSL 2.0+)
-2. Update GPU drivers on Windows
-3. Run tests in native Windows Chrome, or
-4. Use the mock canvas manager for testing without WebGPU
-
-**Alternative: Run tests on native OS:**
-The tests work best on:
-- Native Linux with GPU drivers
-- macOS with Metal support
-- Native Windows with DirectX 12 support
-
-### Test Coverage
-
-| Package | Coverage | Type |
-|---------|----------|------|
-| input   | 100%     | Unit tests |
-| mover   | 61.8%    | Unit tests |
-| sprite  | 64.5%    | Unit tests |
-| types   | 46.7%    | Unit tests |
-| canvas  | 41.5%    | Unit tests + Mock |
-| canvas  | ✅       | **WebGPU browser tests** |
-| gameobject | ✅    | WASM browser tests |
-
-**Total: 74 tests** (47 standard + 10 WASM + 17 WebGPU browser)
-
-See [internal/README_TESTING.md](internal/README_TESTING.md) for detailed testing documentation.
-
-## Makefile Commands
-
-```bash
-make deps               # Install dependencies
-make build              # Build WASM binary
-make serve              # Start development server
-make quick              # Build and serve
-make test               # Run standard tests
-make test-wasm          # Run WASM browser tests
-make test-wasm-all      # Run all WASM tests (all packages)
-make test-webgpu-browser # Run WebGPU tests in visible Chrome
-make clean              # Clean build artifacts
-make prod               # Production build (optimized)
-make info               # Show build information
-```
-
-## Components
-
-### GameObject System
-
-GameObjects represent entities in the game:
-- **Player** - User-controlled character with input handling
-- **Llama** - NPC character (example)
-
-Each GameObject has:
-- A **Sprite** for rendering
-- A **Mover** for movement (optional)
-- **State** for position and visibility
-
-### Input System
-
-Unified input system supporting:
-- **Keyboard** - WASD keys
-- **Gamepad** - Analog sticks and D-pad
-- **Automatic detection** - Controllers hot-plugged automatically
-
-### Rendering Pipeline
-
-WebGPU-based rendering with:
-- **Batch rendering** - Multiple sprites in one draw call
-- **Texture atlas** support
-- **Sprite sheet animation** - Frame-based animation with UV calculation
-- **Pipeline switching** - Multiple render pipelines per game state
-
-## Performance
-
-- **60 FPS** target frame rate
-- **Batch rendering** for efficient sprite drawing
-- **Screen wrapping** with minimal overhead
-- **Test execution** < 1 second for all tests
-
-## Documentation
-
-- [WASM Testing Guide](WASM_TESTING.md) - Detailed browser testing documentation
-- [Testing Guide](internal/README_TESTING.md) - Complete testing reference
-- [Architecture Overview](internal/) - Component documentation
-
-## Browser Compatibility
-
-Requires a browser with WebGPU support:
-- Chrome 113+
-- Edge 113+
-- Opera 99+
-- Firefox (experimental, behind flag)
-- Safari (experimental, Technology Preview)
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass: `make test && make test-wasm`
-5. Submit a pull request
-
-## License
-
-MIT License - See LICENSE file for details
-
-## Acknowledgments
-
-- Built with [Go](https://golang.org/)
-- Uses [wasmbrowsertest](https://github.com/agnivade/wasmbrowsertest) for browser testing
-- Inspired by modern 2D game engines
+Tag releases (`git tag v0.1.0 && git push origin v0.1.0`) to pin versions.
 
 ## Troubleshooting
 
-### Images fail to load / Infinite "Failed to load image" errors
-This means Git LFS assets weren't pulled. The PNG files are LFS pointer files (~130 bytes) instead of actual images.
+**Images fail to load / repeated "failed to load image".** Git LFS assets
+weren't pulled (PNGs are ~130-byte pointer files). Fix:
 
-**Solution:**
 ```bash
-# Install Git LFS if not already installed
-sudo apt-get install git-lfs  # Ubuntu/Debian
-# brew install git-lfs        # macOS
-
-# Initialize and pull LFS files
-git lfs install
-git lfs pull
-
-# Rebuild examples to copy real images
-make -C examples build
+git lfs install && git lfs pull
+ls -lah examples/basic-game/assets/*.png   # should be KB, not bytes
 ```
 
-**Verify fix:**
-```bash
-# Check file sizes - should be KB, not bytes
-ls -lah examples/basic-game/assets/*.png
-# llama.png should be ~2.7KB, not 129 bytes
-```
+**Font textures missing/corrupt.** Regenerate the sprite-sheet fonts:
 
-### Font textures fail to load
-If font sprite sheets are missing or corrupt, regenerate them:
-
-**Prerequisites:**
 ```bash
-# Install Pillow for Python
-sudo apt-get install python3-pil  # Ubuntu/Debian
-# pip3 install --user Pillow      # Alternative
-```
-
-**Generate fonts:**
-```bash
+sudo apt-get install python3-pil
 cd scripts
-python3 font_spritesheet_generator.py --font Mono --size 10 --output ../examples/basic-game/assets/fonts/
-
-# Rebuild to copy to dist
-cd ../examples
-make build
+python3 font_spritesheet_generator.py --font Mono --size 10 \
+    --output ../examples/basic-game/assets/fonts/
 ```
 
-The font generator creates `.sheet.png` (sprite texture) and `.sheet.json` (metadata) files. Proper font files are ~5KB, not ~130 bytes.
+This produces `.sheet.png` + `.sheet.json` (proper fonts are ~5KB).
 
-### WebGPU not supported error
-Ensure you're using a compatible browser and accessing via `localhost`:
-
-1. **Browser:** Chrome 113+, Edge 113+, or Safari 18+
-2. **URL:** Use `http://localhost:8080` not `http://0.0.0.0:8080`
-3. **Enable WebGPU:** In Chrome, visit `chrome://flags/#enable-unsafe-webgpu` and enable it
-4. **Verify:** Check `chrome://gpu` to confirm "WebGPU: Hardware accelerated"
-
-### WASM tests fail with "chrome not found"
-Install Chrome or Chromium:
-```bash
-sudo apt-get install chromium-browser
-```
-
-### Build fails
-Ensure you have Go 1.21+ and all dependencies:
-```bash
-go version
-make deps
-```
-
-### Tests show "IPAddressSpace" errors
-These are harmless ChromeDP warnings and can be ignored. The tests will still pass.
+**Module auth errors (`go get`/`go mod tidy`).** Verify `go env GOPRIVATE` and
+test git access (`git ls-remote git@github.com:cstevenson98/gowasm-engine.git`).
 
 ## Roadmap
 
 - [ ] Collision detection system
 - [ ] Audio support
 - [ ] Particle effects
-- [ ] Level/scene management
+- [ ] ECS-backed battle components (fold Participant timers/stats into the World)
 - [ ] Asset loading system
 - [ ] Mobile touch controls
-- [ ] Additional GameObject types
-- [ ] Performance profiling tools
 
----
+## License
 
-Built with ❤️ using Go and WebGPU
-
+MIT License — see the LICENSE file.
