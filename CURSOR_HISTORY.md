@@ -2627,3 +2627,29 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: Findings for later phases: (1) the browser wasm build is currently broken (examples Makefile builds ./game but no main.go exists there) -> restore in Phase 6; (2) .cursor/rules/gameEngine.mdc is stale (describes the removed WebGPU stack) -> fix in Phase 7. Decisions locked: layer tag components (with intra-layer tiebreak), one World per State, full migration.
 
 ---
+
+## [2026-07-22 18:45 BST] - ECS Adoption Phase 2: components + state packages
+
+**Prompt/Request**: Continue ECS migration - add data components and the State abstraction that replaces Scene.
+
+**Changes Made**:
+- New package `pkg/components` (pure data, no behaviour):
+  - `Position`, `Velocity`, `Wrap` (replace Mover); `Sprite` (replaces types.Sprite as data: TexturePath, Size, Columns, Rows, Frame, Visible) with pure projections `TotalFrames()` and `UV()`; `Animation` (FrameTime/Elapsed timing).
+  - `layers.go`: layer tag components `LayerBackground/LayerEntities/LayerUI` + `Order{Z}` intra-layer tiebreak (archetype order != insertion order, so a stable key prevents flicker).
+  - `resources.go`: `ScreenBounds` per-World resource.
+  - Tests for UV/TotalFrames across multi-frame, single-frame and degenerate sheets.
+- New package `pkg/state` (ECS-era replacement for pkg/scene):
+  - `State` interface (Name/World/Enter/Update/Exit) + optional `AssetProvider`, `OverlayRenderer`.
+  - `Deps` struct carrying engine services (input, UI, screen size, RequestState, GameState).
+  - `BaseState`: owns one ecs.World + ordered ecs.Schedule, stores Deps, seeds ScreenBounds on Enter, runs schedule on Update, resets world on Exit.
+  - Lifecycle test with a custom state + movement system.
+
+**Reasoning**: Components mirror the existing sprite-sheet/mover model exactly so Phase 3 systems can reproduce current behaviour. One World per State (locked decision) gives clean teardown via World.Reset in Exit.
+
+**Impact**: Additive only; pkg/scene, pkg/gameobject and the engine are untouched. Engine wiring of the State path is deferred to Phase 3 (it needs the render system to draw a World).
+
+**Testing**: go test ./pkg/... green, go vet clean, GOOS=js GOARCH=wasm build clean, no lint errors.
+
+**Notes**: UV() is a method on Sprite but is a pure data projection (no mutation), which is acceptable within ECS. Animation drives Sprite.Frame; static sprites (backgrounds) simply omit Animation.
+
+---
