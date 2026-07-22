@@ -15,7 +15,6 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/render"
 	"github.com/cstevenson98/gowasm-engine/pkg/state"
-	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 	"github.com/cstevenson98/gowasm-engine/pkg/ui"
 )
@@ -253,7 +252,8 @@ func (e *Engine) applyPendingStateChange() {
 }
 
 // applyGameState performs the actual state switch: tear down the current state,
-// preload the new state's assets, enter it, and build its renderer.
+// enter the new one, and build its renderer. Textures are lazy-loaded by the
+// canvas on first draw, so there is no separate asset-preload step.
 func (e *Engine) applyGameState(gs types.GameState) error {
 	e.stateLock.Lock()
 	defer e.stateLock.Unlock()
@@ -268,11 +268,6 @@ func (e *Engine) applyGameState(gs types.GameState) error {
 		e.currentState.Exit()
 		e.currentState = nil
 		e.renderer = nil
-	}
-
-	// Preload all state assets BEFORE entering.
-	if err := e.preloadStateAssets(registered); err != nil {
-		logger.Logger.Warnf("Some assets failed to preload for state %s: %s", registered.Name(), err.Error())
 	}
 
 	// Enter the state with engine dependencies.
@@ -292,59 +287,6 @@ func (e *Engine) applyGameState(gs types.GameState) error {
 	e.renderer = render.NewRenderer(registered.World())
 	e.currentGameState = gs
 	logger.Logger.Debugf("Game state changed to: %s", gs.String())
-	return nil
-}
-
-// preloadStateAssets loads all assets declared by a state before it is entered.
-func (e *Engine) preloadStateAssets(s state.State) error {
-	provider, ok := s.(state.AssetProvider)
-	if !ok {
-		return nil
-	}
-
-	logger.Logger.Debugf("Preloading assets for state: %s", s.Name())
-	assets := provider.GetRequiredAssets()
-
-	var errs []error
-	for _, texturePath := range assets.TexturePaths {
-		if texturePath == "" {
-			continue
-		}
-		if err := e.canvasManager.LoadTexture(texturePath); err != nil {
-			errs = append(errs, err)
-		} else {
-			logger.Logger.Debugf("Preloaded texture: %s", texturePath)
-		}
-	}
-
-	for _, fontPath := range assets.FontPaths {
-		if fontPath == "" {
-			continue
-		}
-		tempFont := text.NewSpriteFont()
-		if err := tempFont.LoadFont(fontPath); err != nil {
-			errMsg := fmt.Errorf("failed to preload font %s: %w", fontPath, err)
-			logger.Logger.Warnf("%s", errMsg.Error())
-			errs = append(errs, errMsg)
-			continue
-		}
-		logger.Logger.Debugf("Preloaded font: %s (cached for reuse)", fontPath)
-
-		if fontTexturePath := tempFont.GetTexturePath(); fontTexturePath != "" {
-			if err := e.canvasManager.LoadTexture(fontTexturePath); err != nil {
-				errMsg := fmt.Errorf("failed to preload font texture %s: %w", fontTexturePath, err)
-				logger.Logger.Warnf("%s", errMsg.Error())
-				errs = append(errs, errMsg)
-			} else {
-				logger.Logger.Debugf("Preloaded font texture: %s", fontTexturePath)
-			}
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("preload completed with %d error(s)", len(errs))
-	}
-	logger.Logger.Debugf("Successfully preloaded all assets for state: %s", s.Name())
 	return nil
 }
 

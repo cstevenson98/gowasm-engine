@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"example.com/basic-game/game/gamestate"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/state"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -32,11 +31,6 @@ func NewMenuState() *MenuState {
 		BaseState: state.NewBaseState("Menu"),
 		menuMode:  "main",
 	}
-}
-
-// GetRequiredAssets declares the font used for menu text.
-func (s *MenuState) GetRequiredAssets() state.Assets {
-	return state.Assets{FontPaths: []string{config.Global.Debug.FontPath}}
 }
 
 // Enter initialises the menu.

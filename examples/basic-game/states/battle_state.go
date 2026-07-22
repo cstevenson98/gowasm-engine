@@ -33,18 +33,6 @@ func NewBattleState() *BattleState {
 	return &BattleState{BaseState: state.NewBaseState("Battle")}
 }
 
-// GetRequiredAssets declares the background, character textures, and font.
-func (s *BattleState) GetRequiredAssets() state.Assets {
-	return state.Assets{
-		TexturePaths: []string{
-			"assets/art/test-background.png",
-			config.Global.Player.TexturePath,
-			config.Global.Battle.EnemyTexture,
-		},
-		FontPaths: []string{config.Global.Debug.FontPath},
-	}
-}
-
 // Enter builds the battle scene and starts the battle system.
 func (s *BattleState) Enter(deps state.Deps) error {
 	if err := s.BaseState.Enter(deps); err != nil {

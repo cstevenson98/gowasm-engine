@@ -26,17 +26,6 @@ func NewGameplayState() *GameplayState {
 	return &GameplayState{BaseState: state.NewBaseState("Gameplay")}
 }
 
-// GetRequiredAssets declares the background, player texture, and font.
-func (s *GameplayState) GetRequiredAssets() state.Assets {
-	return state.Assets{
-		TexturePaths: []string{
-			"assets/art/test-background.png",
-			config.Global.Player.TexturePath,
-		},
-		FontPaths: []string{config.Global.Debug.FontPath},
-	}
-}
-
 // Enter builds the world (background + player) and registers systems.
 func (s *GameplayState) Enter(deps state.Deps) error {
 	if err := s.BaseState.Enter(deps); err != nil {

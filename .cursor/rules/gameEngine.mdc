@@ -37,8 +37,8 @@ each affected module, not just the root.
 2. **`ecs`** - the ECS abstraction and the **sole backend seam** (wraps
    `github.com/mlange-42/ark`). Nothing else may import Ark.
 3. **`components`** - pure-data components + shared resource types.
-4. **`state`** - the `State` interface, `BaseState`, injected `Deps`, `Assets`,
-   and the optional `AssetProvider` / `OverlayRenderer` interfaces.
+4. **`state`** - the `State` interface, `BaseState`, injected `Deps`, and the
+   optional `OverlayRenderer` interface.
 5. **`systems`** - engine systems (movement, animation) and `systems/battle`
    (the ATB battle subsystem).
 6. **`render`** - the `Renderer`: draws a World's sprites, one filtered pass per
@@ -128,9 +128,10 @@ func (s *GameplayState) Enter(deps state.Deps) error {
   bespoke injection interfaces.
 - To switch states from within `Update`, call `RequestState(...)` (deferred to
   next frame). Never tear down a state mid-Update.
-- Optional interfaces: `AssetProvider.GetRequiredAssets()` (engine preloads
-  before `Enter`) and `OverlayRenderer.DrawOverlays()` (screen-space UI drawn
+- Optional interface: `OverlayRenderer.DrawOverlays()` (screen-space UI drawn
   after the world; call `BaseState.DrawOverlays()` to keep the debug console).
+  Textures are lazy-loaded by the canvas on first draw, so there is no
+  asset-preload step to implement.
 - Menus are immediate-mode UI with no entities; gameplay/battle spawn ECS
   entities.
 
@@ -221,7 +222,7 @@ require (
 
 ### Add a new state
 1. Embed `*state.BaseState`; override `Enter` to build entities + register
-   systems; optionally implement `AssetProvider` / `OverlayRenderer`.
+   systems; optionally implement `OverlayRenderer`.
 2. Register it in both entry points (`cmd/ebiten-game` and
    `examples/basic-game/game`) via `RegisterState`.
 

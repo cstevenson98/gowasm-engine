@@ -43,11 +43,12 @@
 // Activating a state runs a fixed sequence:
 //
 //  1. Exit the outgoing state (its World is reset).
-//  2. Preload the incoming state's declared assets (textures and fonts, via the
-//     optional state.AssetProvider) so blocking I/O happens up front.
-//  3. Enter the incoming state with injected dependencies (see below), which is
+//  2. Enter the incoming state with injected dependencies (see below), which is
 //     where it builds entities and registers systems.
-//  4. Build a render.Renderer over the new state's World and make it active.
+//  3. Build a render.Renderer over the new state's World and make it active.
+//
+// There is no separate asset-preload step: the canvas lazy-loads (and caches)
+// each texture the first time it is drawn.
 //
 // Use [Engine.SetGameState] to activate the starting state before the loop
 // runs. States request a switch from within their own Update via the injected

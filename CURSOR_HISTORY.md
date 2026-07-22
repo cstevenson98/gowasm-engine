@@ -2751,3 +2751,22 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: components/layers.go retains a one-line rationale comment mentioning the old "SceneLayer buckets" for historical context. gamestate.SetPlayer/GetPlayer/UpdateStateFromPlayer remain unused and could be pruned in a follow-up.
 
 ---
+
+## [2026-07-22 22:30 BST] - Remove asset-preload machinery; delete empty refactor dirs
+
+**Prompt/Request**: The Ebiten canvas already lazy-loads textures on first draw, so the state asset-preload step was redundant. Remove it entirely, and delete the empty directories left behind by the ECS refactor.
+
+**Changes Made**:
+- pkg/engine/engine.go: deleted the preloadStateAssets method and its call in applyGameState; dropped the now-unused pkg/text import. Updated the applyGameState comment to note textures lazy-load.
+- pkg/state/state.go: removed the Assets struct and the AssetProvider interface (OverlayRenderer kept).
+- examples/basic-game/states: removed GetRequiredAssets from MenuState, GameplayState, PlayerMenuState, BattleState; dropped the now-unused config import from menu_state.go and player_menu_state.go (gameplay/battle still use config elsewhere).
+- Docs: updated pkg/engine/doc.go (state lifecycle no longer lists a preload step; notes lazy-load), README.md, and .cursor/rules/gameEngine.mdc to drop AssetProvider/preload references.
+- Deleted empty dirs: pkg/scene, pkg/gameobject, pkg/mover, pkg/sprite (emptied by the migration), examples/basic-game/scenes, and cmd/spike (the phase-0 wasm-size spike).
+
+**Reasoning**: Canvas.DrawTexturedRect lazy-loads and caches any texture on first use, and the single UI font is loaded once by the UI facade at engine init, so preloading was redundant boilerplate on every state. Removing it deletes an interface + a per-state method with no behaviour change.
+
+**Impact**: One fewer optional interface to implement; states are leaner. First-draw of a texture now pays a one-time load cost inline (negligible for the example). No functional change otherwise.
+
+**Testing**: go test ./pkg/... green; examples/basic-game build+vet+test green; cmd/ebiten-game desktop build OK; wasm build ./game (20M) OK; no lint errors. `find . -type d -empty` now reports none (outside .git).
+
+---

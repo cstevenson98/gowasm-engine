@@ -73,15 +73,15 @@ dependencies change, run `go mod tidy` in each affected module.
 ### Engine packages (`pkg/`)
 
 - `engine` — game loop (`ebiten.Game`), State orchestration, Input refresh,
-  deferred state switches, asset preloading.
+  deferred state switches.
 - `ecs` — the ECS abstraction and the **sole backend seam** (wraps
   `github.com/mlange-42/ark`). Nothing else imports Ark. Exposes `World`,
   `Entity`, `Map1..8`, `Filter1..4`, resources, `System`/`Schedule`.
 - `components` — pure-data components (`Position`, `Velocity`, `Wrap`, `Sprite`,
   `Animation`), layer tags (`LayerBackground/Entities/UI`), `Order`, and the
   `ScreenBounds` / `Input` resources.
-- `state` — `State` interface, `BaseState`, injected `Deps`, `Assets`, and the
-  optional `AssetProvider` / `OverlayRenderer` interfaces.
+- `state` — `State` interface, `BaseState`, injected `Deps`, and the optional
+  `OverlayRenderer` interface.
 - `systems` — engine systems (`Movement`, `Animation`) and `systems/battle`
   (the ATB battle subsystem).
 - `render` — the `Renderer`: one filtered pass per layer, ordered by `Order.Z`.
