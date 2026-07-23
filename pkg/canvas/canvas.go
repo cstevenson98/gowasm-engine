@@ -9,10 +9,17 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
+
+// Config holds the rendering-quality knobs the canvas needs. The engine
+// constructs this from its own config.Settings and passes it to NewCanvas, so
+// the canvas itself has no dependency on the engine's config package.
+type Config struct {
+	PixelArtMode        bool // Use nearest-neighbor filtering instead of linear.
+	PixelPerfectScaling bool // Snap draw positions to whole virtual pixels.
+}
 
 // Canvas implements CanvasManager using Ebiten.
 //
@@ -20,6 +27,8 @@ import (
 // image internally, so draws are issued immediately to the current render
 // target without any manual batching layer.
 type Canvas struct {
+	cfg Config
+
 	// Render target (set by the engine each frame during Draw)
 	screen *ebiten.Image
 
@@ -29,9 +38,10 @@ type Canvas struct {
 	initialized bool
 }
 
-// NewCanvas creates a new Ebiten canvas.
-func NewCanvas() *Canvas {
+// NewCanvas creates a new Ebiten canvas with the given rendering config.
+func NewCanvas(cfg Config) *Canvas {
 	return &Canvas{
+		cfg:            cfg,
 		loadedTextures: make(map[string]*ebiten.Image),
 	}
 }
@@ -102,13 +112,13 @@ func (c *Canvas) DrawTexturedRect(texturePath string, position types.Vector2, si
 
 	subImg := img.SubImage(image.Rect(x0, y0, x1, y1)).(*ebiten.Image)
 
-	pos := snapToPixel(position)
+	pos := c.snapToPixel(position)
 
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Scale(size.X/float64(x1-x0), size.Y/float64(y1-y0))
 	opts.GeoM.Translate(pos.X, pos.Y)
 
-	if config.Global.Rendering.PixelArtMode {
+	if c.cfg.PixelArtMode {
 		opts.Filter = ebiten.FilterNearest
 	} else {
 		opts.Filter = ebiten.FilterLinear
@@ -133,7 +143,7 @@ func (c *Canvas) DrawColoredRect(position types.Vector2, size types.Vector2, col
 		A: uint8(colorRGBA[3] * 255),
 	})
 
-	pos := snapToPixel(position)
+	pos := c.snapToPixel(position)
 
 	opts := &ebiten.DrawImageOptions{}
 	opts.GeoM.Translate(pos.X, pos.Y)
@@ -145,8 +155,8 @@ func (c *Canvas) DrawColoredRect(position types.Vector2, size types.Vector2, col
 // rendering is enabled. Movers keep their smooth sub-pixel position; only the
 // rendered position is quantized, which keeps sprites and text crisp and free
 // of shimmer as they move (the virtual screen is later upscaled by PixelScale).
-func snapToPixel(position types.Vector2) types.Vector2 {
-	if !config.Global.Rendering.PixelPerfectScaling {
+func (c *Canvas) snapToPixel(position types.Vector2) types.Vector2 {
+	if !c.cfg.PixelPerfectScaling {
 		return position
 	}
 	return types.Vector2{

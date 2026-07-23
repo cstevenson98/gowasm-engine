@@ -102,8 +102,8 @@ dependencies change, run `go mod tidy` in each affected module.
   `github.com/mlange-42/ark`). Nothing else imports Ark. Exposes `World`,
   `Entity`, `Map1..8`, `Filter1..4`, resources, `System`/`Schedule`.
 - `components` — pure-data components (`Position`, `Velocity`, `Wrap`, `Sprite`,
-  `Animation`), layer tags (`LayerBackground/Entities/UI`), `Order`, and the
-  `ScreenBounds` / `Input` resources.
+  `Animation`, `CameraTarget`), layer tags (`LayerBackground/Entities/UI`),
+  `Order`, and the `ScreenBounds` / `Input` / `Camera` resources.
 - `state` — `State` interface, `BaseState`, injected `Deps`, and the optional
   `OverlayRenderer` interface.
 - `systems` — engine systems (`Movement`, `Animation`) and `systems/battle`
@@ -118,7 +118,8 @@ dependencies change, run `go mod tidy` in each affected module.
 
 ```go
 // main.go (desktop entry point)
-eng := engine.NewEngine()
+cfg := config.Default()          // or build a custom config.Settings
+eng := engine.NewEngine(cfg)
 
 // A game-defined provider for cross-state data (optional).
 eng.RegisterGameStateProvider(myGameState)
@@ -167,13 +168,21 @@ replace github.com/cstevenson98/gowasm-engine => ../path/to/engine/repo
 
 ## Configuration
 
-Global configuration lives in `pkg/config` as `config.Global`:
-- `Screen` — virtual width/height and window/canvas size.
-- `Player` — spawn, size, speed, texture, sprite grid.
-- `Animation` — default frame times.
+The engine's own configuration is `config.Settings` (`pkg/config`) - there is no
+global instance. Build one explicitly, or start from `config.Default()`, and
+pass it to `engine.NewEngine`; the engine threads it down into the canvas, UI,
+text, and debug console:
+- `Screen` — virtual width/height (window/canvas size is derived via
+  `Settings.WindowWidth/WindowHeight`).
+- `Animation` — `DefaultFrameTime`, the fallback used by generic prefab helpers.
 - `Rendering` — `PixelArtMode`, scaling, line spacing, etc.
 - `Debug` — console toggle, font path/scale, colours, message settings.
-- `Battle` — example-game combat parameters.
+
+Game-specific configuration (player stats/appearance, enemy/battle content,
+...) does not live here - each game defines its own config package. See
+`examples/basic-game/game/gameconfig` for this repo's example, which - unlike
+the engine's config - is a plain package-level global, since it configures one
+specific game rather than a reusable engine.
 
 ## Build, Test, and Docs
 

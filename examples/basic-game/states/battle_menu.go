@@ -1,7 +1,7 @@
 package states
 
 import (
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"example.com/basic-game/game/gameconfig"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/systems/battle"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -52,10 +52,10 @@ func (bms *BattleMenuSystem) Initialize() {
 		position: types.Vector2{X: 20, Y: 20},
 	}
 	bms.characterStatus = &CharacterStatus{
-		playerHP:    config.Global.Battle.PlayerHP,
-		playerMaxHP: config.Global.Battle.PlayerMaxHP,
-		enemyHP:     config.Global.Battle.EnemyHP,
-		enemyMaxHP:  config.Global.Battle.EnemyMaxHP,
+		playerHP:    gameconfig.Global.Battle.PlayerHP,
+		playerMaxHP: gameconfig.Global.Battle.PlayerMaxHP,
+		enemyHP:     gameconfig.Global.Battle.EnemyHP,
+		enemyMaxHP:  gameconfig.Global.Battle.EnemyMaxHP,
 		position:    types.Vector2{X: 20, Y: 240},
 	}
 	bms.actionMenu = &ActionMenu{

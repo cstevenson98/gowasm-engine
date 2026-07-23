@@ -1,38 +1,38 @@
+// Package config defines the engine's own configuration: virtual screen
+// resolution, rendering quality, and debug-console behaviour/appearance.
+//
+// There is deliberately no package-level mutable global here. Construct a
+// Settings value (or start from Default()) and pass it to engine.NewEngine;
+// the engine threads the relevant pieces down into canvas/ui/text/state, so
+// every consumer sees the same, explicitly-chosen configuration rather than
+// reaching into a shared singleton.
+//
+// Game-specific configuration (player stats, enemy content, save-file
+// defaults, ...) does not belong here - it lives in the game itself, e.g.
+// examples/basic-game/game/gameconfig.
 package config
 
-// Settings contains all global configuration for the game engine
+// Settings is the engine's configuration.
 type Settings struct {
 	Screen    ScreenSettings
-	Player    PlayerSettings
-	Animation AnimationSettings
 	Debug     DebugSettings
 	Rendering RenderingSettings
-	Battle    BattleSettings
+	Animation AnimationSettings
 }
 
 // ScreenSettings contains display configuration. The virtual resolution is the
 // fixed coordinate space the game renders in; the actual window size is derived
-// from it and Rendering.PixelScale (see WindowWidth/WindowHeight).
+// from it and Rendering.PixelScale (see Settings.WindowWidth/WindowHeight).
 type ScreenSettings struct {
 	Width  float64 // Virtual game resolution width
 	Height float64 // Virtual game resolution height
 }
 
-// PlayerSettings contains player-specific configuration
-type PlayerSettings struct {
-	SpawnX        float64 // X position for player spawn (0 = left, Screen.Width = right)
-	SpawnY        float64 // Y position for player spawn (0 = top, Screen.Height = bottom)
-	Size          float64 // Player sprite size (width and height)
-	Speed         float64 // Movement speed in pixels per second
-	TexturePath   string  // Path to player texture
-	SpriteColumns int     // Number of columns in sprite sheet
-	SpriteRows    int     // Number of rows in sprite sheet
-}
-
-// AnimationSettings contains animation timing configuration
+// AnimationSettings contains engine-level animation timing defaults.
 type AnimationSettings struct {
-	PlayerFrameTime  float64 // Time per frame for player animation (seconds)
-	DefaultFrameTime float64 // Default frame time for other sprites (seconds)
+	// DefaultFrameTime is the fallback seconds-per-frame used by generic
+	// prefab helpers (e.g. prefab.NewLlama) when a game doesn't specify one.
+	DefaultFrameTime float64
 }
 
 // DebugSettings contains debug console configuration
@@ -58,93 +58,48 @@ type RenderingSettings struct {
 	TextLineSpacing     float64 // Line spacing multiplier for paragraph text (newlines within strings)
 }
 
-// BattleSettings contains battle scene configuration
-type BattleSettings struct {
-	PlayerHP      int     // Player's starting HP
-	PlayerMaxHP   int     // Player's maximum HP
-	EnemyHP       int     // Enemy's starting HP
-	EnemyMaxHP    int     // Enemy's maximum HP
-	EnemyTexture  string  // Path to enemy texture
-	MenuFontPath  string  // Path to menu font (without .sheet.png extension)
-	MenuFontScale float64 // Scale factor for menu text
-
-	// Battle system configuration
-	TimerChargeRate      float64 // How fast action timers charge (1.0 = 1.0 per second)
-	AnimationDuration    float64 // Default animation duration in seconds
-	DamageEffectDuration float64 // How long damage numbers are displayed
-	ActionQueueSize      int     // Size of the action queue buffer
+// Default returns the engine's stock settings. Games that don't need custom
+// values can pass this straight to engine.NewEngine; games that do can start
+// from it and override individual fields.
+func Default() Settings {
+	return Settings{
+		Screen: ScreenSettings{
+			Width:  320.0, // Virtual game resolution (240p, 4:3)
+			Height: 240.0,
+		},
+		Animation: AnimationSettings{
+			DefaultFrameTime: 0.1, // 10 FPS
+		},
+		Debug: DebugSettings{
+			Enabled:                   true,
+			FontPath:                  "assets/fonts/Mono_10", // Will append .sheet.png/.sheet.json
+			FontScale:                 1.0,                    // 1:1 scale (no additional scaling beyond pixel scale)
+			CharacterSpacingReduction: 8.0,                    // Reduce spacing by 8 pixels (adjust as needed)
+			MaxMessages:               10,
+			MessageLifetime:           0, // 0 = never fade (keep all messages)
+			ConsoleHeight:             200.0,
+			BackgroundColor:           [4]float32{0.0, 0.0, 0.0, 0.7}, // Semi-transparent black
+			TextColor:                 [4]float32{0.0, 1.0, 0.0, 1.0}, // Green text (classic terminal look)
+		},
+		Rendering: RenderingSettings{
+			PixelArtMode:        true,      // Enable pixel-perfect rendering
+			TextureFiltering:    "nearest", // Use nearest-neighbor filtering for pixel art
+			PixelPerfectScaling: true,      // Ensure integer scaling
+			PixelScale:          5,         // 5 real pixels per game pixel (5x upscaling)
+			UILineSpacing:       1.1,       // UI elements line spacing (menus, logs, status)
+			TextLineSpacing:     1.1,       // Paragraph text line spacing (newlines in strings)
+		},
+	}
 }
 
-// Global is the global settings instance
-var Global = Settings{
-	Screen: ScreenSettings{
-		Width:  320.0, // Virtual game resolution (240p, 4:3)
-		Height: 240.0, // Virtual game resolution (240p, 4:3)
-	},
-	Player: PlayerSettings{
-		SpawnX:        0.0,  // Will be calculated as center in scene
-		SpawnY:        0.0,  // Will be calculated as center in scene
-		Size:          32.0, // Native sprite frame size (1:1 with texture, will be scaled by PixelScale)
-		Speed:         2.0,  // pixels per second
-		TexturePath:   "assets/llama.png",
-		SpriteColumns: 2,
-		SpriteRows:    3,
-	},
-	Animation: AnimationSettings{
-		PlayerFrameTime:  0.15, // 6.67 FPS
-		DefaultFrameTime: 0.1,  // 10 FPS
-	},
-	Debug: DebugSettings{
-		Enabled:                   true,
-		FontPath:                  "assets/fonts/Mono_10", // Will append .sheet.png/.sheet.json
-		FontScale:                 1.0,                    // 1:1 scale (no additional scaling beyond pixel scale)
-		CharacterSpacingReduction: 8.0,                    // Reduce spacing by 8 pixels (adjust as needed)
-		MaxMessages:               10,
-		MessageLifetime:           0, // 0 = never fade (keep all messages)
-		ConsoleHeight:             200.0,
-		BackgroundColor:           [4]float32{0.0, 0.0, 0.0, 0.7}, // Semi-transparent black
-		TextColor:                 [4]float32{0.0, 1.0, 0.0, 1.0}, // Green text (classic terminal look)
-	},
-	Rendering: RenderingSettings{
-		PixelArtMode:        true,      // Enable pixel-perfect rendering
-		TextureFiltering:    "nearest", // Use nearest-neighbor filtering for pixel art
-		PixelPerfectScaling: true,      // Ensure integer scaling
-		PixelScale:          5,         // 3 real pixels per game pixel (3x upscaling)
-		UILineSpacing:       1.1,       // UI elements line spacing (menus, logs, status)
-		TextLineSpacing:     1.1,       // Paragraph text line spacing (newlines in strings)
-	},
-	Battle: BattleSettings{
-		PlayerHP:      100,
-		PlayerMaxHP:   100,
-		EnemyHP:       80,
-		EnemyMaxHP:    80,
-		EnemyTexture:  "assets/art/ghost.png",
-		MenuFontPath:  "assets/fonts/Mono_10",
-		MenuFontScale: 1.0,
-
-		// Battle system configuration
-		TimerChargeRate:      0.33, // 0.33 per second (3 seconds to fill)
-		AnimationDuration:    1.0,  // 1 second default
-		DamageEffectDuration: 2.0,  // 2 seconds for damage numbers
-		ActionQueueSize:      100,  // Buffer for 100 actions
-	},
+// WindowWidth returns the actual window pixel width for these settings: the
+// virtual resolution width scaled up by the pixel scale.
+func (s Settings) WindowWidth() int {
+	return int(s.Screen.Width) * s.Rendering.PixelScale
 }
 
-// WindowWidth returns the actual window pixel width: the virtual resolution
-// width scaled up by the pixel scale.
-func WindowWidth() int {
-	return int(Global.Screen.Width) * Global.Rendering.PixelScale
-}
-
-// WindowHeight returns the actual window pixel height: the virtual resolution
-// height scaled up by the pixel scale.
-func WindowHeight() int {
-	return int(Global.Screen.Height) * Global.Rendering.PixelScale
-}
-
-// GetPlayerSpawnPosition calculates the centered spawn position for the player
-func GetPlayerSpawnPosition() (x, y float64) {
-	x = (Global.Screen.Width - Global.Player.Size) / 2
-	y = (Global.Screen.Height - Global.Player.Size) / 2
-	return
+// WindowHeight returns the actual window pixel height for these settings: the
+// virtual resolution height scaled up by the pixel scale.
+func (s Settings) WindowHeight() int {
+	return int(s.Screen.Height) * s.Rendering.PixelScale
 }

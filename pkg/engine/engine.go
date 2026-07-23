@@ -9,6 +9,7 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/input"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
@@ -23,6 +24,8 @@ import (
 // implementations against types.GameState values; the engine renders the active
 // state's ECS world and drives its Update.
 type Engine struct {
+	cfg config.Settings
+
 	canvasManager *canvas.Canvas
 	inputCapturer *input.Input
 	ui            types.UIManager
@@ -44,15 +47,21 @@ type Engine struct {
 	hasPendingState bool
 }
 
-// NewEngine creates a new game engine instance.
-func NewEngine() *Engine {
+// NewEngine creates a new game engine instance from cfg. Pass config.Default()
+// for the engine's stock settings, or a customized config.Settings to override
+// screen resolution, rendering quality, or debug-console behavior/appearance.
+func NewEngine(cfg config.Settings) *Engine {
 	return &Engine{
-		canvasManager:    canvas.NewCanvas(),
+		cfg: cfg,
+		canvasManager: canvas.NewCanvas(canvas.Config{
+			PixelArtMode:        cfg.Rendering.PixelArtMode,
+			PixelPerfectScaling: cfg.Rendering.PixelPerfectScaling,
+		}),
 		inputCapturer:    input.NewInput(),
 		running:          false,
 		registeredStates: make(map[types.GameState]state.State),
-		screenWidth:      config.Global.Screen.Width,
-		screenHeight:     config.Global.Screen.Height,
+		screenWidth:      cfg.Screen.Width,
+		screenHeight:     cfg.Screen.Height,
 	}
 }
 
@@ -79,11 +88,29 @@ func (e *Engine) Initialize(canvasID string) error {
 		return err
 	}
 
+	// Apply this engine's config to the shared debug console singleton, so a
+	// customized config.Settings actually takes effect instead of the
+	// console's built-in defaults.
+	debug.Console.Configure(debug.Config{
+		Enabled:         e.cfg.Debug.Enabled,
+		MaxMessages:     e.cfg.Debug.MaxMessages,
+		MessageLifetime: e.cfg.Debug.MessageLifetime,
+		ConsoleHeight:   e.cfg.Debug.ConsoleHeight,
+		ScreenWidth:     e.cfg.Screen.Width,
+		BackgroundColor: e.cfg.Debug.BackgroundColor,
+		TextColor:       e.cfg.Debug.TextColor,
+	})
+
 	// Create the shared immediate-mode UI facade so states can draw text and
 	// primitives without loading their own fonts or touching the canvas. On
 	// failure we fall back to a no-op so UI calls stay safe.
 	e.ui = types.NopUI
-	if uiFacade, err := ui.New(e.canvasManager, config.Global.Debug.FontPath, e.screenWidth, e.screenHeight); err != nil {
+	uiCfg := ui.Config{
+		CharacterSpacingReduction: e.cfg.Debug.CharacterSpacingReduction,
+		UILineSpacing:             e.cfg.Rendering.UILineSpacing,
+		TextLineSpacing:           e.cfg.Rendering.TextLineSpacing,
+	}
+	if uiFacade, err := ui.New(e.canvasManager, e.cfg.Debug.FontPath, e.screenWidth, e.screenHeight, uiCfg); err != nil {
 		logger.Logger.Warnf("Failed to create UI facade: %s", err.Error())
 	} else {
 		e.ui = uiFacade
@@ -268,12 +295,14 @@ func (e *Engine) applyGameState(gs types.GameState) error {
 
 	// Enter the state with engine dependencies.
 	deps := state.Deps{
-		Input:        e.inputCapturer,
-		UI:           e.ui,
-		ScreenWidth:  e.screenWidth,
-		ScreenHeight: e.screenHeight,
-		RequestState: e.RequestStateChange,
-		GameState:    e.gameStateProvider,
+		Input:            e.inputCapturer,
+		UI:               e.ui,
+		ScreenWidth:      e.screenWidth,
+		ScreenHeight:     e.screenHeight,
+		RequestState:     e.RequestStateChange,
+		GameState:        e.gameStateProvider,
+		Debug:            state.DebugConfig{Enabled: e.cfg.Debug.Enabled},
+		DefaultFrameTime: e.cfg.Animation.DefaultFrameTime,
 	}
 	if err := registered.Enter(deps); err != nil {
 		return fmt.Errorf("failed to enter state: %w", err)

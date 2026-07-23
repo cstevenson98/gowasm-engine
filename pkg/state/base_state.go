@@ -2,7 +2,6 @@ package state
 
 import (
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
@@ -74,7 +73,7 @@ func (b *BaseState) Update(dt float64) {
 }
 
 func (b *BaseState) updateDebugConsole(dt float64) {
-	if !config.Global.Debug.Enabled {
+	if !b.deps.Debug.Enabled {
 		return
 	}
 	in := b.Input()
@@ -131,3 +130,7 @@ func (b *BaseState) ScreenWidth() float64 { return b.deps.ScreenWidth }
 
 // ScreenHeight returns the virtual screen height.
 func (b *BaseState) ScreenHeight() float64 { return b.deps.ScreenHeight }
+
+// DefaultFrameTime returns the engine's fallback seconds-per-frame for
+// animated sprites (config.Settings.Animation.DefaultFrameTime).
+func (b *BaseState) DefaultFrameTime() float64 { return b.deps.DefaultFrameTime }

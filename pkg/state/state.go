@@ -12,6 +12,13 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
+// DebugConfig is the subset of the engine's debug settings a State needs. The
+// engine populates it from its own config.Settings when entering a state, so
+// pkg/state has no dependency on the engine's config package.
+type DebugConfig struct {
+	Enabled bool
+}
+
 // Deps are the engine services handed to a State when it becomes active. They
 // are stored on the World as resources by BaseState.Enter so systems can reach
 // them without bespoke injection interfaces.
@@ -22,6 +29,12 @@ type Deps struct {
 	ScreenHeight float64
 	RequestState func(types.GameState) error
 	GameState    interface{}
+	Debug        DebugConfig
+
+	// DefaultFrameTime is the engine's fallback seconds-per-frame for animated
+	// sprites (config.Settings.Animation.DefaultFrameTime), for states/games
+	// that want the engine default without importing pkg/config themselves.
+	DefaultFrameTime float64
 }
 
 // State is a top-level game state. Each State owns its own ecs.World; the engine

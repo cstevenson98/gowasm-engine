@@ -20,7 +20,8 @@ import (
 func main() {
 	logger.Logger.Info("Ebiten game starting (wasm entry)")
 
-	gameEngine := engine.NewEngine()
+	cfg := config.Default()
+	gameEngine := engine.NewEngine(cfg)
 
 	stateManager := gamestate.NewGameStateManager()
 	gameEngine.RegisterGameStateProvider(stateManager)
@@ -44,9 +45,9 @@ func main() {
 
 	gameEngine.Start()
 
-	ebiten.SetWindowSize(config.WindowWidth(), config.WindowHeight())
+	ebiten.SetWindowSize(cfg.WindowWidth(), cfg.WindowHeight())
 	ebiten.SetWindowTitle("Go WASM Engine - Ebiten Edition")
-	if config.Global.Rendering.PixelArtMode {
+	if cfg.Rendering.PixelArtMode {
 		ebiten.SetScreenFilterEnabled(false)
 	}
 

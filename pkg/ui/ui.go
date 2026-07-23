@@ -15,7 +15,6 @@ package ui
 
 import (
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/text"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -23,6 +22,15 @@ import (
 
 // Ensure *UI satisfies the engine-facing UI interface.
 var _ types.UIManager = (*UI)(nil)
+
+// Config holds the text-layout knobs the UI facade needs. The engine
+// constructs this from its own config.Settings and passes it to New, so this
+// package has no dependency on the engine's config package.
+type Config struct {
+	CharacterSpacingReduction float64 // Pixels to reduce character spacing by (used by Measure).
+	UILineSpacing             float64 // Line spacing multiplier for UI elements (menus, logs, status).
+	TextLineSpacing           float64 // Line spacing multiplier passed through to the embedded text renderer.
+}
 
 // UI is an immediate-mode text/primitive drawing facade backed by a canvas and
 // a single default font. It implements types.UIManager.
@@ -32,12 +40,13 @@ type UI struct {
 	font     text.Font
 	screenW  float64
 	screenH  float64
+	cfg      Config
 }
 
 // New creates a UI that draws on the given canvas using the font sprite sheet at
 // fontPath, centering against the given virtual screen dimensions. It loads the
 // font and preloads its texture.
-func New(cm canvas.CanvasManager, fontPath string, screenW, screenH float64) (*UI, error) {
+func New(cm canvas.CanvasManager, fontPath string, screenW, screenH float64, cfg Config) (*UI, error) {
 	font := text.NewSpriteFont()
 	if err := font.LoadFont(fontPath); err != nil {
 		return nil, err
@@ -50,11 +59,15 @@ func New(cm canvas.CanvasManager, fontPath string, screenW, screenH float64) (*U
 
 	logger.Logger.Debugf("UI created with font %s", fontPath)
 	return &UI{
-		canvas:   cm,
-		renderer: text.NewTextRenderer(cm),
-		font:     font,
-		screenW:  screenW,
-		screenH:  screenH,
+		canvas: cm,
+		renderer: text.NewTextRenderer(cm, text.Config{
+			CharacterSpacingReduction: cfg.CharacterSpacingReduction,
+			LineSpacing:               cfg.TextLineSpacing,
+		}),
+		font:    font,
+		screenW: screenW,
+		screenH: screenH,
+		cfg:     cfg,
 	}, nil
 }
 
@@ -104,7 +117,7 @@ func (u *UI) Measure(s string) float64 {
 		return 0
 	}
 	cellWidth, _ := u.font.GetCellSize()
-	advance := float64(cellWidth) - config.Global.Debug.CharacterSpacingReduction
+	advance := float64(cellWidth) - u.cfg.CharacterSpacingReduction
 	return float64(len(s)) * advance
 }
 
@@ -114,7 +127,7 @@ func (u *UI) LineHeight() float64 {
 		return 0
 	}
 	_, cellHeight := u.font.GetCellSize()
-	return float64(cellHeight) * config.Global.Rendering.UILineSpacing
+	return float64(cellHeight) * u.cfg.UILineSpacing
 }
 
 // ScreenSize returns the virtual screen dimensions the UI centers against.

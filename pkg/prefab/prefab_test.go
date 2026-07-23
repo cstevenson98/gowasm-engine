@@ -37,7 +37,7 @@ func TestNewLlamaMovesAndAnimates(t *testing.T) {
 	w := ecs.NewWorld()
 	ecs.SetResource(w, &components.ScreenBounds{W: 320, H: 240})
 
-	e := NewLlama(w, types.Vector2{X: 10, Y: 20}, types.Vector2{X: 16, Y: 16}, 50)
+	e := NewLlama(w, types.Vector2{X: 10, Y: 20}, types.Vector2{X: 16, Y: 16}, 50, 0.1)
 
 	move := systems.NewMovement(w)
 	anim := systems.NewAnimation(w)

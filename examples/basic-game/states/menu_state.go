@@ -76,7 +76,7 @@ func (s *MenuState) updateMainMenu(in types.InputState) {
 		switch s.options[s.selectedIndex] {
 		case "New Game":
 			if m := s.manager(); m != nil {
-				if err := m.CreateNewGame(); err != nil {
+				if err := m.CreateNewGame(s.ScreenWidth(), s.ScreenHeight()); err != nil {
 					logger.Logger.Errorf("Failed to create new game: %s", err.Error())
 					return
 				}

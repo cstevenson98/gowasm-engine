@@ -4,20 +4,30 @@ import (
 	"fmt"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
+// Config holds the text-layout knobs the renderer needs. The engine (or
+// pkg/ui, which embeds a text renderer) constructs this from its own
+// config.Settings and passes it to NewTextRenderer, so this package has no
+// dependency on the engine's config package.
+type Config struct {
+	CharacterSpacingReduction float64 // Pixels to reduce character spacing by (tightens mono-font cells).
+	LineSpacing               float64 // Line spacing multiplier for embedded newlines within a string.
+}
+
 // BasicTextRenderer implements the TextRenderer interface
 type BasicTextRenderer struct {
 	canvasManager canvas.CanvasManager
+	cfg           Config
 }
 
-// NewTextRenderer creates a new text renderer
-func NewTextRenderer(canvasManager canvas.CanvasManager) *BasicTextRenderer {
+// NewTextRenderer creates a new text renderer with the given layout config.
+func NewTextRenderer(canvasManager canvas.CanvasManager, cfg Config) *BasicTextRenderer {
 	return &BasicTextRenderer{
 		canvasManager: canvasManager,
+		cfg:           cfg,
 	}
 }
 
@@ -49,10 +59,10 @@ func (r *BasicTextRenderer) RenderTextScaled(text string, position types.Vector2
 
 	// Horizontal advance per character: the cell width tightened by the
 	// configured spacing reduction (mono-font cells carry built-in padding).
-	advance := (float64(cellWidth) - config.Global.Debug.CharacterSpacingReduction) * scale
+	advance := (float64(cellWidth) - r.cfg.CharacterSpacingReduction) * scale
 
 	// Vertical distance between lines for multi-line strings.
-	lineHeight := scaledHeight * config.Global.Rendering.TextLineSpacing
+	lineHeight := scaledHeight * r.cfg.LineSpacing
 
 	// Current position for rendering (advances with each character)
 	currentX := position.X

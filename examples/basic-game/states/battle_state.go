@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"example.com/basic-game/game/entities"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"example.com/basic-game/game/gameconfig"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/prefab"
 	"github.com/cstevenson98/gowasm-engine/pkg/state"
@@ -53,14 +53,15 @@ func (s *BattleState) Enter(deps state.Deps) error {
 	enemyPos := types.Vector2{X: s.ScreenWidth() * 0.8, Y: s.ScreenHeight() * 0.5}
 
 	entities.SpawnCharacter(w, playerPos,
-		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
-		config.Global.Player.TexturePath, config.Global.Player.SpriteColumns, config.Global.Player.SpriteRows)
+		types.Vector2{X: gameconfig.Global.Player.Size, Y: gameconfig.Global.Player.Size},
+		gameconfig.Global.Player.TexturePath, gameconfig.Global.Player.SpriteColumns, gameconfig.Global.Player.SpriteRows,
+		s.DefaultFrameTime())
 	entities.SpawnCharacter(w, enemyPos,
-		types.Vector2{X: 32, Y: 64}, config.Global.Battle.EnemyTexture, 3, 2)
+		types.Vector2{X: 32, Y: 64}, gameconfig.Global.Battle.EnemyTexture, 3, 2, s.DefaultFrameTime())
 
 	// Combat participants (adapters for the battle manager).
-	s.playerPart = entities.NewParticipant("Player", config.Global.Battle.PlayerHP, config.Global.Battle.PlayerMaxHP, playerPos, true)
-	s.enemyPart = entities.NewParticipant("Enemy", config.Global.Battle.EnemyHP, config.Global.Battle.EnemyMaxHP, enemyPos, false)
+	s.playerPart = entities.NewParticipant("Player", gameconfig.Global.Battle.PlayerHP, gameconfig.Global.Battle.PlayerMaxHP, playerPos, true)
+	s.enemyPart = entities.NewParticipant("Enemy", gameconfig.Global.Battle.EnemyHP, gameconfig.Global.Battle.EnemyMaxHP, enemyPos, false)
 
 	s.menuSystem = NewBattleMenuSystem()
 	s.menuSystem.Initialize()
@@ -68,9 +69,9 @@ func (s *BattleState) Enter(deps state.Deps) error {
 	s.menuSystem.SetPlayer(s.playerPart)
 
 	s.battleManager = battle.NewBattleManager(battle.Config{
-		ActionQueueSize:      config.Global.Battle.ActionQueueSize,
-		TimerChargeRate:      config.Global.Battle.TimerChargeRate,
-		DamageEffectDuration: config.Global.Battle.DamageEffectDuration,
+		ActionQueueSize:      gameconfig.Global.Battle.ActionQueueSize,
+		TimerChargeRate:      gameconfig.Global.Battle.TimerChargeRate,
+		DamageEffectDuration: gameconfig.Global.Battle.DamageEffectDuration,
 		Logger:               logger.Logger,
 	})
 	s.battleManager.AddEntity(s.playerPart)

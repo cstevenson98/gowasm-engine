@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
+	"example.com/basic-game/game/gameconfig"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
@@ -56,20 +56,22 @@ func (gsm *GameStateManager) GetPlayer() interface{} {
 	return gsm.playerRef
 }
 
-// CreateNewGame initializes a new game with default state
-func (gsm *GameStateManager) CreateNewGame() error {
+// CreateNewGame initializes a new game with default state. screenWidth/Height
+// are the engine's virtual screen dimensions (config.Settings.Screen), used to
+// center the player's spawn position.
+func (gsm *GameStateManager) CreateNewGame(screenWidth, screenHeight float64) error {
 	gsm.mu.Lock()
 	defer gsm.mu.Unlock()
 
-	spawnX, spawnY := config.GetPlayerSpawnPosition()
+	spawnX, spawnY := gameconfig.GetPlayerSpawnPosition(screenWidth, screenHeight)
 
 	gsm.currentState = &GameState{
 		Version:   GameStateVersion,
 		Timestamp: 0, // Set when saving
 		PlayerStats: PlayerStats{
 			Level:      1,
-			HP:         config.Global.Battle.PlayerHP,
-			MaxHP:      config.Global.Battle.PlayerMaxHP,
+			HP:         gameconfig.Global.Battle.PlayerHP,
+			MaxHP:      gameconfig.Global.Battle.PlayerMaxHP,
 			Experience: 0,
 		},
 		PlayerPosition: types.Vector2{

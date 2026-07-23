@@ -6,7 +6,6 @@ package prefab
 
 import (
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
@@ -31,8 +30,10 @@ func NewBackground(w *ecs.World, position, size types.Vector2, texturePath strin
 
 // NewLlama spawns an animated, screen-wrapping llama entity on the ENTITIES
 // layer moving right at the given speed, and returns its handle. Ports
-// gameobject.Llama (2x3 sheet = 6 frames).
-func NewLlama(w *ecs.World, position, size types.Vector2, speed float64) ecs.Entity {
+// gameobject.Llama (2x3 sheet = 6 frames). defaultFrameTime is the engine's
+// fallback seconds-per-frame (config.Settings.Animation.DefaultFrameTime); the
+// caller supplies it explicitly so this package has no config dependency.
+func NewLlama(w *ecs.World, position, size types.Vector2, speed, defaultFrameTime float64) ecs.Entity {
 	m := ecs.NewMap7[
 		components.Position,
 		components.Velocity,
@@ -43,7 +44,7 @@ func NewLlama(w *ecs.World, position, size types.Vector2, speed float64) ecs.Ent
 		components.Order,
 	](w)
 
-	frameTime := config.Global.Animation.DefaultFrameTime + (speed/100.0)*0.1
+	frameTime := defaultFrameTime + (speed/100.0)*0.1
 
 	return m.NewEntity(
 		&components.Position{X: position.X, Y: position.Y},

@@ -5,6 +5,7 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
+	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/engine"
 	"github.com/cstevenson98/gowasm-engine/pkg/prefab"
 	"github.com/cstevenson98/gowasm-engine/pkg/state"
@@ -44,7 +45,7 @@ func (s *MenuState) Enter(deps state.Deps) error {
 // more states against game states, pick a starting state, then hand control to
 // Ebiten's run loop.
 func Example() {
-	eng := engine.NewEngine()
+	eng := engine.NewEngine(config.Default())
 
 	// Register states for the values your game can be in.
 	eng.RegisterState(types.MENU, NewMenuState())

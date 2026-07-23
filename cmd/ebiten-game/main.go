@@ -16,8 +16,9 @@ import (
 func main() {
 	logger.Logger.Info("Ebiten game starting")
 
-	// Create the Ebiten game engine
-	gameEngine := engine.NewEngine()
+	// Create the Ebiten game engine, using the engine's stock settings.
+	cfg := config.Default()
+	gameEngine := engine.NewEngine(cfg)
 
 	// Create game state manager
 	stateManager := gamestate.NewGameStateManager()
@@ -52,20 +53,20 @@ func main() {
 
 	// Configure Ebiten window. The window size is derived from the virtual
 	// resolution and the pixel scale.
-	windowWidth := config.WindowWidth()
-	windowHeight := config.WindowHeight()
+	windowWidth := cfg.WindowWidth()
+	windowHeight := cfg.WindowHeight()
 
 	ebiten.SetWindowSize(windowWidth, windowHeight)
 	ebiten.SetWindowTitle("Go WASM Engine - Ebiten Edition")
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
 	// Disable screen filter for pixel-perfect rendering
-	if config.Global.Rendering.PixelArtMode {
+	if cfg.Rendering.PixelArtMode {
 		ebiten.SetScreenFilterEnabled(false)
 	}
 
 	logger.Logger.Infof("Starting Ebiten game loop (window: %dx%d, virtual: %.0fx%.0f)",
-		windowWidth, windowHeight, config.Global.Screen.Width, config.Global.Screen.Height)
+		windowWidth, windowHeight, cfg.Screen.Width, cfg.Screen.Height)
 
 	// Run the game - this blocks until the game ends
 	if err := ebiten.RunGame(gameEngine); err != nil {

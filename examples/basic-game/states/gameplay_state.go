@@ -2,9 +2,9 @@ package states
 
 import (
 	"example.com/basic-game/game/entities"
+	"example.com/basic-game/game/gameconfig"
 	"example.com/basic-game/game/gamestate"
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/prefab"
@@ -43,8 +43,8 @@ func (s *GameplayState) Enter(deps state.Deps) error {
 	s.player = entities.SpawnPlayer(
 		s.World(),
 		pos,
-		types.Vector2{X: config.Global.Player.Size, Y: config.Global.Player.Size},
-		config.Global.Player.Speed,
+		types.Vector2{X: gameconfig.Global.Player.Size, Y: gameconfig.Global.Player.Size},
+		gameconfig.Global.Player.Speed,
 		stats,
 	)
 	logger.Logger.Debugf("Spawned player at (%.2f, %.2f) in %s", pos.X, pos.Y, s.Name())
@@ -72,8 +72,8 @@ func (s *GameplayState) manager() *gamestate.GameStateManager {
 func (s *GameplayState) resolvePlayer() (types.Vector2, entities.Stats) {
 	stats := entities.Stats{
 		Level: 1,
-		HP:    config.Global.Battle.PlayerHP,
-		MaxHP: config.Global.Battle.PlayerMaxHP,
+		HP:    gameconfig.Global.Battle.PlayerHP,
+		MaxHP: gameconfig.Global.Battle.PlayerMaxHP,
 	}
 	if m := s.manager(); m != nil {
 		if gs := m.GetState(); gs != nil {
@@ -86,7 +86,7 @@ func (s *GameplayState) resolvePlayer() (types.Vector2, entities.Stats) {
 			return gs.PlayerPosition, stats
 		}
 	}
-	spawnX, spawnY := config.GetPlayerSpawnPosition()
+	spawnX, spawnY := gameconfig.GetPlayerSpawnPosition(s.ScreenWidth(), s.ScreenHeight())
 	return types.Vector2{X: spawnX, Y: spawnY}, stats
 }
 

@@ -1,8 +1,8 @@
 package entities
 
 import (
+	"example.com/basic-game/game/gameconfig"
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
@@ -28,13 +28,13 @@ func SpawnPlayer(w *ecs.World, pos, size types.Vector2, speed float64, stats Sta
 		&components.Velocity{},
 		&components.Wrap{SpriteW: size.X, SpriteH: size.Y},
 		&components.Sprite{
-			TexturePath: config.Global.Player.TexturePath,
+			TexturePath: gameconfig.Global.Player.TexturePath,
 			Size:        size,
-			Columns:     config.Global.Player.SpriteColumns,
-			Rows:        config.Global.Player.SpriteRows,
+			Columns:     gameconfig.Global.Player.SpriteColumns,
+			Rows:        gameconfig.Global.Player.SpriteRows,
 			Visible:     true,
 		},
-		&components.Animation{FrameTime: config.Global.Animation.PlayerFrameTime},
+		&components.Animation{FrameTime: gameconfig.Global.PlayerFrameTime},
 		&PlayerControl{Speed: speed},
 		&components.LayerEntities{},
 		&components.Order{Z: 0},
@@ -47,8 +47,9 @@ func SpawnPlayer(w *ecs.World, pos, size types.Vector2, speed float64, stats Sta
 
 // SpawnCharacter creates a static, animated character sprite entity on the
 // ENTITIES layer (used for battle participants, which don't move) and returns
-// its handle.
-func SpawnCharacter(w *ecs.World, pos, size types.Vector2, texturePath string, columns, rows int) ecs.Entity {
+// its handle. frameTime is the seconds-per-frame for its animation; callers
+// typically pass the engine's default (see state.BaseState.DefaultFrameTime).
+func SpawnCharacter(w *ecs.World, pos, size types.Vector2, texturePath string, columns, rows int, frameTime float64) ecs.Entity {
 	m := ecs.NewMap5[
 		components.Position,
 		components.Sprite,
@@ -66,7 +67,7 @@ func SpawnCharacter(w *ecs.World, pos, size types.Vector2, texturePath string, c
 			Rows:        rows,
 			Visible:     true,
 		},
-		&components.Animation{FrameTime: config.Global.Animation.DefaultFrameTime},
+		&components.Animation{FrameTime: frameTime},
 		&components.LayerEntities{},
 		&components.Order{Z: 0},
 	)

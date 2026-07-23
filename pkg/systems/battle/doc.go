@@ -16,9 +16,9 @@
 // BattleManager is the orchestrator. Each frame it charges every entity's
 // timer and, for any entity that is ready, produces an Action. Player
 // actions come from menu selection; enemy actions are chosen automatically.
-// Actions are pushed onto an ActionQueue (a buffered channel) and applied by a
-// background goroutine, which resolves attacks, defends, items, and run
-// attempts, adjusting the target's HP.
+// Actions are pushed onto an ActionQueue (a mutex-protected slice) and drained
+// synchronously by BattleManager.Update on the main loop, which resolves
+// attacks, defends, items, and run attempts, adjusting the target's HP.
 //
 // # Effects
 //
@@ -41,12 +41,13 @@
 // interface layer) and takes everything else through a Config value passed to
 // NewBattleManager - queue size, timer charge rate, effect duration, and a
 // Logger. It reads no global engine configuration, so it can be reused across
-// games or tested in isolation. A game wires it up like:
+// games or tested in isolation. A game wires it up like (values here come from
+// the game's own config, not the engine's - see examples/basic-game/game/gameconfig):
 //
 //	bm := battle.NewBattleManager(battle.Config{
-//		ActionQueueSize:      config.Global.Battle.ActionQueueSize,
-//		TimerChargeRate:      config.Global.Battle.TimerChargeRate,
-//		DamageEffectDuration: config.Global.Battle.DamageEffectDuration,
+//		ActionQueueSize:      gameconfig.Global.Battle.ActionQueueSize,
+//		TimerChargeRate:      gameconfig.Global.Battle.TimerChargeRate,
+//		DamageEffectDuration: gameconfig.Global.Battle.DamageEffectDuration,
 //		Logger:               logger.Logger,
 //	})
 //

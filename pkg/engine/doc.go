@@ -60,10 +60,12 @@
 //
 // States never construct engine services themselves. The engine passes them in
 // via state.Deps at Enter: the input capturer, the UI facade, the virtual
-// screen size, the state-change callback, and the game-defined game-state
-// provider. Embedding [github.com/cstevenson98/gowasm-engine/pkg/state.BaseState]
-// stores these and exposes them through accessors, and seeds the ScreenBounds
-// and Input resources on the World.
+// screen size, the state-change callback, the game-defined game-state
+// provider, and the relevant slices of the engine's own config.Settings (debug
+// console enablement, default animation frame time). Embedding
+// [github.com/cstevenson98/gowasm-engine/pkg/state.BaseState] stores these and
+// exposes them through accessors, and seeds the ScreenBounds, Input, and
+// Camera resources on the World.
 //
 // Because each State owns its own World, data that must survive a switch (for
 // example a player's position) is the game's responsibility - typically written
@@ -77,7 +79,7 @@
 //
 // # Quick start
 //
-//	eng := engine.NewEngine()
+//	eng := engine.NewEngine(config.Default())
 //	eng.RegisterState(types.MENU, NewMenuState())
 //	if err := eng.Initialize(""); err != nil { // canvasID is unused by Ebiten
 //		log.Fatal(err)
