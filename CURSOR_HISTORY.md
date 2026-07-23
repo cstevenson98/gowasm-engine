@@ -2814,3 +2814,42 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Testing**: go build/vet/test ./pkg/... green; cmd/ebiten-game desktop build OK; examples/basic-game build OK; no lint errors.
 
 ---
+
+## [2026-07-23 21:44 BST] - Fix .gitignore bug: pkg/debug was never committed
+
+**Prompt/Request**: User noticed pkg/debug/console.go was open in the editor but flagged that it looked gitignored - asked to confirm.
+
+**Root cause**: .gitignore had a bare `debug` pattern (from the standard Go template, meant to exclude a Delve `dlv debug` binary at the repo root, alongside `__debug_bin`). Gitignore patterns without a leading slash match at any depth, so it also matched the `pkg/debug` directory. `git log --all -- pkg/debug/` confirmed the package has **zero commits** - it has existed only on disk, untracked, since it was created; every clone of this repo has been missing the debug console entirely and would fail to build pkg/... or examples/basic-game.
+
+**Changes Made**:
+- .gitignore: anchored the pattern to the repo root (`/debug` instead of `debug`) so it only matches a root-level Delve binary, not nested packages/dirs named "debug". Verified via `git check-ignore` that pkg/debug/* is no longer matched and no other tracked directory collided with the old pattern.
+- pkg/debug/doc.go: updated stale content while bringing the package under version control for the first time - it still described the pre-ECS types.DebugMessagePoster indirection and scene.BaseScene overlay rendering, both deleted in earlier sessions. Rewrote to describe the current reality: call debug.Console.PostMessage directly; state.BaseState.DrawOverlays renders it and toggles it on key 3.
+- Committed pkg/debug/console.go and pkg/debug/doc.go for the first time.
+
+**Impact**: Fresh clones of the repo will now actually build - this was a silent, latent break for any collaborator or CI checkout.
+
+**Testing**: go build/vet/test ./pkg/... green (unchanged behaviour - the files were already present on disk during this session); no lint errors.
+
+---
+
+## [2026-07-23 22:10 BST] - Add a basic camera (follow-the-player) at the pkg level
+
+**Prompt/Request**: "add a basic camera which can be configured to follow the player. add at pkg level, and utilise in the basic-game"
+
+**Changes Made**:
+- pkg/components/camera.go (new): `Camera` per-World singleton resource (X, Y, Zoom) describing the current viewport into the world; `CameraTarget` marker component naming which entity to follow.
+- pkg/systems/camera.go (new): `CameraFollow` system - each frame, centers the `Camera` resource on the (first) entity carrying `CameraTarget`, using `ScreenBounds` to compute the centering offset. No-op if there's no `Camera`/`ScreenBounds` resource or no tagged entity, so adding it to a schedule is always safe.
+- pkg/render/render.go: `Renderer` now stores its `World` and reads the `Camera` resource once per `Draw`. The Background and Entities layer passes offset+scale positions/sizes by the camera (world-space -> screen-space); the UI layer pass is always drawn in screen space (camera-independent), so HUD/menus never move with the world.
+- pkg/state/base_state.go: `BaseState.Enter` now also seeds an identity `Camera{Zoom: 1}` resource, alongside the existing `ScreenBounds`/`Input` seeding. States that never add a `CameraFollow` system (or touch the camera themselves) render exactly as before this change.
+- examples/basic-game/game/entities/spawn.go: `SpawnPlayer` now also tags the player entity with `components.CameraTarget` (added via a second `ecs.Map1`, the same pattern already used for `Stats`, since the initial `Map8` used for the player's other components is already at Ark's generic arity ceiling).
+- examples/basic-game/states/gameplay_state.go: registered `systems.NewCameraFollow(s.World())` in `GameplayState`'s schedule, after movement/animation so it follows the post-movement position with no one-frame lag.
+
+**Reasoning**: A camera is render-time view state, not orchestration - it doesn't belong in `engine.Engine` (which stays state-agnostic, just calling `State.Update`/`Renderer.Draw`). It fits the same seam as `ScreenBounds`/`Input`: a per-World resource seeded by `BaseState`, moved by an ordinary `System` a state opts into via its `Schedule`, and consumed by the renderer - fully consistent with the existing ECS architecture and requiring no changes to `Engine` itself.
+
+**Impact**: Purely additive/opt-in for states that don't use it (identity camera == old fixed-to-screen rendering). In `examples/basic-game`, the `GameplayState`'s world is currently the same size as the viewport (background is `ScreenWidth x ScreenHeight`), so the follow camera will visibly re-center on the player as they approach the edges, which can reveal empty canvas beyond the background sprite since there's nothing to clamp the camera to yet. `CameraFollow` intentionally has no bounds-clamping (kept "basic" per the request) - a natural follow-up if/when a level becomes larger than the viewport would be a `CameraBounds` resource the system clamps against.
+
+**Testing**: `go build/vet/test ./...` green at repo root; `go build/test ./...` green in `examples/basic-game` and `cmd/ebiten-game` (separate modules via `replace`); `GOOS=js GOARCH=wasm go build ./game` succeeds for `examples/basic-game`. No lint errors.
+
+**Notes**: Zoom is plumbed through (`Camera.Zoom`, scaling both position and sprite size in the renderer) but nothing sets it yet beyond the default 1 - future work (e.g. camera shake, smoothing/lerp-follow, level-bounds clamping) can layer on top of `CameraFollow` as additional/replacement systems without touching the renderer or `Camera` resource shape.
+
+---

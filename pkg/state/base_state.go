@@ -52,13 +52,16 @@ func (b *BaseState) Schedule() *ecs.Schedule { return b.sched }
 // Deps returns the engine services injected at Enter.
 func (b *BaseState) Deps() Deps { return b.deps }
 
-// Enter stores the injected deps and seeds the ScreenBounds and Input
+// Enter stores the injected deps and seeds the ScreenBounds, Input, and Camera
 // resources. Concrete states should call BaseState.Enter first, then build
-// entities and add systems.
+// entities and add systems. The seeded Camera is an identity camera (0,0, zoom
+// 1), so states that never add a CameraFollow system (or move the camera
+// themselves) render exactly as if there were no camera at all.
 func (b *BaseState) Enter(deps Deps) error {
 	b.deps = deps
 	ecs.SetResource(b.world, &components.ScreenBounds{W: deps.ScreenWidth, H: deps.ScreenHeight})
 	ecs.SetResource(b.world, &components.Input{})
+	ecs.SetResource(b.world, &components.Camera{Zoom: 1})
 	return nil
 }
 

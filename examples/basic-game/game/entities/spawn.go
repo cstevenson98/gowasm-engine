@@ -9,7 +9,8 @@ import (
 
 // SpawnPlayer creates the movable, animated player entity on the ENTITIES layer
 // and returns its handle. It carries PlayerControl (for input), Stats (for
-// save/load), and screen wrapping.
+// save/load), screen wrapping, and CameraTarget so a CameraFollow system keeps
+// it centered.
 func SpawnPlayer(w *ecs.World, pos, size types.Vector2, speed float64, stats Stats) ecs.Entity {
 	m := ecs.NewMap8[
 		components.Position,
@@ -40,6 +41,7 @@ func SpawnPlayer(w *ecs.World, pos, size types.Vector2, speed float64, stats Sta
 	)
 
 	ecs.NewMap1[Stats](w).Add(e, &stats)
+	ecs.NewMap1[components.CameraTarget](w).Add(e, &components.CameraTarget{})
 	return e
 }
 

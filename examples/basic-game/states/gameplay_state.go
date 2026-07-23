@@ -49,11 +49,13 @@ func (s *GameplayState) Enter(deps state.Deps) error {
 	)
 	logger.Logger.Debugf("Spawned player at (%.2f, %.2f) in %s", pos.X, pos.Y, s.Name())
 
-	// Order: input -> movement -> animation.
+	// Order: input -> movement -> animation -> camera (so it follows the
+	// player's post-movement position with no one-frame lag).
 	s.Schedule().
 		Add(entities.NewPlayerInputSystem(s.World())).
 		Add(systems.NewMovement(s.World())).
-		Add(systems.NewAnimation(s.World()))
+		Add(systems.NewAnimation(s.World())).
+		Add(systems.NewCameraFollow(s.World()))
 
 	return nil
 }

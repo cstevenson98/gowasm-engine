@@ -82,10 +82,10 @@ var Global = Settings{
 		Height: 240.0, // Virtual game resolution (240p, 4:3)
 	},
 	Player: PlayerSettings{
-		SpawnX:        0.0,   // Will be calculated as center in scene
-		SpawnY:        0.0,   // Will be calculated as center in scene
-		Size:          32.0,  // Native sprite frame size (1:1 with texture, will be scaled by PixelScale)
-		Speed:         200.0, // pixels per second
+		SpawnX:        0.0,  // Will be calculated as center in scene
+		SpawnY:        0.0,  // Will be calculated as center in scene
+		Size:          32.0, // Native sprite frame size (1:1 with texture, will be scaled by PixelScale)
+		Speed:         2.0,  // pixels per second
 		TexturePath:   "assets/llama.png",
 		SpriteColumns: 2,
 		SpriteRows:    3,

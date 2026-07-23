@@ -55,8 +55,9 @@ Thumbs.db
 tmp/
 temp/
 
-# Debug files
-debug
+# Debug files (Delve debug binary at repo root; anchored so it doesn't match
+# nested packages/dirs named "debug", e.g. pkg/debug)
+/debug
 __debug_bin
 
 # Environment files
