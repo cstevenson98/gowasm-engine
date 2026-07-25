@@ -8,8 +8,8 @@
 // WebAssembly (GOOS=js) every method is a silent no-op so games still compile
 // and run without CGo.
 //
-// Only this package imports the ImGui library; game code talks exclusively to
-// Context / WindowBuilder.
+// Only this package imports the ImGui library (and ImPlot); game code talks
+// exclusively to Context / WindowBuilder / PlotBuilder.
 package imgui
 
 import (

@@ -62,3 +62,20 @@ func (w *WindowBuilder) TreeNode(label string, fn func(w *WindowBuilder)) {
 	}
 	w.ctx.treeNodePlatform(label, fn)
 }
+
+// Columns starts (or changes) an ImGui multi-column layout with count columns.
+// Pass count=1 to return to a single column. Pair with NextColumn to advance.
+func (w *WindowBuilder) Columns(count int) {
+	if w == nil || w.ctx == nil || !w.ctx.ready || count < 1 {
+		return
+	}
+	w.ctx.columnsPlatform(count)
+}
+
+// NextColumn advances to the next column in the current Columns layout.
+func (w *WindowBuilder) NextColumn() {
+	if w == nil || w.ctx == nil || !w.ctx.ready {
+		return
+	}
+	w.ctx.nextColumnPlatform()
+}

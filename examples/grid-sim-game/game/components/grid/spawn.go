@@ -9,8 +9,9 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// randLoad returns a uniform random value in [10, 20] kW/kVAR for house demand.
-func randLoad() float64 { return 10.0 + rand.Float64()*10.0 }
+// RandLoadKW returns a uniform random value in [10, 20] kW (or kVAR) for
+// house demand. Used at spawn and by the load-tick system.
+func RandLoadKW() float64 { return 10.0 + rand.Float64()*10.0 }
 
 // cellPosition returns a cell's top-left world position in pixels.
 func cellPosition(cell GridCoord) types.Vector2 {
@@ -67,7 +68,7 @@ func SpawnGenerator(w *ecs.World, cell GridCoord) ecs.Entity {
 // It attaches a HouseLoad component with P and Q sampled uniformly from [10, 20] kW.
 func SpawnHouse(w *ecs.World, cell GridCoord) ecs.Entity {
 	e := spawnTile(w, cell, ToolHouse, gameconfig.Global.HouseTexture, 0, false)
-	ecs.NewMap1[HouseLoad](w).Add(e, &HouseLoad{PKw: randLoad(), QKw: randLoad()})
+	ecs.NewMap1[HouseLoad](w).Add(e, &HouseLoad{PKw: RandLoadKW(), QKw: RandLoadKW()})
 	return e
 }
 

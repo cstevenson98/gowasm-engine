@@ -33,9 +33,9 @@ type Settings struct {
 // Global is this game's configuration singleton.
 var Global = Settings{
 	TileSize:    32.0,
-	GridCols:    20,
-	GridRows:    20,
-	CameraSpeed: 150.0,
+	GridCols:    100,
+	GridRows:    100,
+	CameraSpeed: 350.0,
 
 	ToolbarHeight: 20.0,
 	ButtonWidth:   70.0,

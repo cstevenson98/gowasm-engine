@@ -33,8 +33,14 @@ func (s *LoadflowSystem) Update(w *ecs.World, _ float64) {
 	}
 
 	net.Log()
-	if err := s.solver.Solve(net); err != nil {
+	err := s.solver.Solve(net)
+	if err != nil {
 		logger.Logger.Errorf("grid-sim: loadflow failed: %v", err)
+	}
+	// Append history when the solve wrote results (success, or NR that ran
+	// some iterations). Skip pure early-outs like "no slack bus".
+	if err == nil || net.State.Converged || net.State.Iterations > 0 {
+		network.RecordHistory(w, net)
 	}
 	net.LogVoltages()
 	net.ClearDirty()

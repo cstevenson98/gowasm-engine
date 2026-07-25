@@ -37,3 +37,17 @@ func (c *Context) sliderFloatPlatform(label string, v *float64, min, max float64
 func (c *Context) buttonPlatform(label string) bool { return false }
 
 func (c *Context) treeNodePlatform(label string, fn func(w *WindowBuilder)) {}
+
+func (c *Context) columnsPlatform(count int) {}
+
+func (c *Context) nextColumnPlatform() {}
+
+func (c *Context) plotPlatform(title string, height float64, fn func(p *PlotBuilder)) {}
+
+func (c *Context) plotSetupAxesPlatform(xLabel, yLabel string) {}
+
+func (c *Context) plotLinePlatform(label string, ys []float64) {}
+
+func (c *Context) plotLineXYPlatform(label string, xs, ys []float64) {}
+
+func (c *Context) plotBarsPlatform(label string, ys []float64) {}

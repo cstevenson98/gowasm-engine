@@ -18,15 +18,12 @@ import (
 func main() {
 	logger.Logger.Info("Grid sim game starting")
 
-	// 720p 16:9 window with a larger virtual canvas so tiles appear smaller
-	// and more of the grid is visible. PixelScale only controls the physical
-	// window size (via WindowWidth/Height) — to actually show more content,
-	// Screen.Width/Height must grow. Virtual 640×360 * scale 2 = 1280×720.
-	// At TileSize=32 this makes all 20 columns visible without horizontal
-	// scrolling, and ~11 rows before needing to scroll vertically.
+	// 1080p 16:9 virtual resolution. The world grid is much larger than the
+	// viewport (see gameconfig.GridCols/Rows); explore with WASD / middle-mouse
+	// pan. The right half of the window is the ImGui network panel.
 	cfg := config.Default()
-	cfg.Screen.Width = 1280
-	cfg.Screen.Height = 720
+	cfg.Screen.Width = 1920
+	cfg.Screen.Height = 1080
 	cfg.Rendering.PixelScale = 1
 	// Opt into ImGui for the right-half network inspector panel.
 	gameEngine := engine.NewEngine(cfg).EnableImGui()

@@ -5,11 +5,15 @@ package imgui
 import (
 	ebitenbackend "github.com/AllenDang/cimgui-go/backend/ebiten-backend"
 	cim "github.com/AllenDang/cimgui-go/imgui"
+	"github.com/AllenDang/cimgui-go/implot"
+	"github.com/AllenDang/cimgui-go/utils"
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
 // backendHandle is the desktop ImGui ebiten backend.
 type backendHandle = *ebitenbackend.EbitenBackend
+
+const defaultPlotHeight = 180.0
 
 func (c *Context) initPlatform() error {
 	be := ebitenbackend.NewEbitenBackend()
@@ -18,6 +22,8 @@ func (c *Context) initPlatform() error {
 	be.CreateWindow("gowasm-engine-imgui", c.screenW, c.screenH)
 	// CreateWindow also sets the OS window size/title; Layout syncs display size.
 	be.Layout(c.screenW, c.screenH)
+	// ImPlot needs its own context, created after the ImGui context exists.
+	implot.CreateContext()
 	c.be = be
 	c.ready = true
 	return nil
@@ -88,4 +94,42 @@ func (c *Context) treeNodePlatform(label string, fn func(w *WindowBuilder)) {
 	}
 	fn(&WindowBuilder{ctx: c})
 	cim.TreePop()
+}
+
+func (c *Context) columnsPlatform(count int) {
+	cim.ColumnsV(int32(count), "", true)
+}
+
+func (c *Context) nextColumnPlatform() {
+	cim.NextColumn()
+}
+
+func (c *Context) plotPlatform(title string, height float64, fn func(p *PlotBuilder)) {
+	if height <= 0 {
+		height = defaultPlotHeight
+	}
+	// Fit X/Y to this frame's series so streaming history recenters as data grows.
+	implot.SetNextAxesToFit()
+	if !implot.BeginPlotV(title, cim.NewVec2(-1, float32(height)), 0) {
+		return
+	}
+	fn(&PlotBuilder{ctx: c})
+	implot.EndPlot()
+}
+
+func (c *Context) plotSetupAxesPlatform(xLabel, yLabel string) {
+	// AutoFit keeps axes locked to the data every frame (not only the first).
+	implot.SetupAxesV(xLabel, yLabel, implot.AxisFlagsAutoFit, implot.AxisFlagsAutoFit)
+}
+
+func (c *Context) plotLinePlatform(label string, ys []float64) {
+	implot.PlotLinedoublePtrInt(label, utils.SliceToPtr(ys), int32(len(ys)))
+}
+
+func (c *Context) plotLineXYPlatform(label string, xs, ys []float64) {
+	implot.PlotLinedoublePtrdoublePtr(label, utils.SliceToPtr(xs), utils.SliceToPtr(ys), int32(len(xs)))
+}
+
+func (c *Context) plotBarsPlatform(label string, ys []float64) {
+	implot.PlotBarsdoublePtrInt(label, utils.SliceToPtr(ys), int32(len(ys)))
 }

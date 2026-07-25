@@ -72,13 +72,18 @@ func (s *PlacementSystem) handleToolbarClick(placement *grid.PlacementState, x, 
 }
 
 // handleGridClick converts a click below the toolbar into a grid cell (via
-// the current camera offset) and dispatches to the placement logic for the
-// currently selected tool.
+// the current camera offset and zoom) and dispatches to the placement logic
+// for the currently selected tool.
 func (s *PlacementSystem) handleGridClick(w *ecs.World, placement *grid.PlacementState, occupancy *grid.GridOccupancy, cam *components.Camera, x, y float64) {
 	ts := gameconfig.Global.TileSize
+	zoom := cam.Zoom
+	if zoom <= 0 {
+		zoom = 1
+	}
+	// screen = (world - cam) * zoom  ⇒  world = cam + screen/zoom
 	cell := grid.GridCoord{
-		Col: int((x + cam.X) / ts),
-		Row: int((y + cam.Y) / ts),
+		Col: int((cam.X + x/zoom) / ts),
+		Row: int((cam.Y + y/zoom) / ts),
 	}
 	if cell.Col < 0 || cell.Row < 0 || cell.Col >= gameconfig.Global.GridCols || cell.Row >= gameconfig.Global.GridRows {
 		return
@@ -182,6 +187,8 @@ func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridC
 	}
 	bus := net.AddBus(e, toolToBusType(kind))
 	ecs.NewMap1[network.NetworkLink](w).Add(e, &network.NetworkLink{BusID: bus.ID})
+	h := network.NewBusHistory()
+	ecs.NewMap1[network.BusHistory](w).Add(e, &h)
 
 	if kind == grid.ToolHouse {
 		if hl := ecs.NewMap1[grid.HouseLoad](w).Get(e); hl != nil {

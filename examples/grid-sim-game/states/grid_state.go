@@ -1,6 +1,7 @@
 package states
 
 import (
+	"fmt"
 	"math"
 	"sort"
 
@@ -9,6 +10,7 @@ import (
 	"example.com/grid-sim-game/game/gameconfig"
 	"example.com/grid-sim-game/game/systems/camera"
 	"example.com/grid-sim-game/game/systems/loadflow"
+	"example.com/grid-sim-game/game/systems/loadtick"
 	"example.com/grid-sim-game/game/systems/placement"
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
@@ -52,10 +54,11 @@ func (s *GridState) Enter(deps state.Deps) error {
 		}
 	}
 
-	// Placement mutates the grid and marks ElectricalNetwork Dirty;
+	// Placement / load-tick mutate topology or house P/Q (mark Dirty);
 	// LoadflowSystem re-solves only when Dirty; camera scrolls last.
 	s.Schedule().
 		Add(placement.NewPlacementSystem(s.World())).
+		Add(loadtick.NewLoadTickSystem(s.World())).
 		Add(loadflow.NewLoadflowSystem(s.World())).
 		Add(camera.NewCameraScrollSystem(cfg.CameraSpeed))
 
@@ -151,6 +154,9 @@ func (s *GridState) renderNetworkPanel(w *imgui.WindowBuilder, net *network.Elec
 	w.Text("  Peak |I|: %.2f A", iMax)
 	w.Separator()
 
+	s.renderBusHistoryCharts(w, net)
+	w.Separator()
+
 	w.TreeNode("Buses", func(w *imgui.WindowBuilder) {
 		ids := make([]int, 0, len(buses))
 		for id := range buses {
@@ -204,6 +210,100 @@ func formulationLabel(f network.BusFormulation) string {
 	default:
 		return "?"
 	}
+}
+
+const perBusPlotHeight = 220.0
+
+// busHist holds one bus entity's solve history in kW / kvar / volts.
+type busHist struct {
+	id     network.BusID
+	pKW    []float64
+	qKVAR  []float64
+	vVolts []float64
+}
+
+// collectBusHistories returns BusHistory series for buses of the given type,
+// sorted by bus ID. If consumerSign is true, P/Q are negated (load demand);
+// otherwise they stay in generator-convention kW (positive = injection).
+func (s *GridState) collectBusHistories(net *network.ElectricalNetwork, typ network.BusType, consumerSign bool) []busHist {
+	busHistMap := ecs.NewMap1[network.BusHistory](s.World())
+	ids := make([]int, 0)
+	for id, b := range net.Buses() {
+		if b.Type != typ {
+			continue
+		}
+		ids = append(ids, int(id))
+	}
+	sort.Ints(ids)
+
+	out := make([]busHist, 0, len(ids))
+	for _, raw := range ids {
+		id := network.BusID(raw)
+		b := net.Buses()[id]
+		h := busHistMap.Get(b.Entity)
+		if h == nil || h.P.Len() == 0 {
+			continue
+		}
+		p := h.P.Values()
+		q := h.Q.Values()
+		v := h.V.Values()
+		pKW := make([]float64, len(p))
+		qKVAR := make([]float64, len(q))
+		sign := 1.0
+		if consumerSign {
+			sign = -1.0
+		}
+		for i := range p {
+			pKW[i] = sign * p[i] / 1000
+			if i < len(q) {
+				qKVAR[i] = sign * q[i] / 1000
+			}
+		}
+		out = append(out, busHist{id: id, pKW: pKW, qKVAR: qKVAR, vVolts: v})
+	}
+	return out
+}
+
+func (s *GridState) renderBusHistoryCharts(w *imgui.WindowBuilder, net *network.ElectricalNetwork) {
+	gens := s.collectBusHistories(net, network.BusGenerator, false)
+	houses := s.collectBusHistories(net, network.BusLoad, true)
+
+	w.Text("Generators")
+	if len(gens) == 0 {
+		w.Text("  (none with history yet)")
+	} else {
+		for _, h := range gens {
+			s.renderOneBusHistory(w, "Gen", h, "kW / kvar (+gen)")
+		}
+	}
+	w.Separator()
+
+	w.Text("Houses")
+	if len(houses) == 0 {
+		w.Text("  (none with history yet)")
+	} else {
+		for _, h := range houses {
+			s.renderOneBusHistory(w, "House", h, "kW / kvar (demand)")
+		}
+	}
+}
+
+// renderOneBusHistory draws one bus's P/Q (left) and |V| (right) plots.
+// Plot titles include the bus id so ImPlot keys stay unique across the panel.
+func (s *GridState) renderOneBusHistory(w *imgui.WindowBuilder, kind string, h busHist, pqAxis string) {
+	w.Text("%s bus %d  (%d samples)", kind, h.id, len(h.pKW))
+	w.Columns(2)
+	w.Plot(fmt.Sprintf("%s%d P/Q", kind, h.id), perBusPlotHeight, func(p *imgui.PlotBuilder) {
+		p.SetupAxes("solve #", pqAxis)
+		p.Line("P", h.pKW)
+		p.Line("Q", h.qKVAR)
+	})
+	w.NextColumn()
+	w.Plot(fmt.Sprintf("%s%d |V|", kind, h.id), perBusPlotHeight, func(p *imgui.PlotBuilder) {
+		p.SetupAxes("solve #", "V")
+		p.Line("|V|", h.vVolts)
+	})
+	w.Columns(1)
 }
 
 func (s *GridState) renderToolbar() {

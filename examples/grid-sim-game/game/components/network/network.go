@@ -59,7 +59,8 @@ type NetworkLink struct {
 
 // ElectricalNetwork is a per-World resource representing the power grid graph.
 // It is the single source of truth for network topology and operating state.
-// ECS entities hold only a NetworkLink back-reference.
+// ECS entities hold a NetworkLink back-reference and a BusHistory component
+// for the last N solve samples (see history.go).
 //
 // Dirty is set by every topology/spec mutation (AddBus, RemoveBus, AddBranch,
 // RemoveBranch, SetBusSpec). LoadflowSystem clears it after a successful
@@ -146,6 +147,7 @@ func (n *ElectricalNetwork) RemoveBus(id BusID) {
 		}
 		n.incidence[other] = removeBranchID(n.incidence[other], brID)
 		delete(n.branches, brID)
+		delete(n.State.Branches, brID)
 	}
 	if b, ok := n.buses[id]; ok {
 		delete(n.entityBus, b.Entity)
@@ -168,7 +170,7 @@ func (n *ElectricalNetwork) AddBranch(from, to BusID, resistance float64) *Branc
 	n.branches[id] = br
 	n.incidence[from] = append(n.incidence[from], id)
 	n.incidence[to] = append(n.incidence[to], id)
-	n.State.Branches[id] = &BranchState{}
+	n.State.Branches[id] = &BranchState{History: NewBranchHistory()}
 	n.MarkDirty()
 	return br
 }

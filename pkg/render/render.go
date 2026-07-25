@@ -6,6 +6,7 @@
 package render
 
 import (
+	"math"
 	"sort"
 
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
@@ -72,10 +73,17 @@ func (r *Renderer) pass(f *ecs.Filter3[components.Position, components.Sprite, c
 		if !sp.Visible {
 			return
 		}
+		// Snap each edge independently so adjacent tiles share a pixel boundary
+		// under fractional zoom (avoids 1px gaps / overlaps from rounding size
+		// and position separately).
+		x0 := math.Round((p.X - camX) * zoom)
+		y0 := math.Round((p.Y - camY) * zoom)
+		x1 := math.Round((p.X + sp.Size.X - camX) * zoom)
+		y1 := math.Round((p.Y + sp.Size.Y - camY) * zoom)
 		r.buf = append(r.buf, item{
 			texturePath: sp.TexturePath,
-			position:    types.Vector2{X: (p.X - camX) * zoom, Y: (p.Y - camY) * zoom},
-			size:        types.Vector2{X: sp.Size.X * zoom, Y: sp.Size.Y * zoom},
+			position:    types.Vector2{X: x0, Y: y0},
+			size:        types.Vector2{X: x1 - x0, Y: y1 - y0},
 			uv:          sp.UV(),
 			z:           o.Z,
 		})

@@ -56,11 +56,15 @@ type MouseButtonState struct {
 
 // MouseState is the mouse's per-frame snapshot: cursor position in virtual
 // screen-space pixels (the same coordinate space draw calls use), plus
-// button states. Only Left is populated today; Right/Middle or a scroll
-// delta are natural additions later without changing InputState's shape.
+// button states and scroll-wheel delta for the current frame.
 type MouseState struct {
-	X, Y float64
-	Left MouseButtonState
+	X, Y   float64
+	Left   MouseButtonState
+	Middle MouseButtonState
+	Right  MouseButtonState
+	// WheelX / WheelY are this frame's scroll offsets (Ebiten convention:
+	// WheelY > 0 is scroll up / "away from user"). Zero when the wheel is idle.
+	WheelX, WheelY float64
 }
 
 // InputCapturer is the interface for capturing user input

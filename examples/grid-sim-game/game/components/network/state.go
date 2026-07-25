@@ -95,7 +95,8 @@ type BranchResult struct {
 
 // BranchState is the complete per-branch state.
 type BranchState struct {
-	Result BranchResult
+	Result  BranchResult
+	History BranchHistory // last N |I| samples; see history.go
 }
 
 // StaticState is one solved (or partially solved) snapshot of the network:

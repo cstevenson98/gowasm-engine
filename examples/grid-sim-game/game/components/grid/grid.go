@@ -60,9 +60,8 @@ type PlacementState struct {
 }
 
 // HouseLoad is the power-demand component for a house entity. P and Q are
-// sampled once at spawn and remain constant until the entity is removed.
-// Values are in kilowatts / kilovars (kW, kVAR) and are always positive
-// (consumed power, i.e. a load draws from the network).
+// in kilowatts / kilovars (kW, kVAR) and are always positive (consumed power).
+// They are sampled at spawn and periodically re-sampled by LoadTickSystem.
 type HouseLoad struct {
 	PKw float64 // active power demand  [kW]
 	QKw float64 // reactive power demand [kVAR]

@@ -3332,3 +3332,263 @@ Placement puts segment R on line→neighbour edges, but house→line uses R=0. C
 - Physically V1≈V2 for a contact link is expected
 
 ---
+
+## [2026-07-25 17:44:41 BST] - Middle-mouse camera pan
+
+**Prompt/Request**: Add middle mouse hold to scroll functionality to the camera system.
+
+**Changes Made**:
+- `pkg/types.MouseState`: added Middle and Right button fields
+- `pkg/input`: poll Middle/Right and edge-detect LastFrame
+- `camera.CameraScrollSystem`: middle-button drag pans camera 1:1 with cursor
+
+**Reasoning**:
+Keyboard scroll alone is slow for exploring the grid; grab-pan is the usual RTS/editor affordance.
+
+**Impact**:
+- Hold middle mouse and drag to pan (content follows cursor)
+- Keyboard/gamepad scroll unchanged
+
+**Testing**:
+- `go test ./pkg/input/ ./pkg/types/` — pass
+- `CGO_ENABLED=1 go build ./game` (grid-sim) — pass
+
+**Notes**:
+- Right button is polled for completeness but unused by camera
+
+---
+
+## [2026-07-25 17:45:39 BST] - Expand grid-sim map to 100×100
+
+**Prompt/Request**: Expand the grid to be much bigger.
+
+**Changes Made**:
+- `gameconfig`: GridCols/Rows 20→100; CameraSpeed 150→350
+- Updated stale size comment in `game/main.go`
+
+**Reasoning**:
+20×20 fits almost in one playfield view; 100×100 (~10k cells) gives room to build larger networks while staying cheap for ECS.
+
+**Impact**:
+- World is 3200×3200 px at TileSize 32
+- Keyboard pan sped up to match the larger map
+
+**Testing**:
+- Config-only change
+
+**Notes**:
+-
+
+---
+
+## [2026-07-25 18:25:13 BST] - Wire ImPlot graphs through pkg/imgui
+
+**Prompt/Request**: Wire up graphing capability (ImPlot) through the imgui facade.
+
+**Changes Made**:
+- `pkg/imgui/plot.go`: `PlotBuilder` + `Plot` / `Line` / `LineXY` / `Bars` / `SetupAxes`
+- Desktop: create `implot.CreateContext()`, implement plot platform via cimgui-go ImPlot
+- WASM: no-op stubs
+- Grid network panel: bus |V| bar chart + bus P bar/line chart (first 48 buses)
+- Nil-safety coverage in `imgui_test.go`
+
+**Reasoning**:
+Keep ImPlot behind the same isolated facade as ImGui widgets so game code never imports cimgui-go/implot.
+
+**Impact**:
+- Desktop ImGui panels can draw charts
+- Network inspector shows live voltage/power graphs after placement
+
+**Testing**:
+- `CGO_ENABLED=1 go test ./pkg/imgui/...` — pass
+- `GOOS=js GOARCH=wasm go build ./pkg/imgui ./pkg/engine` — pass
+- `CGO_ENABLED=1 go build ./game` (grid-sim) — pass
+
+**Notes**:
+- Charts capped at 48 buses for readability on large grids
+
+---
+
+## [2026-07-25 18:32:53 BST] - Bus/branch solve history series (last 25)
+
+**Prompt/Request**: Store past history on bus entities (P, Q, V, δ) and branches (|I|) for the last 25 solves, with add/clear API, filled from the network after each solve.
+
+**Changes Made**:
+- `network/history.go`: `Series` ring buffer; `BusHistory` ECS component (P/Q/V/Delta); `BranchHistory` on `BranchState` (Current); `RecordHistory` / `ClearAllHistory`
+- Placement attaches `BusHistory` with `NetworkLink`
+- `LoadflowSystem` calls `RecordHistory` after solves that wrote results
+- `AddBranch` initialises `BranchHistory`; `RemoveBus` also drops `State.Branches`
+- Tests: ring overflow, RecordHistory after LV solve
+
+**Reasoning**:
+Hover/plots need per-entity time series without re-deriving from the resource each frame. Buses are grid entities so history is a component; branches are graph edges only, so history lives on `BranchState`.
+
+**Impact**:
+- After each successful/attempted solve, entities accumulate up to 25 samples
+- Ready for ImGui time-series plots / mouse-over history
+
+**Testing**:
+- `go test ./game/components/network/` — pass
+
+**Notes**:
+- Cap is `DefaultHistoryCap = 25`
+
+---
+
+## [2026-07-25 18:35:23 BST] - LoadTickSystem: random house P/Q every 3s
+
+**Prompt/Request**: Implement a system which randomly updates powers every 3s on all houses.
+
+**Changes Made**:
+- `game/systems/loadtick/loadtick.go`: every 3s re-sample all `HouseLoad`+`NetworkLink` entities, `SetBusSpec` (marks Dirty)
+- Schedule: placement → loadtick → loadflow → camera
+- Exported `grid.RandLoadKW` (same [10,20] kW range as spawn)
+
+**Reasoning**:
+Entity owns fluctuating demand; network BusSpec is the solver view; Dirty gate avoids per-frame solves.
+
+**Impact**:
+- House loads change every 3s → loadflow re-runs → history series grow over time
+
+**Testing**:
+- `go test ./...` / `go build ./...` — pass
+
+**Notes**:
+-
+
+---
+
+## [2026-07-25 18:38:22 BST] - House history ImGui plots (P/Q left, V right)
+
+**Prompt/Request**: Using imgui plot, plot all houses: P and Q as two lines in left column; V in right column.
+
+**Changes Made**:
+- `pkg/imgui`: `Columns` / `NextColumn` facade (+ WASM stubs)
+- `grid_state.renderHouseHistoryCharts`: left plot ΣP/ΣQ (consumer kW/kvar) from `BusHistory`; right plot per-house |V| (newest-aligned, capped at 24 lines)
+- Removed old bus-index bar charts
+
+**Reasoning**:
+History series already accumulate on entities; panel should show time series of loads, not a one-shot bar snapshot.
+
+**Impact**:
+- Network panel shows evolving house demand and voltages as loadtick/solves run
+
+**Testing**:
+- `go test ./pkg/imgui/...` + `go build` grid-sim — pass
+
+**Notes**:
+- Histories newest-aligned so late-placed houses still contribute to recent samples
+
+---
+
+## [2026-07-25 18:40:10 BST] - ImPlot auto-fit axes for streaming history
+
+**Prompt/Request**: Make plots automatically recenter/fit as new data comes in.
+
+**Changes Made**:
+- `plotPlatform`: `implot.SetNextAxesToFit()` before BeginPlot
+- `SetupAxes`: `SetupAxesV` with `AxisFlagsAutoFit` on X and Y
+
+**Reasoning**:
+House history grows over solves; without AutoFit the view stays on the first range.
+
+**Impact**:
+- All imgui plots re-fit to current series each frame
+
+**Testing**:
+- `go test ./pkg/imgui/...` + grid-sim build — pass
+
+**Notes**:
+-
+
+---
+
+## [2026-07-25 18:48:04 BST] - Per-bus history plots (gens then houses)
+
+**Prompt/Request**: With two houses, second house P/Q missing — each house should have its own graph pair; add generators section above houses.
+
+**Changes Made**:
+- Replaced aggregated house charts with per-bus P/Q + |V| plot pairs
+- Generators section first (injection kW), then Houses (demand kW)
+- Unique ImPlot titles per bus id
+
+**Reasoning**:
+Aggregation hid per-house series; each entity history should be plotted separately.
+
+**Impact**:
+- Panel scrolls with one chart row per gen/house
+
+**Testing**:
+- `go build ./...` grid-sim — pass
+
+**Notes**:
+-
+
+---
+
+## [2026-07-25 18:55:43 BST] - 1080p resolution + taller bus plots
+
+**Prompt/Request**: Make plots a bit taller; run the game at actual 1080p.
+
+**Changes Made**:
+- `game/main.go`: virtual resolution 1920×1080
+- `perBusPlotHeight`: 140 → 220
+
+**Reasoning**:
+More vertical room for history charts at 1080p.
+
+**Impact**:
+- Window/playfield/panel scale to 1080p
+
+**Testing**:
+- Config-only change
+
+**Notes**:
+-
+
+---
+
+## [2026-07-25 20:53:20 BST] - Camera mouse-wheel zoom
+
+**Prompt/Request**: Add zoom in/out functionality to the camera.
+
+**Changes Made**:
+- `MouseState.WheelX/WheelY` + ebiten.Wheel() polling in `pkg/input`
+- `CameraScrollSystem`: wheel zooms toward cursor (0.35–3×), ignores ImGui panel; middle-drag and scroll limits account for zoom
+- Placement screen→world uses `cam + screen/zoom`
+
+**Reasoning**:
+Renderer already multiplies by `Camera.Zoom`; input + placement/clamp needed to match.
+
+**Impact**:
+- Scroll wheel zooms playfield; pan/place stay aligned under zoom
+
+**Testing**:
+- `go build` / `go test` grid-sim — pass
+
+**Notes**:
+- Zoom step 1.12 per wheel unit; clamp [0.35, 3]
+
+---
+
+## [2026-07-25 20:55:34 BST] - Fix zoom-out tile artifacting
+
+**Prompt/Request**: Zooming out artifacts a lot — how to avoid?
+
+**Changes Made**:
+- Camera: quantize zoom so on-screen tile size is an integer px; snap camera to pixel grid after move/zoom
+- Renderer: draw sprites by rounding each edge (coverage) so adjacent tiles share boundaries under zoom
+
+**Reasoning**:
+Nearest-neighbor + fractional tile sizes + independent position/size rounding → gaps and shimmer. Integer tile footprints + edge-snapped draws fix it.
+
+**Impact**:
+- Wheel zoom steps are discrete (n/TileSize) but much cleaner visually
+
+**Testing**:
+- `go test ./pkg/render/...` + grid-sim build — pass
+
+**Notes**:
+-
+
+---
