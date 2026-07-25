@@ -6,6 +6,7 @@ require (
 	github.com/cstevenson98/gowasm-engine v0.0.0-00010101000000-000000000000
 	github.com/hajimehoshi/ebiten/v2 v2.6.3
 	golang.org/x/image v0.31.0
+	gonum.org/v1/gonum v0.17.0
 )
 
 require (

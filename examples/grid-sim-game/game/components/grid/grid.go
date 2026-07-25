@@ -1,7 +1,8 @@
-// Package entities holds the grid-sim-game's ECS components, resources,
-// spawners and systems: everything specific to placing generators, houses and
-// lines on a grid.
-package entities
+// Package grid holds the ECS components and resources that describe the
+// placement grid: cell addresses, placed-object kinds, occupancy tracking,
+// and the placement UI state. It is the data layer for the grid game; all
+// behaviour lives in the systems packages.
+package grid
 
 import "github.com/cstevenson98/gowasm-engine/pkg/ecs"
 
@@ -14,6 +15,7 @@ const (
 	ToolGenerator
 	ToolHouse
 	ToolLine
+	ToolDelete
 )
 
 // Label returns the toolbar button label for the tool.
@@ -25,6 +27,8 @@ func (t Tool) Label() string {
 		return "HOUSE (H)"
 	case ToolLine:
 		return "LINE (L)"
+	case ToolDelete:
+		return "DEL (X)"
 	default:
 		return "NONE"
 	}

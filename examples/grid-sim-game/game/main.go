@@ -27,7 +27,7 @@ func main() {
 	cfg := config.Default()
 	cfg.Screen.Width = 640
 	cfg.Screen.Height = 360
-	cfg.Rendering.PixelScale = 2
+	cfg.Rendering.PixelScale = 1
 	gameEngine := engine.NewEngine(cfg)
 
 	// This example has a single state (the grid itself), registered under the

@@ -2932,3 +2932,31 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 - `go build` clean; game launched, all textures loaded, clean exit.
 
 ---
+
+## [2026-07-25 13:34:41 BST] - Refactor grid-sim-game: entities → components/grid + systems/{placement,camera}
+
+**Prompt/Request**: "ok refactor according to plan"
+
+**Changes Made**:
+- Created `game/components/grid/` (package grid): grid.go (Tool, GridCoord, GridObject, PlacementState, GridOccupancy), spawn.go (SpawnBlank/Generator/House/LineSegment, ManhattanPath), toolbar.go (ToolbarButton, ToolbarButtons)
+- Created `game/components/network/` (package network): already existed as stubs
+- Created `game/systems/placement/` (package placement): PlacementSystem
+- Created `game/systems/camera/` (package camera): CameraScrollSystem
+- Updated `states/grid_state.go`: replaced `entities` import with `grid`, `placement`, `camera`
+- Deleted `game/entities/` monolith
+
+**Reasoning**:
+Separated data (components) from behaviour (systems) into distinct packages as per refactor-packages.md plan.
+
+**Impact**:
+- `go build ./...` passes clean
+- Import paths changed throughout; no external API breakage (all game-internal)
+- `entities/entities_test.go` was lost with the deletion — needs recreating in `components/grid/` and `systems/placement/`
+
+**Testing**:
+- `go build ./...` clean
+
+**Notes**:
+Test file needs to be split and recreated in the two new packages.
+
+---

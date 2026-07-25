@@ -1,4 +1,4 @@
-package entities
+package grid
 
 import "example.com/grid-sim-game/game/gameconfig"
 
@@ -23,7 +23,7 @@ func (b ToolbarButton) Contains(x, y float64) bool {
 // left to right using the sizing/spacing in gameconfig.Global.
 func ToolbarButtons() []ToolbarButton {
 	cfg := gameconfig.Global
-	tools := []Tool{ToolGenerator, ToolLine, ToolHouse}
+	tools := []Tool{ToolGenerator, ToolLine, ToolHouse, ToolDelete}
 
 	buttons := make([]ToolbarButton, len(tools))
 	x := cfg.ButtonMarginX

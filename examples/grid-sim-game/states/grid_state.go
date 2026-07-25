@@ -1,8 +1,11 @@
 package states
 
 import (
-	"example.com/grid-sim-game/game/entities"
+	"example.com/grid-sim-game/game/components/grid"
+	"example.com/grid-sim-game/game/components/network"
 	"example.com/grid-sim-game/game/gameconfig"
+	"example.com/grid-sim-game/game/systems/camera"
+	"example.com/grid-sim-game/game/systems/placement"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/state"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
@@ -27,21 +30,22 @@ func (s *GridState) Enter(deps state.Deps) error {
 		return err
 	}
 
-	ecs.SetResource(s.World(), &entities.PlacementState{Tool: entities.ToolNone})
-	ecs.SetResource(s.World(), entities.NewGridOccupancy())
+	ecs.SetResource(s.World(), &grid.PlacementState{Tool: grid.ToolNone})
+	ecs.SetResource(s.World(), grid.NewGridOccupancy())
+	ecs.SetResource(s.World(), network.NewElectricalNetwork())
 
 	cfg := gameconfig.Global
 	for row := 0; row < cfg.GridRows; row++ {
 		for col := 0; col < cfg.GridCols; col++ {
-			entities.SpawnBlank(s.World(), entities.GridCoord{Col: col, Row: row})
+			grid.SpawnBlank(s.World(), grid.GridCoord{Col: col, Row: row})
 		}
 	}
 
 	// Placement resolves clicks against the camera position from the frame
 	// just rendered, then the camera scrolls for the next frame.
 	s.Schedule().
-		Add(entities.NewPlacementSystem(s.World())).
-		Add(entities.NewCameraScrollSystem(cfg.CameraSpeed))
+		Add(placement.NewPlacementSystem(s.World())).
+		Add(camera.NewCameraScrollSystem(cfg.CameraSpeed))
 
 	return nil
 }
@@ -59,15 +63,15 @@ func (s *GridState) renderToolbar() {
 
 	ui.Rect(0, 0, s.ScreenWidth(), cfg.ToolbarHeight, types.Color{0.1, 0.1, 0.12, 1})
 
-	placement := ecs.GetResource[entities.PlacementState](s.World())
-	selected := entities.ToolNone
+	placement := ecs.GetResource[grid.PlacementState](s.World())
+	selected := grid.ToolNone
 	linePending := false
 	if placement != nil {
 		selected = placement.Tool
 		linePending = placement.LinePending
 	}
 
-	for _, b := range entities.ToolbarButtons() {
+	for _, b := range grid.ToolbarButtons() {
 		bg := types.Color{0.3, 0.3, 0.34, 1}
 		fg := types.White
 		if b.Tool == selected {

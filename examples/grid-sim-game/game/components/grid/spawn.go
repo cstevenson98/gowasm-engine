@@ -1,4 +1,4 @@
-package entities
+package grid
 
 import (
 	"example.com/grid-sim-game/game/gameconfig"
@@ -91,8 +91,6 @@ func ManhattanPath(from, to GridCoord) []GridCoord {
 	}
 	for r := from.Row; ; r += rowStep {
 		if r == from.Row {
-			// The (to.Col, from.Row) corner was already added by the loop
-			// above; skip it here to avoid a duplicate cell.
 			if r == to.Row {
 				break
 			}

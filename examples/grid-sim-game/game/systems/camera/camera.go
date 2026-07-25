@@ -1,4 +1,7 @@
-package entities
+// Package camera implements CameraScrollSystem, a free-scrolling camera
+// driven directly by player input (arrow keys / WASD / gamepad), clamped to
+// the grid's world bounds.
+package camera
 
 import (
 	"example.com/grid-sim-game/game/gameconfig"
