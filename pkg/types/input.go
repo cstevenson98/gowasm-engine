@@ -26,6 +26,9 @@ type InputState struct {
 	ShiftPressed bool
 	CtrlPressed  bool // Ctrl key for save shortcuts (Ctrl+S)
 
+	// Mouse state (position + buttons). See MouseState.
+	Mouse MouseState
+
 	// Previous frame state for detecting key presses
 	UpPressedLastFrame    bool
 	DownPressedLastFrame  bool
@@ -39,6 +42,25 @@ type InputState struct {
 	MPressedLastFrame     bool
 	ShiftPressedLastFrame bool
 	CtrlPressedLastFrame  bool
+}
+
+// MouseButtonState tracks a single mouse button's current and
+// previous-frame pressed state, using the same edge-detection shape as the
+// keyboard's Pressed/PressedLastFrame pairs (e.g. Key2Pressed /
+// Key2PressedLastFrame), but as a reusable type instead of a duplicated pair
+// of flat fields per button.
+type MouseButtonState struct {
+	Pressed          bool
+	PressedLastFrame bool
+}
+
+// MouseState is the mouse's per-frame snapshot: cursor position in virtual
+// screen-space pixels (the same coordinate space draw calls use), plus
+// button states. Only Left is populated today; Right/Middle or a scroll
+// delta are natural additions later without changing InputState's shape.
+type MouseState struct {
+	X, Y float64
+	Left MouseButtonState
 }
 
 // InputCapturer is the interface for capturing user input

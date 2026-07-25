@@ -2882,3 +2882,53 @@ UI was the odd dependency out: owned by the engine but passed as interface{} + t
 **Notes**: `debug.Console` remains the one true package-level global in the engine, because it's constructed at package-init time (`var Console = NewDebugConsole()`) before any `Engine` exists and is shared across all states within a run - there's no natural constructor call site to inject a config into. It's seeded with `config.Default()`'s debug settings so it works out of the box (e.g. in tests that build states without an `Engine`), and `Engine.Initialize` calls `Configure` to apply the real config on top. This is a deliberate, narrow exception, not a reversion to the old pattern.
 
 ---
+
+## [2026-07-24 23:25 BST] - Add mouse input to the engine, and a new grid-sim-game example (grid placement of generators/houses/lines)
+
+**Prompt/Request**: "make the beginnings of" a new example parallel to `examples/basic-game`: a square grid where the player places non-overlapping Generators/Lines/Houses (denoted by 32x32 tiles labelled "G"/"L"/"H") via a clickable top toolbar, with a keyboard-scrollable camera and click-to-place (lines need sequential start/end clicks, tracked in a small "global store of user actions"). Explicitly asked to keep `pkg` additions minimal but structured for future flexibility, and to generate sprites for a blank tile plus each placeable type.
+
+**Changes Made**:
+- `pkg/types/input.go`: added `MouseButtonState{Pressed, PressedLastFrame}` and `MouseState{X, Y float64; Left MouseButtonState}`, and one new `Mouse MouseState` field on `InputState` - grouped rather than flat fields, so a future right-click/scroll-wheel is one more field on `MouseState` instead of a fresh batch of flat `InputState` fields.
+- `pkg/input/input.go`: added `pollMouse()` (cursor position via `ebiten.CursorPosition()`, already in the virtual/Layout coordinate space; left-button via `ebiten.IsMouseButtonPressed`), called from `PollInput` alongside `pollKeyboard`/`pollGamepad`; carries `Mouse.Left.PressedLastFrame` over the same way the existing `*LastFrame` keys are.
+- New module `examples/grid-sim-game/` (own `go.mod`, `replace` to the root engine, `ebiten/v2` pinned to `v2.6.3` to match root):
+  - `game/gameconfig/gameconfig.go`: grid dimensions (20x20 @ 32px tiles), camera speed, toolbar sizing, and the four tile texture paths.
+  - `tools/gentiles/main.go`: a one-off generator (run via `go run ./tools/gentiles`) that bakes `assets/art/{blank,generator,house,line}.png` (32x32, solid color + 1px border + a centered, nearest-neighbor-scaled letter from `golang.org/x/image/font/basicfont`) - no external font/image assets needed. Output path resolved via `runtime.Caller` so it's correct regardless of invocation cwd.
+  - `game/entities/components.go`: `Tool` enum (`ToolNone/Generator/House/Line`), `GridCoord{Col,Row}`, `GridObject{Kind,Cell}`, `PlacementState{Tool,LinePending,LineStart}` (the "global store of user actions", a per-World resource), `GridOccupancy{Cells map[GridCoord]ecs.Entity}`.
+  - `game/entities/spawn.go`: `SpawnBlank/SpawnGenerator/SpawnHouse/SpawnLineSegment` (each a `Position+Sprite+Layer+Order+GridObject` entity, following the `prefab.NewBackground`/`SpawnPlayer` shape exactly - ordinary ECS entities rendered by the existing `render.Renderer`, no bespoke draw path) and `ManhattanPath(from,to)` (L-shaped cell path: horizontal along the start row, then vertical along the end column).
+  - `game/entities/toolbar.go`: `ToolbarButton`/`ToolbarButtons()` - shared button-rect layout consumed by both click hit-testing and overlay drawing, so they can't disagree.
+  - `game/entities/camera_scroll.go`: `CameraScrollSystem` - continuous arrow/WASD-driven scroll of the `components.Camera` resource, clamped to the grid's world bounds; kept local to the example (not added to `pkg/systems`) since it's a free-scroll camera, unlike the generic `CameraFollow`.
+  - `game/entities/placement.go`: `PlacementSystem` - the one system that reads `Mouse.Left` edge clicks and either (a) hits a toolbar button (select/deselect a tool, cancelling any pending line) or (b) hits the grid (convert screen->world via the current `Camera`, then to a cell; place a generator/house if free, or run the two-click line flow: first click on a free cell records `LineStart`/`LinePending`, second computes `ManhattanPath` and spawns one line tile per cell only if the whole path is free).
+  - `states/grid_state.go`: `GridState` (single state, registered under the existing `types.GAMEPLAY` value - no new `GameState` constant needed) - `Enter` seeds `PlacementState`/`GridOccupancy`, spawns one `SpawnBlank` per cell, registers `PlacementSystem` then `CameraScrollSystem` (in that order, so a click resolves against the camera position the player actually saw last frame); `DrawOverlays` draws the toolbar (highlighting the selected tool, plus a "click the end cell" hint while a line is pending) and defers to `BaseState.DrawOverlays()` for the debug console.
+  - `game/main.go`: wasm/desktop entry point mirroring `examples/basic-game/game/main.go`.
+  - `game/entities/entities_test.go`: unit tests for `ManhattanPath` (same-row/same-col/L-shape/degenerate), the spawners' components, `GridOccupancy`, and `PlacementSystem` (toolbar select/deselect, single-tile placement, the two-click line flow) - written over plain `ecs.NewWorld()`, no engine/graphics dependency.
+
+**Reasoning**: Mouse input was entirely absent from the engine (`InputState` had no cursor/button fields at all), so it had to be added before any click-to-place UI was possible; grouping it as `MouseState`/`MouseButtonState` rather than flat fields was a direct response to being asked to keep the engine addition minimal but extensible. Everything else deliberately reuses existing engine seams instead of inventing new ones: placed tiles are ordinary ECS entities (`Position`+`Sprite`+layer+`Order`) so the stock `render.Renderer` draws them exactly like any other sprite (camera-offset included), and letters are baked into the sprite textures at asset-generation time rather than drawn at runtime, since the engine's render pipeline only draws texture-backed `Sprite`s.
+
+**Impact**: Purely additive to `pkg/types`/`pkg/input` (new `Mouse` field, named-field struct literals elsewhere are unaffected); `examples/basic-game`/`cmd/ebiten-game` untouched. `examples/Makefile` auto-discovers `grid-sim-game` (confirmed via `make list`) with no Makefile changes.
+
+**Testing**: `go build/vet/test ./...` green at repo root. In `examples/grid-sim-game`: `go build/vet ./...` clean, `gofmt -l .` clean, `go test ./...` passes (10 new tests). `GOOS=js GOARCH=wasm go build ./game` succeeds. `examples/Makefile`'s per-example target (`make deps grid-sim-game`) builds the wasm binary and provisions `dist/grid-sim-game` (wasm + assets/art + wasm_exec.js) correctly. A live windowed smoke test was attempted under a virtual X server but abandoned (GLFW/GL isn't viable headlessly in this sandbox); relied on the unit tests above plus visual inspection of the four generated tile sprites instead.
+
+**Notes**: No simulation logic yet (power flowing generator->line->house), no undo/persistence, no zoom, no diagonal line routing - intentionally out of scope per "keep the plan minimal". `golang.org/x/image` is a direct dependency of `grid-sim-game` (for `tools/gentiles`) at a newer version (v0.31.0) than the root module's indirect v0.12.0; this is fine since they're separate Go modules.
+
+---
+
+## [2026-07-25 09:43:12 BST] - Fix 720p resolution: larger virtual canvas instead of PixelScale
+
+**Prompt/Request**: "changing cfg...pixelscale does nothing"
+
+**Changes Made**:
+- `examples/grid-sim-game/game/main.go`: changed `Screen.Width` 320→640, `Screen.Height` 180→360, `PixelScale` →2
+- Added `ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)`
+
+**Reasoning**:
+`PixelScale` only feeds `ebiten.SetWindowSize()` — it never touches `Layout()` or the framebuffer, so changing it alone has no visible effect on content. The virtual canvas size (`Screen.Width/Height`) is what `Layout()` returns and what controls how many tiles are visible. Virtual 640×360 × PixelScale 2 = 1280×720 window; all 20 grid columns are now visible without horizontal scrolling.
+
+**Impact**:
+- Window: 1280×720 (720p, 16:9) ✓
+- Visible tiles: 20 wide (full grid) × ~11 tall (vs. 10×5 before)
+- Each virtual pixel = 2 real pixels (much less chunky than the 5× default)
+
+**Testing**:
+- `go build` clean; game launched, all textures loaded, clean exit.
+
+---

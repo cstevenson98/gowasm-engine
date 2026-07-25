@@ -44,6 +44,9 @@ func (e *Input) PollInput() types.InputState {
 	// Poll keyboard
 	e.pollKeyboard()
 
+	// Poll mouse
+	e.pollMouse()
+
 	// Poll gamepad (if connected)
 	e.pollGamepad()
 
@@ -60,6 +63,7 @@ func (e *Input) PollInput() types.InputState {
 	e.state.MPressedLastFrame = e.previousState.MPressed
 	e.state.ShiftPressedLastFrame = e.previousState.ShiftPressed
 	e.state.CtrlPressedLastFrame = e.previousState.CtrlPressed
+	e.state.Mouse.Left.PressedLastFrame = e.previousState.Mouse.Left.Pressed
 
 	return e.state
 }
@@ -95,6 +99,16 @@ func (e *Input) pollKeyboard() {
 	// Modifier keys
 	e.state.ShiftPressed = ebiten.IsKeyPressed(ebiten.KeyShift)
 	e.state.CtrlPressed = ebiten.IsKeyPressed(ebiten.KeyControl)
+}
+
+// pollMouse polls the cursor position and button state. CursorPosition is
+// reported by Ebiten in the same virtual coordinate space used by Layout (and
+// thus by draw calls), so no manual scaling is needed here.
+func (e *Input) pollMouse() {
+	x, y := ebiten.CursorPosition()
+	e.state.Mouse.X = float64(x)
+	e.state.Mouse.Y = float64(y)
+	e.state.Mouse.Left.Pressed = ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)
 }
 
 // pollGamepad polls gamepad input and merges with keyboard state
