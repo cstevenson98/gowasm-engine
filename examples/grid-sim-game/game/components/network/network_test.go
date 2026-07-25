@@ -113,3 +113,29 @@ func TestRemoveBranch(t *testing.T) {
 		t.Fatal("both buses should have empty neighbor lists")
 	}
 }
+
+func TestDirtyFlag(t *testing.T) {
+	n := network.NewElectricalNetwork()
+	if n.Dirty {
+		t.Fatal("new network should not be dirty")
+	}
+
+	w := ecs.NewWorld()
+	e := ecs.NewMap1[struct{}](w).NewEntity(&struct{}{})
+	b := n.AddBus(e, network.BusGenerator)
+	if !n.Dirty {
+		t.Fatal("AddBus should mark dirty")
+	}
+
+	n.ClearDirty()
+	n.SetBusSpec(b.ID, network.SlackSpec(230, 0))
+	if !n.Dirty {
+		t.Fatal("SetBusSpec should mark dirty")
+	}
+
+	n.ClearDirty()
+	n.RemoveBus(b.ID)
+	if !n.Dirty {
+		t.Fatal("RemoveBus should mark dirty")
+	}
+}

@@ -60,6 +60,11 @@ type NetworkLink struct {
 // ElectricalNetwork is a per-World resource representing the power grid graph.
 // It is the single source of truth for network topology and operating state.
 // ECS entities hold only a NetworkLink back-reference.
+//
+// Dirty is set by every topology/spec mutation (AddBus, RemoveBus, AddBranch,
+// RemoveBranch, SetBusSpec). LoadflowSystem clears it after a successful
+// attempt to re-solve, so the Newton-Raphson pass only runs when the circuit
+// has actually changed.
 type ElectricalNetwork struct {
 	buses      map[BusID]*Bus
 	branches   map[BranchID]*Branch
@@ -71,6 +76,9 @@ type ElectricalNetwork struct {
 	// State holds the current operating-point snapshot. It is kept in sync
 	// with the topology: entries are created/removed with buses and branches.
 	State *StaticState
+
+	// Dirty is true when State may be stale relative to the current graph/specs.
+	Dirty bool
 }
 
 // NewElectricalNetwork creates an empty network with an initialised StaticState.
@@ -83,6 +91,12 @@ func NewElectricalNetwork() *ElectricalNetwork {
 		State:     newStaticState(),
 	}
 }
+
+// MarkDirty flags the network so LoadflowSystem will re-solve next frame.
+func (n *ElectricalNetwork) MarkDirty() { n.Dirty = true }
+
+// ClearDirty acknowledges that State has been refreshed for the current graph.
+func (n *ElectricalNetwork) ClearDirty() { n.Dirty = false }
 
 // --- Join interface ---------------------------------------------------------
 
@@ -99,6 +113,7 @@ func (n *ElectricalNetwork) AddBus(e ecs.Entity, t BusType) *Bus {
 	n.entityBus[e] = id
 	n.incidence[id] = nil
 	n.State.Buses[id] = &BusState{Spec: defaultBusSpec(t)}
+	n.MarkDirty()
 	return b
 }
 
@@ -138,6 +153,7 @@ func (n *ElectricalNetwork) RemoveBus(id BusID) {
 	delete(n.buses, id)
 	delete(n.incidence, id)
 	delete(n.State.Buses, id)
+	n.MarkDirty()
 }
 
 // --- Graph operations -------------------------------------------------------
@@ -153,6 +169,7 @@ func (n *ElectricalNetwork) AddBranch(from, to BusID, resistance float64) *Branc
 	n.incidence[from] = append(n.incidence[from], id)
 	n.incidence[to] = append(n.incidence[to], id)
 	n.State.Branches[id] = &BranchState{}
+	n.MarkDirty()
 	return br
 }
 
@@ -166,6 +183,7 @@ func (n *ElectricalNetwork) RemoveBranch(id BranchID) {
 	n.incidence[br.To] = removeBranchID(n.incidence[br.To], id)
 	delete(n.branches, id)
 	delete(n.State.Branches, id)
+	n.MarkDirty()
 }
 
 // Neighbors returns all buses directly connected to the given bus.
@@ -202,6 +220,7 @@ func removeBranchID(s []BranchID, id BranchID) []BranchID {
 func (n *ElectricalNetwork) SetBusSpec(id BusID, spec BusSpec) {
 	if bs, ok := n.State.Buses[id]; ok {
 		bs.Spec = spec
+		n.MarkDirty()
 	}
 }
 

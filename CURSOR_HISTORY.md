@@ -3145,3 +3145,29 @@ Physical SI units avoid inventing a per-unit base; at LV the Jacobian is well-co
 - Pure-R lines still converge with non-zero Q via small angles
 
 ---
+
+## [2026-07-25 17:06:32 BST] - LoadflowSystem with Dirty flag
+
+**Prompt/Request**: Make loadflow its own ECS system, with a dirty flag so solves only run when the circuit changes.
+
+**Changes Made**:
+- `ElectricalNetwork.Dirty` + `MarkDirty`/`ClearDirty`; auto-marked by AddBus/RemoveBus/AddBranch/RemoveBranch/SetBusSpec
+- New `game/systems/loadflow.LoadflowSystem`: if Dirty → Log → Solve → LogVoltages → ClearDirty
+- Placement no longer solves/logs; only mutates the graph
+- Registered after placement in `GridState` schedule
+- `TestDirtyFlag`
+
+**Reasoning**:
+Placement owns input/topology; analysis belongs in a dedicated system. Dirty avoids per-frame NR when nothing changed (including after a failed solve for an unchanged no-slack island).
+
+**Impact**:
+- Same log behaviour after place/delete, but only one solve per mutation burst (same frame)
+- Idle frames are free
+
+**Testing**:
+- `go test ./...` green; `TestDirtyFlag` pass
+
+**Notes**:
+- Failed solves still ClearDirty to avoid spam; next mutation re-triggers
+
+---

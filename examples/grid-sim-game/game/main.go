@@ -25,8 +25,8 @@ func main() {
 	// At TileSize=32 this makes all 20 columns visible without horizontal
 	// scrolling, and ~11 rows before needing to scroll vertically.
 	cfg := config.Default()
-	cfg.Screen.Width = 640
-	cfg.Screen.Height = 360
+	cfg.Screen.Width = 1280
+	cfg.Screen.Height = 720
 	cfg.Rendering.PixelScale = 1
 	gameEngine := engine.NewEngine(cfg)
 

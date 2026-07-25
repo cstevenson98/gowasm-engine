@@ -5,6 +5,7 @@ import (
 	"example.com/grid-sim-game/game/components/network"
 	"example.com/grid-sim-game/game/gameconfig"
 	"example.com/grid-sim-game/game/systems/camera"
+	"example.com/grid-sim-game/game/systems/loadflow"
 	"example.com/grid-sim-game/game/systems/placement"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/state"
@@ -41,10 +42,11 @@ func (s *GridState) Enter(deps state.Deps) error {
 		}
 	}
 
-	// Placement resolves clicks against the camera position from the frame
-	// just rendered, then the camera scrolls for the next frame.
+	// Placement mutates the grid and marks ElectricalNetwork Dirty;
+	// LoadflowSystem re-solves only when Dirty; camera scrolls last.
 	s.Schedule().
 		Add(placement.NewPlacementSystem(s.World())).
+		Add(loadflow.NewLoadflowSystem(s.World())).
 		Add(camera.NewCameraScrollSystem(cfg.CameraSpeed))
 
 	return nil

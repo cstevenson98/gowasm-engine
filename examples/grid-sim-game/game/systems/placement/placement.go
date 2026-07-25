@@ -82,19 +82,15 @@ func (s *PlacementSystem) handleGridClick(w *ecs.World, placement *grid.Placemen
 	case grid.ToolGenerator:
 		if e, ok := s.placeSingle(w, occupancy, cell, grid.SpawnGenerator); ok {
 			attachToNetwork(w, e, grid.ToolGenerator, cell, occupancy)
-			logNetwork(w)
 		}
 	case grid.ToolHouse:
 		if e, ok := s.placeSingle(w, occupancy, cell, grid.SpawnHouse); ok {
 			attachToNetwork(w, e, grid.ToolHouse, cell, occupancy)
-			logNetwork(w)
 		}
 	case grid.ToolLine:
 		s.handleLineClick(w, placement, occupancy, cell)
 	case grid.ToolDelete:
-		if deleteCell(w, occupancy, cell) {
-			logNetwork(w)
-		}
+		deleteCell(w, occupancy, cell)
 	}
 }
 
@@ -139,7 +135,6 @@ func (s *PlacementSystem) handleLineClick(w *ecs.World, placement *grid.Placemen
 		occupancy.Occupy(c, e)
 		attachToNetwork(w, e, grid.ToolLine, c, occupancy)
 	}
-	logNetwork(w)
 }
 
 // deleteCell removes the entity at cell from the grid occupancy, the
@@ -170,9 +165,10 @@ func deleteCell(w *ecs.World, occupancy *grid.GridOccupancy, cell grid.GridCoord
 //
 // For line-segment entities the branch resistance is read from the entity's
 // LineSegmentProps component; all other connections use resistance = 0.
-// House entities have their measured HouseLoad demand written into the
-// bus's BusSpec (consumer convention P/Q converted to the solver's
-// generator-convention watts/VAR), overriding the zero-injection default.
+// House entities have their HouseLoad demand written into the bus's BusSpec
+// (consumer kW/kVAR → generator-convention watts/VAR).
+//
+// Graph mutations mark the network Dirty; LoadflowSystem re-solves later.
 func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridCoord, occupancy *grid.GridOccupancy) {
 	net := ecs.GetResource[network.ElectricalNetwork](w)
 	if net == nil {
@@ -205,23 +201,6 @@ func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridC
 			net.AddBranch(bus.ID, nbBus.ID, resistance)
 		}
 	}
-}
-
-// logNetwork logs the current network topology at INFO level, then attempts
-// a load flow solve and logs either the resulting bus voltages or the solve
-// error, if the ElectricalNetwork resource exists. Called after every
-// placement/deletion that changes the network.
-func logNetwork(w *ecs.World) {
-	net := ecs.GetResource[network.ElectricalNetwork](w)
-	if net == nil {
-		return
-	}
-	net.Log()
-
-	if err := network.NewLoadflowSolver().Solve(net); err != nil {
-		logger.Logger.Errorf("grid-sim: loadflow failed: %v", err)
-	}
-	net.LogVoltages()
 }
 
 func toolToBusType(t grid.Tool) network.BusType {
