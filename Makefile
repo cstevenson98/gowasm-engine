@@ -22,9 +22,15 @@ help: ## Display this help message
 
 ##@ Building
 
+# ImGui (cimgui-go) is CGo. Desktop builds that pull pkg/imgui need a C/C++
+# toolchain. WASM builds use //go:build js stubs and do not link cimgui.
+# If you also import cimgui-go glfw/sdl backends, add:
+#   -tags exclude_cimgui_glfw,exclude_cimgui_sdl
+CGO_ENABLED ?= 1
+
 build-desktop: ## Build Ebiten desktop binary
 	@echo "$(CYAN)Building Ebiten desktop binary...$(NC)"
-	@cd cmd/ebiten-game && go mod tidy && go build -o ../../build/game-desktop
+	@cd cmd/ebiten-game && go mod tidy && CGO_ENABLED=$(CGO_ENABLED) go build -o ../../build/game-desktop
 	@echo "$(GREEN)✓ Build complete: build/game-desktop$(NC)"
 
 build-all: build-desktop ## Build all binaries
@@ -41,26 +47,26 @@ run-desktop-from-assets: build-desktop ## Run desktop game from assets directory
 
 dev: ## Quick rebuild and run (for rapid iteration)
 	@echo "$(CYAN)Quick dev build...$(NC)"
-	@cd cmd/ebiten-game && go build -o ../../build/game-desktop
+	@cd cmd/ebiten-game && CGO_ENABLED=$(CGO_ENABLED) go build -o ../../build/game-desktop
 	@cd examples/basic-game && ../../build/game-desktop
 
 ##@ Testing
 
 test: ## Run engine library tests
 	@echo "$(CYAN)Running engine tests...$(NC)"
-	@go test ./pkg/...
+	@CGO_ENABLED=$(CGO_ENABLED) go test ./pkg/...
 
 test-all: ## Run all tests (including examples)
 	@echo "$(CYAN)Running all tests...$(NC)"
-	@go test ./...
+	@CGO_ENABLED=$(CGO_ENABLED) go test ./...
 
 test-verbose: ## Run tests with verbose output
 	@echo "$(CYAN)Running tests (verbose)...$(NC)"
-	@go test -v ./pkg/...
+	@CGO_ENABLED=$(CGO_ENABLED) go test -v ./pkg/...
 
 test-coverage: ## Run tests with coverage report
 	@echo "$(CYAN)Running tests with coverage...$(NC)"
-	@go test -coverprofile=coverage.out ./pkg/...
+	@CGO_ENABLED=$(CGO_ENABLED) go test -coverprofile=coverage.out ./pkg/...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)✓ Coverage report: coverage.html$(NC)"
 

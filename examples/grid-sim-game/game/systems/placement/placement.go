@@ -40,6 +40,12 @@ func (s *PlacementSystem) Update(w *ecs.World, dt float64) {
 		return
 	}
 
+	// Right half is the ImGui network panel — ignore clicks there.
+	bounds := ecs.GetResource[components.ScreenBounds](w)
+	if bounds != nil && mouse.X >= gameconfig.Global.PlayfieldWidth(bounds.W) {
+		return
+	}
+
 	if mouse.Y < gameconfig.Global.ToolbarHeight {
 		s.handleToolbarClick(placement, mouse.X, mouse.Y)
 		return

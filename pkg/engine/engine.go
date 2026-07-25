@@ -11,6 +11,7 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/config"
 	"github.com/cstevenson98/gowasm-engine/pkg/debug"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
+	"github.com/cstevenson98/gowasm-engine/pkg/imgui"
 	"github.com/cstevenson98/gowasm-engine/pkg/input"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 	"github.com/cstevenson98/gowasm-engine/pkg/render"
@@ -45,6 +46,9 @@ type Engine struct {
 	// down while it is still running its own Update (see RequestStateChange).
 	pendingState    types.GameState
 	hasPendingState bool
+
+	// Optional Dear ImGui context. Nil unless EnableImGui was called.
+	imguiCtx *imgui.Context
 }
 
 // NewEngine creates a new game engine instance from cfg. Pass config.Default()
@@ -63,6 +67,16 @@ func NewEngine(cfg config.Settings) *Engine {
 		screenWidth:      cfg.Screen.Width,
 		screenHeight:     cfg.Screen.Height,
 	}
+}
+
+// EnableImGui opts into Dear ImGui for this engine. Call before Initialize.
+// Returns the engine for chaining. On WebAssembly ImGui is a silent no-op.
+// States that want to draw windows should implement imgui.StateRenderer.
+func (e *Engine) EnableImGui() *Engine {
+	if e.imguiCtx == nil {
+		e.imguiCtx = imgui.NewContext()
+	}
+	return e
 }
 
 // RegisterState registers a state for a specific game state value.
@@ -116,6 +130,15 @@ func (e *Engine) Initialize(canvasID string) error {
 		e.ui = uiFacade
 	}
 
+	if e.imguiCtx != nil {
+		if err := e.imguiCtx.Init(int(e.screenWidth), int(e.screenHeight)); err != nil {
+			logger.Logger.Warnf("Failed to initialize ImGui: %s", err.Error())
+			e.imguiCtx = nil
+		} else {
+			logger.Logger.Debugf("ImGui enabled")
+		}
+	}
+
 	logger.Logger.Debugf("Engine initialized successfully")
 	return nil
 }
@@ -158,6 +181,20 @@ func (e *Engine) Update() error {
 		currentState.Update(deltaTime)
 	}
 
+	// ImGui must build its UI on the Update goroutine: Ebiten may run Draw on
+	// another thread, and cimgui is not thread-safe / requires WithinFrameScope
+	// between NewFrame and EndFrame on the same caller.
+	if e.imguiCtx != nil {
+		e.imguiCtx.SetScreenSize(int(e.screenWidth), int(e.screenHeight))
+		e.imguiCtx.NewFrame()
+		if currentState != nil {
+			if r, ok := currentState.(imgui.StateRenderer); ok {
+				r.RenderImGui(e.imguiCtx)
+			}
+		}
+		e.imguiCtx.EndFrame()
+	}
+
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) {
 		return ebiten.Termination
 	}
@@ -188,6 +225,11 @@ func (e *Engine) Draw(screen *ebiten.Image) {
 		if err := overlay.DrawOverlays(); err != nil {
 			logger.Logger.Tracef("Failed to render state overlays: %s", err.Error())
 		}
+	}
+
+	// Blit the ImGui draw lists built during Update.
+	if e.imguiCtx != nil {
+		e.imguiCtx.Draw(screen)
 	}
 }
 

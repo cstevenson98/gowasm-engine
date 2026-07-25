@@ -28,7 +28,8 @@ func main() {
 	cfg.Screen.Width = 1280
 	cfg.Screen.Height = 720
 	cfg.Rendering.PixelScale = 1
-	gameEngine := engine.NewEngine(cfg)
+	// Opt into ImGui for the right-half network inspector panel.
+	gameEngine := engine.NewEngine(cfg).EnableImGui()
 
 	// This example has a single state (the grid itself), registered under the
 	// engine's existing GAMEPLAY value - no menu/battle states needed.

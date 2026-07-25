@@ -1,6 +1,6 @@
 // Package camera implements CameraScrollSystem, a free-scrolling camera
 // driven directly by player input (arrow keys / WASD / gamepad), clamped to
-// the grid's world bounds.
+// the grid's world bounds with chrome overscroll.
 package camera
 
 import (
@@ -11,10 +11,11 @@ import (
 
 // CameraScrollSystem moves the World's Camera resource continuously while an
 // arrow key (or WASD, or gamepad d-pad/stick - all merged into Input.MoveX by
-// the engine) is held, clamped so the viewport never scrolls past the grid's
-// world bounds. Unlike systems.CameraFollow (which centers on an entity),
-// this is a free-scrolling camera driven directly by input, so it lives here
-// rather than in the engine's generic systems package.
+// the engine) is held. Clamping allows a little overscroll past the map edges
+// so rows under the toolbar (and the far edge against the side panel) can be
+// brought fully into the clear playfield. Unlike systems.CameraFollow (which
+// centers on an entity), this is free-scrolling driven by input, so it lives
+// here rather than in the engine's generic systems package.
 type CameraScrollSystem struct {
 	speed float64
 }
@@ -25,7 +26,7 @@ func NewCameraScrollSystem(speed float64) *CameraScrollSystem {
 	return &CameraScrollSystem{speed: speed}
 }
 
-// Update advances the camera and clamps it to the grid's world bounds.
+// Update advances the camera and clamps it with chrome-aware overscroll.
 func (s *CameraScrollSystem) Update(w *ecs.World, dt float64) {
 	cam := ecs.GetResource[components.Camera](w)
 	bounds := ecs.GetResource[components.ScreenBounds](w)
@@ -49,17 +50,33 @@ func (s *CameraScrollSystem) Update(w *ecs.World, dt float64) {
 		}
 	}
 
-	cam.X = clamp(cam.X, 0, maxScroll(gameconfig.Global.WorldWidth(), bounds.W))
-	cam.Y = clamp(cam.Y, 0, maxScroll(gameconfig.Global.WorldHeight(), bounds.H))
+	minX, maxX, minY, maxY := scrollLimits(bounds.W, bounds.H)
+	cam.X = clamp(cam.X, minX, maxX)
+	cam.Y = clamp(cam.Y, minY, maxY)
 }
 
-// maxScroll returns the largest camera offset that keeps the viewport inside
-// the world, or 0 if the world is smaller than the viewport.
-func maxScroll(worldSize, viewSize float64) float64 {
-	if m := worldSize - viewSize; m > 0 {
-		return m
+// scrollLimits returns inclusive camera offset bounds for the playfield.
+//
+// Negative minY (-ToolbarHeight) scrolls the top of the map down from under
+// the toolbar. maxX uses the left playfield width (not the full screen) so the
+// rightmost columns can sit clear of the ImGui panel.
+func scrollLimits(screenW, screenH float64) (minX, maxX, minY, maxY float64) {
+	cfg := gameconfig.Global
+	viewW := cfg.PlayfieldWidth(screenW)
+
+	minX = 0
+	maxX = cfg.WorldWidth() - viewW
+	if maxX < minX {
+		maxX = minX
 	}
-	return 0
+
+	minY = -cfg.ToolbarHeight
+	maxY = cfg.WorldHeight() - screenH
+	if maxY < minY {
+		// Map shorter than the screen: pin so the top row clears the toolbar.
+		maxY = minY
+	}
+	return minX, maxX, minY, maxY
 }
 
 func clamp(v, lo, hi float64) float64 {

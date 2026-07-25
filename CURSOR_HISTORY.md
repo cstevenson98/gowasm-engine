@@ -3171,3 +3171,164 @@ Placement owns input/topology; analysis belongs in a dedicated system. Dirty avo
 - Failed solves still ClearDirty to avoid spam; next mutation re-triggers
 
 ---
+
+## [2026-07-25 17:18:20 BST] - Opt-in Ebiten ImGui facade
+
+**Prompt/Request**: Implement the ImGui engine integration plan: opt-in Dear ImGui via an isolated `pkg/imgui` package with a WindowBuilder DSL, desktop cimgui-go backend, WASM no-op stubs, and engine EnableImGui hooks.
+
+**Changes Made**:
+- Added dependency `github.com/AllenDang/cimgui-go v1.5.0` (also upgraded ebiten to v2.9.9 as required by cimgui-go)
+- Created `pkg/imgui/`:
+  - `imgui.go` — `Context`, `StateRenderer`, `NewContext`, frame lifecycle API
+  - `window.go` — `WindowBuilder` DSL (Text, Button, SliderFloat, Checkbox, TreeNode, Separator)
+  - `imgui_desktop.go` (`!js`) — wires `ebiten-backend` with transparent overlay clear
+  - `imgui_wasm.go` (`js`) — silent no-op stubs (no CGo)
+  - `imgui_test.go` — nil/uninitialized safety tests
+- Updated `pkg/engine/engine.go`: `EnableImGui()`, Init/NewFrame/EndFrame/Draw hooks, optional `imgui.StateRenderer` dispatch
+- Updated root `Makefile` to set `CGO_ENABLED=1` for desktop test/build targets and document ImGui CGo notes
+- `go mod tidy` in root, `cmd/ebiten-game`, and `examples/basic-game`
+
+**Reasoning**:
+Keep ImGui behind a single package so game/state code never imports cimgui-go. Runtime opt-in via `EnableImGui()` avoids cost when unused; WASM stubs preserve the engine's dual desktop/browser build story despite CGo ImGui.
+
+**Impact**:
+- Desktop builds that import `pkg/engine` now require CGo + a C/C++ toolchain
+- Ebiten upgraded 2.6.3 → 2.9.9 across modules that tidy against the root
+- No state API changes; games opt in by calling `EnableImGui()` and implementing `imgui.StateRenderer`
+
+**Testing**:
+- `CGO_ENABLED=1 go test ./pkg/...` — pass
+- `CGO_ENABLED=1 go test ./pkg/imgui/...` — pass
+- `GOOS=js GOARCH=wasm go build ./pkg/imgui ./pkg/engine` — pass
+- `GOOS=js GOARCH=wasm go build ./game` (basic-game) — pass
+- `CGO_ENABLED=1 go build` in `cmd/ebiten-game` — pass
+
+**Notes**:
+- ImGui widgets are declared in `Draw` after `NewFrame` in `Update` (ebitenbackend BeginFrame/EndFrame/Draw mapping)
+- Overlay clear uses alpha-0 `SetBgColor` so the game remains visible under ImGui
+- `exclude_cimgui_glfw/sdl` tags are documented in the Makefile but not required when only importing `ebiten-backend`
+
+---
+
+## [2026-07-25 17:19:40 BST] - Grid-sim ImGui network side panel
+
+**Prompt/Request**: Add to the grid example so half the window is an ImGui panel with network stats.
+
+**Changes Made**:
+- Extended `pkg/imgui` with `Context.Panel` (fixed pos/size, no move/resize) + desktop/wasm implementations
+- `examples/grid-sim-game/game/main.go`: `EnableImGui()`
+- `states/grid_state.go`: `RenderImGui` right-half panel showing topology, load-flow status, bus/branch lists
+- `gameconfig`: `SidePanelFraction` (0.5) + `SidePanelWidth` / `PlayfieldWidth` helpers
+- `placement`: ignore clicks over the side panel
+- `camera`: clamp horizontal scroll to playfield width
+
+**Reasoning**:
+Use a fixed half-screen ImGui dock for live network inspection without covering the playfield controls; keep placement/camera aware of the reserved region.
+
+**Impact**:
+- Desktop grid-sim shows a persistent right-half inspector
+- WASM still builds (ImGui no-op); panel simply does not appear
+
+**Testing**:
+- `CGO_ENABLED=1 go test ./pkg/imgui/...` — pass
+- `CGO_ENABLED=1 go build ./game` (grid-sim) — pass
+- `CGO_ENABLED=1 go test ./...` (grid-sim) — pass
+
+**Notes**:
+- Panel is full height on the right; toolbar is drawn only over the left playfield
+
+---
+
+## [2026-07-25 17:22:25 BST] - Fix ImGui WithinFrameScope panic
+
+**Prompt/Request**: Game panicked with `g.WithinFrameScope` assertion in imgui Begin during Draw.
+
+**Changes Made**:
+- Moved `RenderImGui` + `EndFrame` from `Engine.Draw` into `Engine.Update` (paired with `NewFrame`)
+- `Draw` only calls `imguiCtx.Draw(screen)` to blit
+- Updated `pkg/imgui` docs to reflect Update-path widget building
+
+**Reasoning**:
+Ebiten v2.9 can run Update and Draw on different goroutines; ImGui is not thread-safe and widgets must run inside NewFrame/EndFrame on the same thread as NewFrame.
+
+**Impact**:
+- Fixes crash on grid-sim with ImGui enabled
+- `StateRenderer.RenderImGui` still has the same signature; call timing is now Update
+
+**Testing**:
+- Not re-run interactively; fix matches cimgui-go ebitenbackend Update/Draw split
+
+**Notes**:
+- OverlayRenderer (immediate UI) remains in Draw; only ImGui moved
+
+---
+
+## [2026-07-25 17:25:57 BST] - Camera overscroll past toolbar
+
+**Prompt/Request**: Topbar overlaps the grid; allow scanning past map edges so everything is visible.
+
+**Changes Made**:
+- `camera.CameraScrollSystem`: allow `cam.Y` down to `-ToolbarHeight` so the top row can clear the toolbar; pin short maps to that offset
+- `GridState.Enter`: initialise camera at `-ToolbarHeight` so the top is clear on start
+
+**Reasoning**:
+With `cam.Y=0` the first tiles render under the toolbar. Negative overscroll shifts the map down into the clear playfield.
+
+**Impact**:
+- Top row visible without (and with) scrolling
+- Placement math unchanged (`mouse + cam`)
+
+**Testing**:
+- `CGO_ENABLED=1 go build ./game` — pass
+
+**Notes**:
+- Horizontal clamp still uses playfield width vs side panel
+
+---
+
+## [2026-07-25 17:29:35 BST] - Fix LV loadflow stall on house↔line contact
+
+**Prompt/Request**: Loadflow failed after placing Gen–Line–House; expected it to solve. Residual ~7e-6 vs tol 1e-6.
+
+**Changes Made**:
+- Raised `minResistance` 1e-6 → 1e-3 Ω in `ybus.go` (R=0 contacts)
+- Relaxed default loadflow tol 1e-6 → 1e-3 W (SI residual scale)
+- Added `TestLVZeroContactR` regression for in-game branch R pattern
+
+**Reasoning**:
+Placement puts segment R on line→neighbour edges, but house→line uses R=0. Clamped to 1e-6 Ω this made Y entries ~1e6 S and ill-conditioned Newton in SI units; voltages were already essentially correct (V_line≈V_house).
+
+**Impact**:
+- Gen–Line–House networks converge
+- Existing LV feeder tests still pass
+
+**Testing**:
+- `go test ./game/components/network/ ./pkg/nr/` — run after edit
+
+**Notes**:
+- Physically V1≈V2 for a contact link is expected
+
+---
+
+## [2026-07-25 17:29:46 BST] - Fix LV loadflow stall on house↔line contact
+
+**Prompt/Request**: Loadflow failed after placing Gen–Line–House; expected it to solve. Residual ~7e-6 vs tol 1e-6.
+
+**Changes Made**:
+- Raised `minResistance` 1e-6 → 1e-3 Ω in `ybus.go` (R=0 contacts)
+- Added `TestLVZeroContactR` regression for in-game branch R pattern
+
+**Reasoning**:
+Placement puts segment R on line→neighbour edges, but house→line uses R=0. Clamped to 1e-6 Ω this made Y entries ~1e6 S and ill-conditioned Newton in SI units; voltages were already essentially correct (V_line≈V_house).
+
+**Impact**:
+- Gen–Line–House networks converge
+- Existing LV / per-unit feeder tests still pass
+
+**Testing**:
+- `go test ./game/components/network/` — pass
+
+**Notes**:
+- Physically V1≈V2 for a contact link is expected
+
+---

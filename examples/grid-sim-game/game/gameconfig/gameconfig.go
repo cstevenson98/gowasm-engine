@@ -19,6 +19,11 @@ type Settings struct {
 	ButtonMarginX float64 // Left margin before the first toolbar button.
 	ButtonMarginY float64 // Top margin of each toolbar button within the bar.
 
+	// SidePanelFraction is the share of screen width reserved for the ImGui
+	// network inspector on the right (0.5 = half the window). Grid clicks in
+	// that region are ignored so placement stays on the playfield.
+	SidePanelFraction float64
+
 	BlankTexture     string // Path to the single-cell blank/grid tile texture.
 	GeneratorTexture string // Path to the generator tile texture.
 	HouseTexture     string // Path to the house tile texture.
@@ -39,10 +44,22 @@ var Global = Settings{
 	ButtonMarginX: 6.0,
 	ButtonMarginY: 2.0,
 
+	SidePanelFraction: 0.5,
+
 	BlankTexture:     "assets/art/blank.png",
 	GeneratorTexture: "assets/art/generator.png",
 	HouseTexture:     "assets/art/house.png",
 	LineTexture:      "assets/art/line.png",
+}
+
+// SidePanelWidth returns the ImGui side-panel width for the given screen width.
+func (s Settings) SidePanelWidth(screenW float64) float64 {
+	return screenW * s.SidePanelFraction
+}
+
+// PlayfieldWidth returns the left-side playfield width for the given screen width.
+func (s Settings) PlayfieldWidth(screenW float64) float64 {
+	return screenW - s.SidePanelWidth(screenW)
 }
 
 // WorldWidth returns the total grid width in virtual pixels.
