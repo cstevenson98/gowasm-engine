@@ -48,8 +48,8 @@ func TestBranchAndNeighbors(t *testing.T) {
 	b2 := mustAddBus(t, n, e2, network.BusJunction)
 	b3 := mustAddBus(t, n, e3, network.BusLoad)
 
-	n.AddBranch(b1.ID, b2.ID, 0)
-	n.AddBranch(b2.ID, b3.ID, 0)
+	n.AddBranch(b1.ID, b2.ID, 0, 0)
+	n.AddBranch(b2.ID, b3.ID, 0, 0)
 
 	nb1 := n.Neighbors(b1.ID)
 	if len(nb1) != 1 || nb1[0].ID != b2.ID {
@@ -71,7 +71,7 @@ func TestRemoveBus(t *testing.T) {
 
 	b1 := mustAddBus(t, n, e1, network.BusGenerator)
 	b2 := mustAddBus(t, n, e2, network.BusLoad)
-	n.AddBranch(b1.ID, b2.ID, 0)
+	n.AddBranch(b1.ID, b2.ID, 0, 0)
 
 	n.RemoveBus(b1.ID)
 
@@ -98,7 +98,7 @@ func TestRemoveBranch(t *testing.T) {
 
 	b1 := mustAddBus(t, n, e1, network.BusGenerator)
 	b2 := mustAddBus(t, n, e2, network.BusLoad)
-	br := n.AddBranch(b1.ID, b2.ID, 0)
+	br := n.AddBranch(b1.ID, b2.ID, 0, 0)
 
 	n.RemoveBranch(br.ID)
 

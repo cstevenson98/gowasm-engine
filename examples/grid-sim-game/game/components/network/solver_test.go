@@ -80,7 +80,7 @@ func TestTwoBusPureResistive(t *testing.T) {
 	bus1 := mustAddBus(t, net, e1, network.BusLoad)
 	net.SetBusSpec(bus1.ID, network.PQSpec(Pspec, 0.0))
 
-	net.AddBranch(bus0.ID, bus1.ID, R)
+	net.AddBranch(bus0.ID, bus1.ID, R, 0)
 
 	s := network.NewLoadflowSolver()
 	if err := s.Solve(net); err != nil {
@@ -130,8 +130,8 @@ func TestThreeBusResistive(t *testing.T) {
 	b2 := mustAddBus(t, net, e2, network.BusLoad)
 	net.SetBusSpec(b2.ID, network.PQSpec(Pload, 0.0))
 
-	net.AddBranch(b0.ID, b1.ID, R)
-	net.AddBranch(b1.ID, b2.ID, R)
+	net.AddBranch(b0.ID, b1.ID, R, 0)
+	net.AddBranch(b1.ID, b2.ID, R, 0)
 
 	s := network.NewLoadflowSolver()
 	if err := s.Solve(net); err != nil {
@@ -201,8 +201,8 @@ func TestLVFeeder(t *testing.T) {
 	b2 := mustAddBus(t, net, e2, network.BusLoad)
 	net.SetBusSpec(b2.ID, network.PQSpec(PloadW, QloadVAR))
 
-	net.AddBranch(b0.ID, b1.ID, lineCellR)
-	net.AddBranch(b1.ID, b2.ID, lineCellR)
+	net.AddBranch(b0.ID, b1.ID, lineCellR, 0)
+	net.AddBranch(b1.ID, b2.ID, lineCellR, 0)
 
 	if err := network.NewLoadflowSolver().Solve(net); err != nil {
 		t.Fatalf("solve error: %v", err)
@@ -240,6 +240,38 @@ func TestLVFeeder(t *testing.T) {
 		bs0.Result.VoltMag, bs1.Result.VoltMag, bs2.Result.VoltMag, drop, net.State.Iterations)
 }
 
+// TestLVFeederWithX checks that non-zero series reactance produces angle
+// separation and non-zero reactive branch flow.
+func TestLVFeederWithX(t *testing.T) {
+	const PloadW = -15000.0
+	const QloadVAR = -5000.0
+	const x = lineCellR * 0.5 // X/R = 0.5
+
+	net, w := emptyNet()
+	e0, e1, e2 := newEntity(w), newEntity(w), newEntity(w)
+	b0 := mustAddBus(t, net, e0, network.BusGenerator)
+	b1 := mustAddBus(t, net, e1, network.BusJunction)
+	b2 := mustAddBus(t, net, e2, network.BusLoad)
+	net.SetBusSpec(b2.ID, network.PQSpec(PloadW, QloadVAR))
+	net.AddBranch(b0.ID, b1.ID, lineCellR, x)
+	net.AddBranch(b1.ID, b2.ID, lineCellR, x)
+
+	if err := network.NewLoadflowSolver().Solve(net); err != nil {
+		t.Fatalf("solve error: %v", err)
+	}
+	bs2, _ := net.BusStateFor(b2.ID)
+	if math.Abs(bs2.Result.VoltAng) < 1e-6 {
+		t.Fatalf("expected non-zero load angle with X>0, got %.6f", bs2.Result.VoltAng)
+	}
+	var qFlow float64
+	for _, br := range net.State.Branches {
+		qFlow += math.Abs(br.Result.QFrom)
+	}
+	if qFlow < 1e-3 {
+		t.Fatalf("expected non-zero |Q| branch flow with X>0, got %.6f", qFlow)
+	}
+}
+
 // TestLVHundredBusRadial is a ~100-bus radial feeder (slack + 98 junctions +
 // one end load) at 10 m/cell with distribution-cable R. Confirms the tuned
 // parameters stay within a healthy LV band for a kilometre-scale feeder.
@@ -254,13 +286,13 @@ func TestLVHundredBusRadial(t *testing.T) {
 	for i := 0; i < nJunction; i++ {
 		e := newEntity(w)
 		b := mustAddBus(t, net, e, network.BusJunction)
-		net.AddBranch(prev, b.ID, lineCellR)
+		net.AddBranch(prev, b.ID, lineCellR, 0)
 		prev = b.ID
 	}
 	loadE := newEntity(w)
 	load := mustAddBus(t, net, loadE, network.BusLoad)
 	net.SetBusSpec(load.ID, network.PQSpec(PloadW, 0))
-	net.AddBranch(prev, load.ID, lineCellR)
+	net.AddBranch(prev, load.ID, lineCellR, 0)
 
 	if err := network.NewLoadflowSolver().Solve(net); err != nil {
 		t.Fatalf("solve error: %v", err)

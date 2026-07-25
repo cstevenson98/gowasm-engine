@@ -32,6 +32,9 @@ func (s *GridState) renderNetworkPanel(w *imgui.WindowBuilder, net *network.Elec
 	}
 	w.Text("  Converged: %v", st.Converged)
 	w.Text("  Iterations: %d", st.Iterations)
+	if st.LastError != "" {
+		w.Text("  Error: %s", st.LastError)
+	}
 	w.Separator()
 
 	var nGen, nLoad, nJunc int
@@ -258,7 +261,10 @@ func (s *GridState) renderSelectionPanel(w *imgui.WindowBuilder, net *network.El
 		w.Text("  MaxOutput: %.1f kW", gp.MaxOutputKW)
 	}
 	if lsp := ecs.NewMap1[grid.LineSegmentProps](s.World()).Get(e); lsp != nil {
-		w.Text("  Resistance: %.4f Ω (%.0f m cell)", lsp.ResistanceOhm, grid.CellLengthM)
+		w.Text("  R=%.4f Ω  X=%.4f Ω", lsp.ResistanceOhm, lsp.ReactanceOhm)
+	}
+	if lp := ecs.NewMap1[grid.LinePath](s.World()).Get(e); lp != nil {
+		w.Text("  Path: %d cells (%.0f m)", len(lp.Cells), float64(len(lp.Cells))*grid.CellLengthM)
 	}
 
 	link := ecs.NewMap1[network.NetworkLink](s.World()).Get(e)

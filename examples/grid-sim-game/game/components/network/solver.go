@@ -44,20 +44,22 @@ const (
 // Solve runs the AC power flow on net and writes results to net.State.
 // Returns a non-nil error if the solver did not converge or the network has
 // no slack bus; always writes the best available result even on error.
+// LastError mirrors the returned error (empty on success) for ImGui.
 func (s *LoadflowSolver) Solve(net *ElectricalNetwork) error {
 	state := net.State
 	if state == nil {
-		return fmt.Errorf("loadflow: network has no StaticState")
+		err := fmt.Errorf("loadflow: network has no StaticState")
+		return err
 	}
 	state.Converged = false
 	state.Iterations = 0
+	state.LastError = ""
 
 	if len(net.Buses()) == 0 {
 		state.Converged = true
 		return nil
 	}
 
-	// Require at least one slack bus (the network reference).
 	hasSlack := false
 	for _, bs := range state.Buses {
 		if bs.Spec.Formulation == Slack {
@@ -66,14 +68,13 @@ func (s *LoadflowSolver) Solve(net *ElectricalNetwork) error {
 		}
 	}
 	if !hasSlack {
-		return fmt.Errorf("loadflow: no slack bus in network")
+		state.LastError = "loadflow: no slack bus in network"
+		return fmt.Errorf("%s", state.LastError)
 	}
 
-	// Build the sparse Y-bus and bus ordering.
 	yb := BuildYBus(net)
 	bo := yb.BO
 
-	// Trivial case: no free variables (all buses are slack).
 	if bo.stateSize == 0 {
 		state.Converged = true
 		writeAllResults(net, yb, nil)
@@ -89,10 +90,7 @@ func (s *LoadflowSolver) Solve(net *ElectricalNetwork) error {
 		tol = defaultLFTol
 	}
 
-	// Pre-build the Jacobian sparsity structure from topology.
-	// The pattern does not change within this solve; only values are updated.
 	jacTemplate, jacUpdates := buildJacobianTemplate(state, bo, net)
-
 	nrSolver := &nr.NewtonRaphson{
 		MaxIter:     maxIter,
 		Tol:         tol,
@@ -109,6 +107,7 @@ func (s *LoadflowSolver) Solve(net *ElectricalNetwork) error {
 	writeAllResults(net, yb, res.X)
 
 	if err != nil {
+		state.LastError = err.Error()
 		return fmt.Errorf("loadflow: %w", err)
 	}
 	return nil
@@ -148,8 +147,11 @@ func buildJacobianTemplate(state *StaticState, bo *busOrdering, net *ElectricalN
 		pairs = append(pairs, pair{i, i}) // diagonal always present
 	}
 	for _, br := range net.Branches() {
-		i := bo.rowOf[br.From]
-		j := bo.rowOf[br.To]
+		i, okI := bo.rowOf[br.From]
+		j, okJ := bo.rowOf[br.To]
+		if !okI || !okJ {
+			continue
+		}
 		pairs = append(pairs, pair{i, j})
 		pairs = append(pairs, pair{j, i})
 	}
@@ -365,35 +367,30 @@ func writeAllResults(net *ElectricalNetwork, yb *YBus, x *mat.VecDense) {
 		}
 	}
 
-	// Branch results (purely resistive: y_ij = g = 1/R, b = 0)
-	//   P_from = g(|V_i|²  − |V_i||V_j|cos θ_ij)
-	//   P_to   = g(|V_i||V_j|cos θ_ij − |V_j|²)
-	//   |I_ij| = g · |V_i − V_j|
+	// Branch results from series y = g + jb = 1/(r+jx):
+	//   I_ij = y · (V_i − V_j);  S_from = V_i · conj(I_ij)
 	for id, br := range net.Branches() {
-		i := bo.rowOf[br.From]
-		j := bo.rowOf[br.To]
+		i, okI := bo.rowOf[br.From]
+		j, okJ := bo.rowOf[br.To]
+		if !okI || !okJ {
+			continue
+		}
 		vi, vj := Vm[i], Vm[j]
-		θij := Va[i] - Va[j]
-		cosθ := math.Cos(θij)
+		vai, vaj := Va[i], Va[j]
+		g, b := seriesGB(br.Resistance, br.Reactance)
 
-		r := br.Resistance
-		if r < minResistance {
-			r = minResistance
-		}
-		g := 1.0 / r
-
-		pFrom := g * (vi*vi - vi*vj*cosθ)
-		pTo := g * (vi*vj*cosθ - vj*vj)
-
-		dv2 := vi*vi + vj*vj - 2*vi*vj*cosθ
-		if dv2 < 0 {
-			dv2 = 0
-		}
+		viRe, viIm := vi*math.Cos(vai), vi*math.Sin(vai)
+		vjRe, vjIm := vj*math.Cos(vaj), vj*math.Sin(vaj)
+		dvr, dvIm := viRe-vjRe, viIm-vjIm
+		iRe := g*dvr - b*dvIm
+		iIm := b*dvr + g*dvIm
 
 		state.Branches[id].Result = BranchResult{
-			CurrentMag: g * math.Sqrt(dv2),
-			PFrom:      pFrom,
-			PTo:        pTo,
+			CurrentMag: math.Hypot(iRe, iIm),
+			PFrom:      viRe*iRe + viIm*iIm,
+			PTo:        -(vjRe*iRe + vjIm*iIm),
+			QFrom:      viIm*iRe - viRe*iIm,
+			QTo:        -(vjIm*iRe - vjRe*iIm),
 		}
 	}
 }

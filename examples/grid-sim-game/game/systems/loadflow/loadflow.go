@@ -37,7 +37,8 @@ func (s *LoadflowSystem) Update(w *ecs.World, _ float64) {
 	}
 	err := s.solver.Solve(net)
 	if err != nil {
-		logger.Logger.Errorf("grid-sim: loadflow failed: %v", err)
+		// LastError is on net.State for ImGui; keep the log at Debug to avoid spam.
+		logger.Logger.Debugf("grid-sim: loadflow failed: %v", err)
 	}
 	// Append history when the solve wrote results (success, or NR that ran
 	// some iterations). Skip pure early-outs like "no slack bus".

@@ -11,10 +11,15 @@ import (
 )
 
 // Attach registers entity e as a bus, stamps NetworkLink + BusHistory, writes
-// house PQ when applicable, and adds branches to cardinal network neighbours.
-// Branch resistance comes from LineSegmentProps for line tiles; otherwise 0.
-// Graph mutations mark the network Dirty; LoadflowSystem re-solves later.
+// house PQ when applicable, and adds branches to network neighbours.
+// Lines use AttachLine (one bus for the whole polyline). Graph mutations mark
+// the network Dirty; LoadflowSystem re-solves later.
 func Attach(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridCoord, occupancy *grid.GridOccupancy) {
+	if kind == grid.ToolLine {
+		AttachLine(w, e, occupancy)
+		return
+	}
+
 	net := ecs.GetResource[network.ElectricalNetwork](w)
 	if net == nil {
 		return
@@ -34,24 +39,45 @@ func Attach(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridCoord, occ
 		}
 	}
 
-	var resistance float64
-	if kind == grid.ToolLine {
-		if lsp := ecs.NewMap1[grid.LineSegmentProps](w).Get(e); lsp != nil {
-			resistance = lsp.ResistanceOhm
-		}
-	}
-
+	// Contact links (R=X=0) to non-line neighbours; line neighbours are
+	// rewired below so stroke impedance stays on the line spokes.
 	dirs := []grid.GridCoord{{Col: 1}, {Col: -1}, {Row: 1}, {Row: -1}}
+	var lineNeighbours []ecs.Entity
 	for _, d := range dirs {
 		nb := grid.GridCoord{Col: cell.Col + d.Col, Row: cell.Row + d.Row}
 		ne, ok := occupancy.Cells[nb]
 		if !ok {
 			continue
 		}
+		if ecs.NewMap1[grid.LinePath](w).Get(ne) != nil || ecs.NewMap1[grid.LineSegmentProps](w).Get(ne) != nil {
+			lineNeighbours = append(lineNeighbours, ne)
+			continue
+		}
 		if nbBus, ok := net.BusForEntity(ne); ok {
-			net.AddBranch(bus.ID, nbBus.ID, resistance)
+			net.AddBranch(bus.ID, nbBus.ID, 0, 0)
 		}
 	}
+	for _, le := range uniqueEntities(lineNeighbours) {
+		rewireLineSpokes(w, net, le, occupancy)
+	}
+}
+
+// AttachLine registers a polyline line entity as one Junction bus and wires
+// spokes to neighbouring network buses (see rewireLineSpokes).
+func AttachLine(w *ecs.World, e ecs.Entity, occupancy *grid.GridOccupancy) {
+	net := ecs.GetResource[network.ElectricalNetwork](w)
+	if net == nil {
+		return
+	}
+	bus, err := net.AddBus(e, network.BusJunction)
+	if err != nil {
+		logger.Logger.Errorf("grid-sim: AttachLine AddBus: %v", err)
+		return
+	}
+	ecs.NewMap1[network.NetworkLink](w).Add(e, &network.NetworkLink{BusID: bus.ID})
+	h := network.NewBusHistory()
+	ecs.NewMap1[network.BusHistory](w).Add(e, &h)
+	rewireLineSpokes(w, net, e, occupancy)
 }
 
 // Detach removes the entity's bus (and incident branches) from the network if
@@ -75,4 +101,90 @@ func toolToBusType(t grid.Tool) network.BusType {
 	default:
 		return network.BusJunction
 	}
+}
+
+func rewireLineSpokes(w *ecs.World, net *network.ElectricalNetwork, lineEntity ecs.Entity, occupancy *grid.GridOccupancy) {
+	bus, ok := net.BusForEntity(lineEntity)
+	if !ok {
+		return
+	}
+	// Drop existing spokes; rebuild from current occupancy.
+	for _, brID := range append([]network.BranchID(nil), incidentCopy(net, bus.ID)...) {
+		net.RemoveBranch(brID)
+	}
+
+	var r, x float64
+	if lsp := ecs.NewMap1[grid.LineSegmentProps](w).Get(lineEntity); lsp != nil {
+		r, x = lsp.ResistanceOhm, lsp.ReactanceOhm
+	}
+	neighbors := uniqueNeighborBuses(net, lineEntity, lineCells(w, lineEntity), occupancy)
+	n := len(neighbors)
+	if n == 0 {
+		return
+	}
+	sr, sx := r/float64(n), x/float64(n)
+	for _, nbID := range neighbors {
+		net.AddBranch(bus.ID, nbID, sr, sx)
+	}
+}
+
+func incidentCopy(net *network.ElectricalNetwork, id network.BusID) []network.BranchID {
+	// Neighbors walks incidence; we need branch IDs. Use Branches() filter.
+	var ids []network.BranchID
+	for brID, br := range net.Branches() {
+		if br.From == id || br.To == id {
+			ids = append(ids, brID)
+		}
+	}
+	return ids
+}
+
+func lineCells(w *ecs.World, e ecs.Entity) []grid.GridCoord {
+	if lp := ecs.NewMap1[grid.LinePath](w).Get(e); lp != nil && len(lp.Cells) > 0 {
+		return lp.Cells
+	}
+	if go_ := ecs.NewMap1[grid.GridObject](w).Get(e); go_ != nil {
+		return []grid.GridCoord{go_.Cell}
+	}
+	return nil
+}
+
+func uniqueNeighborBuses(
+	net *network.ElectricalNetwork,
+	self ecs.Entity,
+	cells []grid.GridCoord,
+	occupancy *grid.GridOccupancy,
+) []network.BusID {
+	seen := make(map[network.BusID]bool)
+	var out []network.BusID
+	dirs := []grid.GridCoord{{Col: 1}, {Col: -1}, {Row: 1}, {Row: -1}}
+	for _, cell := range cells {
+		for _, d := range dirs {
+			nb := grid.GridCoord{Col: cell.Col + d.Col, Row: cell.Row + d.Row}
+			ne, ok := occupancy.Cells[nb]
+			if !ok || ne == self {
+				continue
+			}
+			nbBus, ok := net.BusForEntity(ne)
+			if !ok || seen[nbBus.ID] {
+				continue
+			}
+			seen[nbBus.ID] = true
+			out = append(out, nbBus.ID)
+		}
+	}
+	return out
+}
+
+func uniqueEntities(in []ecs.Entity) []ecs.Entity {
+	seen := make(map[ecs.Entity]bool)
+	var out []ecs.Entity
+	for _, e := range in {
+		if seen[e] {
+			continue
+		}
+		seen[e] = true
+		out = append(out, e)
+	}
+	return out
 }

@@ -54,21 +54,14 @@ type busOrdering struct {
 
 	// State-vector voltage sub-block: index of |V|_i in x[nAngle : nAngle+nVolt]
 	// -1 for Slack and PV buses (magnitude is fixed or not free).
-	nVolt    int
-	voltIdx  map[BusID]int
+	nVolt   int
+	voltIdx map[BusID]int
 
 	stateSize int // = nAngle + nVolt
 }
 
-// newBusOrdering builds the index maps for net. Called by BuildYBus.
-func newBusOrdering(net *ElectricalNetwork) *busOrdering {
-	buses := net.Buses()
-	ids := make([]BusID, 0, len(buses))
-	for id := range buses {
-		ids = append(ids, id)
-	}
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-
+// newBusOrdering builds the index maps for the given bus IDs (already sorted).
+func newBusOrdering(net *ElectricalNetwork, ids []BusID) *busOrdering {
 	bo := &busOrdering{
 		n:        len(ids),
 		allIDs:   ids,
@@ -82,7 +75,6 @@ func newBusOrdering(net *ElectricalNetwork) *busOrdering {
 		bo.voltIdx[id] = -1
 	}
 
-	// Angle variables: all non-slack buses
 	ai := 0
 	for _, id := range ids {
 		if net.State.Buses[id].Spec.Formulation != Slack {
@@ -92,7 +84,6 @@ func newBusOrdering(net *ElectricalNetwork) *busOrdering {
 	}
 	bo.nAngle = ai
 
-	// Voltage variables: PQ buses only
 	vi := 0
 	for _, id := range ids {
 		if net.State.Buses[id].Spec.Formulation == PQ {
@@ -106,12 +97,22 @@ func newBusOrdering(net *ElectricalNetwork) *busOrdering {
 	return bo
 }
 
+// sortedBusIDs returns all bus IDs in net, sorted ascending.
+func sortedBusIDs(net *ElectricalNetwork) []BusID {
+	buses := net.Buses()
+	ids := make([]BusID, 0, len(buses))
+	for id := range buses {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids
+}
+
 // YBus holds the nodal admittance matrix split into its real part G and
 // imaginary part B (Y = G + jB), plus the index mapping used to build it.
 //
 // Both matrices are stored as SparseMatrix with the Y-bus sparsity pattern
-// (n diagonal entries + 2 entries per branch). For purely resistive networks
-// B is structural zeros; it is kept for future inductive/capacitive lines.
+// (n diagonal entries + 2 entries per included branch).
 type YBus struct {
 	G  *SparseMatrix // conductance (real part of Y)
 	B  *SparseMatrix // susceptance (imaginary part of Y)
@@ -119,51 +120,68 @@ type YBus struct {
 }
 
 // YBusPattern returns the (row, col) pairs for the structural non-zeros of
-// the Y-bus (diagonal self-admittances + both directions of every branch).
+// the Y-bus for the buses in bo, using only branches whose both ends are in bo.
 func YBusPattern(net *ElectricalNetwork, bo *busOrdering) [][2]int {
 	n := bo.n
-	branches := net.Branches()
-	pattern := make([][2]int, 0, n+2*len(branches))
+	pattern := make([][2]int, 0, n+2*len(net.Branches()))
 	for i := 0; i < n; i++ {
 		pattern = append(pattern, [2]int{i, i})
 	}
-	for _, br := range branches {
-		i := bo.rowOf[br.From]
-		j := bo.rowOf[br.To]
+	for _, br := range net.Branches() {
+		i, okI := bo.rowOf[br.From]
+		j, okJ := bo.rowOf[br.To]
+		if !okI || !okJ {
+			continue
+		}
 		pattern = append(pattern, [2]int{i, j})
 		pattern = append(pattern, [2]int{j, i})
 	}
 	return pattern
 }
 
-// BuildYBus constructs the Y-bus from the network's current topology and
-// branch resistances. Branches with R < minResistance (including R=0 direct
-// connections) are clamped to minResistance.
+// seriesGB returns the series conductance and susceptance for impedance r+jx.
+// Resistance is floored at minResistance; reactance is used as-is.
+func seriesGB(r, x float64) (g, b float64) {
+	if r < minResistance {
+		r = minResistance
+	}
+	denom := r*r + x*x
+	g = r / denom
+	b = -x / denom
+	return g, b
+}
+
+// BuildYBus constructs the Y-bus from the network's full topology.
 func BuildYBus(net *ElectricalNetwork) *YBus {
-	bo := newBusOrdering(net)
+	return BuildYBusFor(net, sortedBusIDs(net))
+}
+
+// BuildYBusFor constructs the Y-bus restricted to the given bus IDs (one
+// island). Branches with an endpoint outside ids are ignored.
+func BuildYBusFor(net *ElectricalNetwork, ids []BusID) *YBus {
+	bo := newBusOrdering(net, ids)
 	pattern := YBusPattern(net, bo)
 
 	G := NewSparseFromPattern(bo.n, bo.n, pattern)
 	B := NewSparseFromPattern(bo.n, bo.n, pattern)
 
 	for _, br := range net.Branches() {
-		r := br.Resistance
-		if r < minResistance {
-			r = minResistance
+		i, okI := bo.rowOf[br.From]
+		j, okJ := bo.rowOf[br.To]
+		if !okI || !okJ {
+			continue
 		}
-		g := 1.0 / r
-		// x (reactance) = 0 for purely resistive branches → b = 0
+		g, b := seriesGB(br.Resistance, br.Reactance)
 
-		i := bo.rowOf[br.From]
-		j := bo.rowOf[br.To]
-
-		// Off-diagonal: Y_ij = Y_ji = −y_ij
 		G.Add(i, j, -g)
 		G.Add(j, i, -g)
+		B.Add(i, j, -b)
+		B.Add(j, i, -b)
 
-		// Diagonal (self-admittance): Y_ii += y_ij
 		G.Add(i, i, g)
 		G.Add(j, j, g)
+		B.Add(i, i, b)
+		B.Add(j, j, b)
 	}
 
 	return &YBus{G: G, B: B, BO: bo}
@@ -202,13 +220,11 @@ func ExtractVmVa(x *mat.VecDense, state *StaticState, bo *busOrdering) (Vm, Va [
 	for _, id := range bo.allIDs {
 		i := bo.rowOf[id]
 		bs := state.Buses[id]
-		// Angle
 		if ai := bo.angleIdx[id]; ai >= 0 && x != nil {
 			Va[i] = x.AtVec(ai)
 		} else {
 			Va[i] = bs.Spec.VoltAng
 		}
-		// Magnitude
 		if vi := bo.voltIdx[id]; vi >= 0 && x != nil {
 			Vm[i] = x.AtVec(bo.nAngle + vi)
 		} else {

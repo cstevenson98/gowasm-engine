@@ -122,6 +122,9 @@ type StaticState struct {
 	Branches   map[BranchID]*BranchState
 	Converged  bool
 	Iterations int
+	// LastError is set by LoadflowSolver when Solve returns an error
+	// (no slack, NR failure, island issues). Empty on success. Shown in ImGui.
+	LastError string
 }
 
 // newStaticState creates an empty snapshot ready to receive bus and branch entries.

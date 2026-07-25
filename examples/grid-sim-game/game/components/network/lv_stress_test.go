@@ -16,8 +16,8 @@ func TestLVZeroContactR(t *testing.T) {
 	b1 := mustAddBus(t, net, e1, network.BusJunction)
 	b2 := mustAddBus(t, net, e2, network.BusLoad)
 	net.SetBusSpec(b2.ID, network.PQSpec(-17390, -15000))
-	net.AddBranch(b0.ID, b1.ID, lineCellR)
-	net.AddBranch(b1.ID, b2.ID, 0) // in-game house→line contact
+	net.AddBranch(b0.ID, b1.ID, lineCellR, 0)
+	net.AddBranch(b1.ID, b2.ID, 0, 0) // in-game house→line contact
 
 	if err := network.NewLoadflowSolver().Solve(net); err != nil {
 		t.Fatalf("solve error: %v", err)

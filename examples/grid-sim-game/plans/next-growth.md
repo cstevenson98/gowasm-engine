@@ -539,12 +539,12 @@ When implementing an item: tick Progress below, keep import constraints, run
 
 ### Progress
 
-- [ ] Leftovers (SpawnHouse comment, loadflow.md stub wording)
-- [ ] #5 Converge feedback in ImGui
-- [ ] #1 Procedural blank grid
-- [ ] #2 Island / multi-slack
-- [ ] #3 Placement vs select split
-- [ ] #6 R+X line model
-- [ ] #7 Save/load topology
-- [ ] #4 Polyline line entity
+- [x] Leftovers (SpawnHouse comment, loadflow.md stub wording)
+- [x] #5 Converge feedback in ImGui
+- [x] #1 Procedural blank grid
+- [ ] #2 Island / multi-slack — **removed** (reverted; keep simple global solve)
+- [x] #3 Placement vs select split
+- [x] #6 R+X line model
+- [ ] #7 Save/load topology — **removed**
+- [x] #4 Polyline line entity
 - [ ] Optional E2 `network/powerflow` subpkg

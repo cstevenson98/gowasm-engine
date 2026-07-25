@@ -3754,3 +3754,104 @@ Plan should be actionable for implementation without re-discovering call sites.
 **Notes**:
 
 ---
+
+## [2026-07-25 22:51:17 BST] - Implemented grid-sim next-growth plan
+
+**Prompt/Request**: Execute examples/grid-sim-game/plans/next-growth.md ("ok go").
+
+**Changes Made**:
+- Leftovers: fixed SpawnHouse comment; rewrote plans/loadflow.md for real NR/SuperLU pipeline
+- #5: StaticState.LastError + ImGui Error line; loadflow failures at Debug log level
+- #1: removed blank SpawnBlank loop; procedural checker/grid in grid_overlays.go
+- #2: network/islands.go ConnectedComponents; per-island solve; multi-slack demote to PQ; no-slack LastError
+- #3: systems/pointer for hover/select/C-clear; placement slimmed to tools/spawn
+- #6: Branch.Reactance, AddBranch(r,x), Y-bus y=1/(r+jx), DefaultLineReactanceOhm (0 default)
+- #7: game/scenario Capture/Apply/Save/Load + assets/scenarios/demo.json + ImGui buttons
+- #4: SpawnLine + LinePath polyline entity; wiring AttachLine/rewireLineSpokes; delete whole stroke
+- Tests: islands, LastError, R+X feeder, scenario round-trip; wiring/scenario pass
+- Progress ticked in plans/next-growth.md (E2 subpkg still deferred)
+
+**Reasoning**:
+Follow suggested streak order; keep import constraints and Dirty→LoadflowSystem sole solver caller.
+
+**Impact**:
+- Far fewer ECS entities on large grids
+- Multi-island play and clearer solve failures in UI
+- Lines are one bus per stroke; scenarios are shareable JSON
+
+**Testing**:
+- `go test ./game/components/... ./game/systems/... ./game/scenario/... ./pkg/... ./states/` — pass
+- `go build ./game/` — pass
+
+**Notes**:
+Optional E2 network/powerflow subpackage still deferred. Multi-slack extras demote to PQ (not PV) to avoid singular short LV links. CableXPerKm remains 0 until tuned.
+
+---
+
+## [2026-07-25 22:54:05 BST] - Fixed procedural grid FPS regression
+
+**Prompt/Request**: Game is now incredibly slow after next-growth.
+
+**Changes Made**:
+- Rewrote `renderGridBackground` to one playfield fill + O(cols+rows) grid lines instead of 5 rects per visible cell
+- Cached `LinePath` ECS filter on GridState
+
+**Reasoning**:
+Immediate-mode UI rects are not batched; per-cell checkerboard/borders were thousands of draws/frame.
+
+**Impact**:
+- Playfield chrome draw cost drops by ~orders of magnitude
+
+**Testing**:
+- `go build ./game/` — pass
+
+**Notes**:
+Visual is solid fill + hairlines (no checkerboard).
+
+---
+
+## [2026-07-25 22:55:48 BST] - Fix generators hidden by overlay fill
+
+**Prompt/Request**: Generators not showing up when placed.
+
+**Changes Made**:
+- Removed opaque playfield fill from overlay `renderGridBackground` (overlays draw after world sprites)
+- Spawn one `prefab.NewBackground` under entities in `GridState.Enter`
+
+**Reasoning**:
+FPS fix added a full playfield rect in DrawOverlays, which painted over all placed tiles.
+
+**Impact**:
+- Placed gen/house/line sprites visible again; grid lines still overlay as hairlines
+
+**Testing**:
+- `go build ./game/` — pass
+
+**Notes**:
+
+---
+
+## [2026-07-25 23:07:48 BST] - Removed islands policy and scenarios
+
+**Prompt/Request**: Remove connected-components/slack policy and all scenario stuff; explain overlays.
+
+**Changes Made**:
+- Restored single global `LoadflowSolver.Solve` (no island loop / slack demotion)
+- Deleted `islands.go`, `islands_test.go`
+- Deleted `game/scenario/`, `assets/scenarios/`, ImGui Load/Save demo buttons
+- Updated loadflow.md / next-growth progress notes
+
+**Reasoning**:
+User did not want island handling or scenario save/load.
+
+**Impact**:
+- Solver behaviour matches pre-island simple path (LastError retained)
+- No scenario package
+
+**Testing**:
+- `go test` grid-sim packages — pass
+- `go build ./game/` — pass
+
+**Notes**:
+
+---

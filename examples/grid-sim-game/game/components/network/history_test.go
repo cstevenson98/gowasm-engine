@@ -55,7 +55,7 @@ func TestRecordHistory(t *testing.T) {
 	ecs.NewMap1[network.BusHistory](w).Add(e1, &h1)
 
 	net.SetBusSpec(b1.ID, network.PQSpec(-15000, 0))
-	net.AddBranch(b0.ID, b1.ID, 0.00164) // one 10 m LV feeder cell
+	net.AddBranch(b0.ID, b1.ID, 0.00164, 0) // one 10 m LV feeder cell
 
 	if err := network.NewLoadflowSolver().Solve(net); err != nil {
 		t.Fatalf("solve: %v", err)

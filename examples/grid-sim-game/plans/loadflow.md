@@ -3,19 +3,21 @@
 ## Layers
 
 ```
-ElectricalNetwork  (topology + state container)
+ElectricalNetwork  (topology + Dirty flag + StaticState)
 │
-├── StaticState    (one solved snapshot: bus voltages, branch flows)
+├── StaticState    (solved snapshot: bus voltages, branch flows, LastError)
 │   ├── map[BusID]*BusState
 │   └── map[BranchID]*BranchState
 │
-├── Solver interface
-│   └── LoadflowSolver   (stub → Newton-Raphson / DC approx later)
+├── LoadflowSystem (sole caller of Solve; Dirty → solve → ClearDirty)
 │
-└── (future) TimeEvolution
-    ├── []StaticState    (series of snapshots)
-    └── Step(dt)         (advance simulation by one time step)
+└── LoadflowSolver (AC Newton–Raphson)
+    ├── BuildYBus → SparseMatrix G + jB
+    └── pkg/nr (+ SuperLU when CGo available)
 ```
+
+History rings (`BusHistory` / `BranchHistory`) record samples after each
+successful or partially-run solve; see `history.go`.
 
 ---
 
@@ -24,46 +26,31 @@ ElectricalNetwork  (topology + state container)
 ### BusSpec — boundary conditions (entity → solver)
 
 What the grid entity (or a system reading its ECS components) provides
-before solving. Meaningful fields depend on BusType:
+before solving. Meaningful fields depend on `BusFormulation` (not `BusType`):
 
-| BusType   | Fixed fields          | Free fields       |
-|-----------|-----------------------|-------------------|
-| Generator (swing) | VoltMag, VoltAng | PInject, QInject |
-| Generator (PV)    | VoltMag, PInject  | VoltAng, QInject |
-| Load (PQ)         | PInject, QInject  | VoltMag, VoltAng |
-| Junction (PQ=0)   | PInject=0, QInject=0 | VoltMag, VoltAng |
+| Formulation | Fixed fields          | Free fields       |
+|-------------|-----------------------|-------------------|
+| Slack       | VoltMag, VoltAng      | PInject, QInject  |
+| PV          | VoltMag, PInject      | VoltAng, QInject  |
+| PQ          | PInject, QInject      | VoltMag, VoltAng  |
+
+Generators default to Slack at `NominalVoltageV`; houses are PQ loads set by
+`systems/wiring` from `HouseLoad`; line tiles are Junction (PQ=0).
 
 ```go
 type BusSpec struct {
-    VoltMag float64  // |V| per-unit (swing/PV buses)
-    VoltAng float64  // voltage angle radians (swing bus only)
-    PInject float64  // active power injection (+ve = generation)
-    QInject float64  // reactive power injection
+    Formulation BusFormulation
+    VoltMag     float64  // volts — Slack + PV
+    VoltAng     float64  // radians — Slack only
+    PInject     float64  // W (+gen) — PV + PQ
+    QInject     float64  // VAR — PQ only
 }
 ```
 
-### BusResult — solver output
+### BusResult / BranchResult — solver output
 
-```go
-type BusResult struct {
-    VoltMag float64
-    VoltAng float64
-    PInject float64
-    QInject float64
-}
-```
-
-### BranchResult — solver output
-
-```go
-type BranchResult struct {
-    CurrentMag float64  // |I| per-unit
-    PFrom      float64  // active power flow from→to
-    PTo        float64  // active power flow to→from
-    QFrom      float64  // reactive flow from→to
-    QTo        float64  // reactive flow to→from
-}
-```
+Written by `LoadflowSolver.Solve` into `StaticState`. Branch flows are
+positive in the from→to direction; `|I|` in amps.
 
 ### StaticState — the snapshot container
 
@@ -73,6 +60,7 @@ type StaticState struct {
     Branches   map[BranchID]*BranchState
     Converged  bool
     Iterations int
+    LastError  string // empty on success; shown in ImGui
 }
 ```
 
@@ -81,25 +69,27 @@ Entries are created/destroyed automatically in `AddBus` / `RemoveBus` /
 
 ---
 
+## Pipeline (Dirty → solve)
+
+1. Placement / wiring / load-tick mutate graph or specs → `MarkDirty()`.
+2. `LoadflowSystem.Update` sees Dirty, calls `LoadflowSolver.Solve`.
+3. Solver: require ≥1 slack, build Y-bus (`y = 1/(r+jx)`), run NR via `pkg/nr`.
+4. Results + `LastError` land in `StaticState`; history may append; Dirty cleared.
+
+Sign convention: `P_spec > 0` is generation. House loads use
+`PQSpec(−P_kW*1000, −Q_kVAR*1000)`.
+
+---
+
 ## Entity → Solver API
 
-The ECS system (e.g. a future `NetworkSetupSystem`) reads entity components
-and calls these before every solve:
-
 ```go
-net.SetBusSpec(busID, BusSpec{VoltMag: 1.0, VoltAng: 0})  // swing
-net.SetBusSpec(busID, BusSpec{PInject: -0.5, QInject: -0.1}) // load
+net.SetBusSpec(busID, SlackSpec(230, 0))
+net.SetBusSpec(busID, PQSpec(-2100, -1800))
+bs, _ := net.BusStateFor(busID)
 ```
 
-After solving, results are read back:
-
-```go
-bs, _ := net.BusStateFor(busID)    // → *BusState {Spec, Result}
-br, _ := net.BranchStateFor(brID)  // → *BranchState {Result}
-```
-
-These could drive visual feedback (e.g. colour tiles by voltage level,
-highlight overloaded branches).
+ImGui reads `net.State` (converged, iterations, `LastError`, per-bus results).
 
 ---
 
@@ -111,23 +101,17 @@ type Solver interface {
 }
 ```
 
-### LoadflowSolver (stub)
-
-Flat-start initialisation: sets all bus voltages to 1.0∠0° and all branch
-flows to zero. Marks the state `Converged=true` with `Iterations=0`.
-
-Real implementations will replace this with:
-- **DC load flow** — linear, fast, ignores reactive power (good for topology checks)
-- **Newton-Raphson AC** — full nonlinear solve for V, θ, P, Q
+`LoadflowSolver` is the production AC NR implementation (not a stub). Tunables:
+`MaxIter` (default 50), `Tol` (default 1e-6 on ‖f‖₂).
 
 ---
 
 ## Time evolution
 
-Not implemented. House demand currently re-samples via `LoadTickSystem`;
-history rings (`BusHistory` / `BranchHistory`) cover recent solve samples.
-A dedicated TimeEvolution stepper can be added later if schedules need
-explicit snapshots beyond Dirty-driven solves.
+Not implemented as a dedicated stepper. House demand re-samples via
+`LoadTickSystem`; history rings cover recent solve samples. A TimeEvolution
+container can be added later if schedules need explicit snapshots beyond
+Dirty-driven solves.
 
 ---
 
@@ -135,10 +119,13 @@ explicit snapshots beyond Dirty-driven solves.
 
 ```
 game/components/network/
-  network.go   ← topology graph + State field + entity-join API
-  state.go     ← BusSpec, BusResult, BusState, BranchResult, BranchState, StaticState
-  solver.go    ← Solver interface, LoadflowSolver
+  network.go   ← topology graph + State + entity-join API
+  state.go     ← BusSpec, BusResult, StaticState, formulations
+  solver.go    ← Solver interface, LoadflowSolver (AC NR)
   history.go   ← Series / BusHistory / BranchHistory
   ybus.go      ← Y-bus build + CalcPQ
   sparse.go    ← SparseMatrix
+  doc.go       ← package glossary
+
+pkg/nr/        ← Newton–Raphson + SuperLU (CGo) / dense fallback
 ```

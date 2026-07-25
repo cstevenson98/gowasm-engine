@@ -77,11 +77,9 @@ type GridObject struct {
 	Cell GridCoord
 }
 
-// PlacementState is the per-World "global store of user actions" for the
-// placement UI: which tool is currently selected, and - for lines, which
-// need two clicks - the pending start cell. It is mutated only by
-// PlacementSystem and read by GridState.DrawOverlays / ImGui to render the
-// toolbar, hover/selection chrome, and placement ghost.
+// PlacementState is the per-World pointer/placement UI store: active tool,
+// line-pending start, hover, and selection. Mutated by pointer + placement
+// systems; read by GridState overlays / ImGui.
 type PlacementState struct {
 	Tool        Tool
 	LinePending bool
@@ -107,25 +105,39 @@ type GeneratorProps struct {
 	MaxOutputKW float64
 }
 
-// LineSegmentProps holds the electrical parameters of one line-segment tile.
-// Resistance is in ohms (physical, not per-unit) for the cell length
-// (see CellLengthM).
+// LineSegmentProps holds the electrical parameters of a line (one cell or a
+// polyline stroke). R/X are in ohms for the whole entity (see CellLengthM).
 type LineSegmentProps struct {
 	ResistanceOhm float64
+	ReactanceOhm  float64
+}
+
+// LinePath lists every cell occupied by a polyline line entity. Occupancy
+// maps each cell to the same entity; delete removes the whole stroke.
+type LinePath struct {
+	Cells []GridCoord
 }
 
 // CellLengthM is the physical length represented by one grid cell / line tile.
 const CellLengthM = 10.0 // metres
 
-// CableOhmPerKm is a typical LV distribution feeder impedance
+// CableOhmPerKm is a typical LV distribution feeder resistance
 // (≈185 mm² aluminium, ~0.164 Ω/km). At 10 m/cell this supports ~100-bus
 // radial feeders at LV without collapsing to unrealistically low voltages
 // under a handful of house-scale loads.
 const CableOhmPerKm = 0.164
 
-// DefaultLineResistanceOhm is R for one newly-placed line segment:
+// CableXPerKm is a small series reactance for the same LV cable class.
+// Default 0 keeps bit-identical resistive behaviour until tuned; set a
+// positive value (e.g. ~0.08 Ω/km) for angle/Q demos.
+const CableXPerKm = 0.0
+
+// DefaultLineResistanceOhm is R for one newly-placed line cell:
 // CableOhmPerKm × (CellLengthM / 1000).
 const DefaultLineResistanceOhm = CableOhmPerKm * CellLengthM / 1000.0 // 0.00164 Ω
+
+// DefaultLineReactanceOhm is X for one newly-placed line cell.
+const DefaultLineReactanceOhm = CableXPerKm * CellLengthM / 1000.0
 
 // GridOccupancy is the per-World map of occupied cells, enforcing that
 // generators, houses and line tiles never overlap each other.
