@@ -167,6 +167,9 @@ func deleteCell(w *ecs.World, occupancy *grid.GridOccupancy, cell grid.GridCoord
 // ElectricalNetwork, stamps a NetworkLink component on the entity, then adds
 // branches to any already-placed cardinal neighbours that are also in the
 // network. It is a no-op if the ElectricalNetwork resource is absent.
+//
+// For line-segment entities the branch resistance is read from the entity's
+// LineSegmentProps component; all other connections use resistance = 0.
 func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridCoord, occupancy *grid.GridOccupancy) {
 	net := ecs.GetResource[network.ElectricalNetwork](w)
 	if net == nil {
@@ -174,6 +177,13 @@ func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridC
 	}
 	bus := net.AddBus(e, toolToBusType(kind))
 	ecs.NewMap1[network.NetworkLink](w).Add(e, &network.NetworkLink{BusID: bus.ID})
+
+	var resistance float64
+	if kind == grid.ToolLine {
+		if lsp := ecs.NewMap1[grid.LineSegmentProps](w).Get(e); lsp != nil {
+			resistance = lsp.ResistanceOhm
+		}
+	}
 
 	dirs := []grid.GridCoord{{Col: 1}, {Col: -1}, {Row: 1}, {Row: -1}}
 	for _, d := range dirs {
@@ -183,7 +193,7 @@ func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridC
 			continue
 		}
 		if nbBus, ok := net.BusForEntity(ne); ok {
-			net.AddBranch(bus.ID, nbBus.ID)
+			net.AddBranch(bus.ID, nbBus.ID, resistance)
 		}
 	}
 }

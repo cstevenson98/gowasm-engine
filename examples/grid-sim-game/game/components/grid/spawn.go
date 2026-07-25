@@ -1,11 +1,16 @@
 package grid
 
 import (
+	"math/rand"
+
 	"example.com/grid-sim-game/game/gameconfig"
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
+
+// randLoad returns a uniform random value in [10, 20] kW/kVAR for house demand.
+func randLoad() float64 { return 10.0 + rand.Float64()*10.0 }
 
 // cellPosition returns a cell's top-left world position in pixels.
 func cellPosition(cell GridCoord) types.Vector2 {
@@ -51,20 +56,29 @@ func SpawnBlank(w *ecs.World, cell GridCoord) ecs.Entity {
 }
 
 // SpawnGenerator spawns a generator tile at cell, on the ENTITIES layer.
+// It also attaches a GeneratorProps component with a default 100 kW capacity.
 func SpawnGenerator(w *ecs.World, cell GridCoord) ecs.Entity {
-	return spawnTile(w, cell, ToolGenerator, gameconfig.Global.GeneratorTexture, 0, false)
+	e := spawnTile(w, cell, ToolGenerator, gameconfig.Global.GeneratorTexture, 0, false)
+	ecs.NewMap1[GeneratorProps](w).Add(e, &GeneratorProps{MaxOutputKW: 100.0})
+	return e
 }
 
 // SpawnHouse spawns a house tile at cell, on the ENTITIES layer.
+// It attaches a HouseLoad component with P and Q sampled uniformly from [10, 20] kW.
 func SpawnHouse(w *ecs.World, cell GridCoord) ecs.Entity {
-	return spawnTile(w, cell, ToolHouse, gameconfig.Global.HouseTexture, 0, false)
+	e := spawnTile(w, cell, ToolHouse, gameconfig.Global.HouseTexture, 0, false)
+	ecs.NewMap1[HouseLoad](w).Add(e, &HouseLoad{PKw: randLoad(), QKw: randLoad()})
+	return e
 }
 
 // SpawnLineSegment spawns one tile of a line's path at cell, on the ENTITIES
-// layer. A line is represented as one entity per cell along its path (see
-// ManhattanPath); there is no single entity for "the line" as a whole.
+// layer. It attaches a LineSegmentProps component with a default resistance of
+// 0.1 Ω per segment. A line is represented as one entity per cell along its
+// path (see ManhattanPath); there is no single entity for "the line" as a whole.
 func SpawnLineSegment(w *ecs.World, cell GridCoord) ecs.Entity {
-	return spawnTile(w, cell, ToolLine, gameconfig.Global.LineTexture, 0, false)
+	e := spawnTile(w, cell, ToolLine, gameconfig.Global.LineTexture, 0, false)
+	ecs.NewMap1[LineSegmentProps](w).Add(e, &LineSegmentProps{ResistanceOhm: 0.1})
+	return e
 }
 
 // ManhattanPath returns the cells of an L-shaped path from `from` to `to`:

@@ -40,12 +40,12 @@ type Bus struct {
 }
 
 // Branch is an undirected connection between two buses representing a grid
-// adjacency (line segment, or direct generator/house contact). Electrical
-// parameters (resistance, reactance, thermal limit) go here when needed.
+// adjacency (line segment, or direct generator/house contact).
 type Branch struct {
-	ID   BranchID
-	From BusID
-	To   BusID
+	ID           BranchID
+	From         BusID
+	To           BusID
+	Resistance   float64 // series resistance [Ω]; 0 for direct connections
 }
 
 // NetworkLink is the ECS component that is the grid-side half of the join.
@@ -141,12 +141,13 @@ func (n *ElectricalNetwork) RemoveBus(id BusID) {
 
 // --- Graph operations -------------------------------------------------------
 
-// AddBranch connects two buses and returns the new branch.
-// The connection is undirected: both buses' incidence lists are updated.
-func (n *ElectricalNetwork) AddBranch(from, to BusID) *Branch {
+// AddBranch connects two buses with the given series resistance and returns
+// the new branch. The connection is undirected: both buses' incidence lists
+// are updated. Pass resistance = 0 for a direct (lossless) connection.
+func (n *ElectricalNetwork) AddBranch(from, to BusID, resistance float64) *Branch {
 	id := n.nextBranch
 	n.nextBranch++
-	br := &Branch{ID: id, From: from, To: to}
+	br := &Branch{ID: id, From: from, To: to, Resistance: resistance}
 	n.branches[id] = br
 	n.incidence[from] = append(n.incidence[from], id)
 	n.incidence[to] = append(n.incidence[to], id)

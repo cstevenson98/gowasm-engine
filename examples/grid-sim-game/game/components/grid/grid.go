@@ -59,6 +59,27 @@ type PlacementState struct {
 	LineStart   GridCoord
 }
 
+// HouseLoad is the power-demand component for a house entity. P and Q are
+// sampled once at spawn and remain constant until the entity is removed.
+// Values are in kilowatts / kilovars (kW, kVAR) and are always positive
+// (consumed power, i.e. a load draws from the network).
+type HouseLoad struct {
+	PKw float64 // active power demand  [kW]
+	QKw float64 // reactive power demand [kVAR]
+}
+
+// GeneratorProps holds the nameplate parameters of a generator entity.
+// MaxOutputKW is the maximum active power the unit can deliver (kW).
+type GeneratorProps struct {
+	MaxOutputKW float64
+}
+
+// LineSegmentProps holds the electrical parameters of one line-segment tile.
+// Resistance is in ohms (physical, not per-unit) per grid cell traversed.
+type LineSegmentProps struct {
+	ResistanceOhm float64
+}
+
 // GridOccupancy is the per-World map of occupied cells, enforcing that
 // generators, houses and line tiles never overlap each other.
 type GridOccupancy struct {

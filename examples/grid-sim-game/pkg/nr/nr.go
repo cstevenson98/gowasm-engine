@@ -98,29 +98,37 @@ func (nr *NewtonRaphson) Solve(
 			nr.MaxIter, residual, nr.Tol)
 }
 
+// NonZeroer is an optional interface for sparse matrices. If a matrix passed
+// to SparseLUSolver implements this interface, non-zeros are copied in O(nnz)
+// instead of O(n²). Any SparseMatrix from the network package satisfies it.
+type NonZeroer interface {
+	ForEachNonZero(func(i, j int, v float64))
+}
+
 // SparseLUSolver returns a LinearSolver that factorises A using LU and back-
 // substitutes to find x in A·x = b.
 //
-// It accepts any mat.Matrix — including a sparse.CSR from
-// github.com/james-bowman/sparse — because it only calls the mat.Matrix
-// interface (At, Dims). Non-zero elements are copied into a gonum dense
-// matrix before factorisation, so zero fill-in in the sparse input does not
-// pay the copy cost.
-//
-// TODO: when the system grows beyond ~800×800, replace the inner copy with a
-// fill-reducing sparse direct solve (e.g. convert to CSC → AMD reordering →
-// UMFPACK via CGo, or a pure-Go nested-dissection implementation).
+// It accepts any mat.Matrix. If A also implements NonZeroer, the copy to the
+// internal dense matrix is O(nnz) instead of O(n²). For systems up to ~800×800
+// (a 400-bus full AC power flow) the dense LU is adequate; replace with a
+// fill-reducing sparse direct solver for larger networks.
 func SparseLUSolver() LinearSolver {
 	return func(A mat.Matrix, b *mat.VecDense) (*mat.VecDense, error) {
 		n, _ := A.Dims()
-
-		// Copy sparse (or dense) input into a gonum dense matrix.
-		// Only non-zero entries are written; zero entries in A are skipped.
 		dense := mat.NewDense(n, n, nil)
-		for i := 0; i < n; i++ {
-			for j := 0; j < n; j++ {
-				if v := A.At(i, j); v != 0 {
-					dense.Set(i, j, v)
+
+		// O(nnz) path for matrices that expose their non-zero iterator.
+		if nz, ok := A.(NonZeroer); ok {
+			nz.ForEachNonZero(func(i, j int, v float64) {
+				dense.Set(i, j, v)
+			})
+		} else {
+			// O(n²) fallback for arbitrary mat.Matrix.
+			for i := 0; i < n; i++ {
+				for j := 0; j < n; j++ {
+					if v := A.At(i, j); v != 0 {
+						dense.Set(i, j, v)
+					}
 				}
 			}
 		}

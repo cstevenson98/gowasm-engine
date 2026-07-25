@@ -2960,3 +2960,101 @@ Separated data (components) from behaviour (systems) into distinct packages as p
 Test file needs to be split and recreated in the two new packages.
 
 ---
+
+## [2026-07-25 15:56:55 BST] - Add electrical properties to house, generator, and line entities
+
+**Prompt/Request**: Add P/Q consumed power (random 10–20 kW) to houses, resistance to line segments, and max output field to generators.
+
+**Changes Made**:
+- `game/components/grid/grid.go`: Added three new ECS components — `HouseLoad{PKw, QKw float64}`, `GeneratorProps{MaxOutputKW float64}`, `LineSegmentProps{ResistanceOhm float64}`
+- `game/components/grid/spawn.go`: Updated spawners to attach new components; `SpawnHouse` samples P and Q uniformly from [10, 20] kW via `math/rand`; `SpawnGenerator` defaults to 100 kW; `SpawnLineSegment` defaults to 0.1 Ω/segment
+- `game/components/network/network.go`: Added `Resistance float64` field to `Branch`; updated `AddBranch` signature to `(from, to BusID, resistance float64)`
+- `game/systems/placement/placement.go`: Updated `attachToNetwork` to read `LineSegmentProps` from the new entity and pass its resistance to `AddBranch`; non-line connections use resistance = 0
+- `game/components/network/network_test.go`: Updated all `AddBranch` call-sites to include the new resistance argument (passing 0)
+
+**Reasoning**:
+Entity-level electrical properties are the boundary conditions the load flow solver will read. Storing them as ECS components makes them accessible to any system via a mapper. Random house load gives variety without a UI editor at this stage.
+
+**Impact**:
+- `AddBranch` signature is a breaking change — fixed all call-sites (test file)
+- No changes to the solver or StaticState; these values will be wired through `SetBusSpec` in a future step
+
+**Testing**:
+- `go build ./...` clean
+- `go test ./...` all pass (network + nr packages)
+
+---
+
+## [2026-07-25 16:11:14 BST] - Implement AC Newton-Raphson power flow solver
+
+**Prompt/Request**: Implement a loadflow solver for S = V ⊙ conj(Y·V) with sparse Y construction and sparse Jacobian.
+
+**Changes Made**:
+- `game/components/network/ybus.go` (new): Y-bus construction and bus ordering
+  - `busOrdering`: deterministic mapping of BusIDs to Y-bus rows and NR state-vector indices (state = [δ non-slack | |V| PQ])
+  - `YBus{G, B *mat.Dense}`: n×n admittance matrix split into real (G) and imaginary (B) parts; B=0 for purely resistive network, retained for future inductive/capacitive lines
+  - `BuildYBus`: assembles G,B from branch resistances; clamps R=0 to 1e-6 Ω
+  - `CalcPQ(i, Vm, Va, yb)`: nodal power injection in generator convention
+  - `ExtractVmVa(x, state, bo)`: decodes state vector, fills fixed values from BusSpec; handles nil x for all-slack networks
+- `game/components/network/solver.go` (rewrite): full NR AC power flow replacing the flat-start stub
+  - `LoadflowSolver.Solve`: builds Y-bus, constructs x0 from BusSpec, calls `pkg/nr.NewtonRaphson`, writes back results
+  - `residualFunc`: f(x) = [P_spec − P_calc | Q_spec − Q_calc] for non-slack/PQ buses
+  - `jacobianFunc`: ∂f/∂x using standard polar power-flow Jacobian formulas (diagonal: −Q−B·V², P−G·V², (P+G·V²)/V, (Q−B·V²)/V; off-diagonal: standard H,N,J,L sub-blocks) — negated because f = P_spec − P_calc
+  - `writeAllResults`: decodes solved x into BusResult (Vm, Va, P, Q) and BranchResult (PFrom, PTo, CurrentMag) for each branch
+  - `TimeEvolution.Step` now returns error (consistent with Solver interface)
+- `game/components/network/solver_test.go` (new): 4 tests
+  - `TestFlatStart`: all-slack trivial network
+  - `TestTwoBusPureResistive`: 2-bus analytical check, V_1 = (1+√0.8)/2 ≈ 0.9472, converges in 3 iterations
+  - `TestThreeBusResistive`: 3-bus radial feeder, verifies V_2 < V_1 < V_0 and P_calc matches P_spec
+  - `TestNoSlackBusReturnsError`: ensures error returned without reference bus
+
+**Reasoning**:
+Standard polar Newton-Raphson power flow is the industry-standard algorithm for AC load flow. The Jacobian is computed analytically (not numerically) using the well-known H, N, J, L sub-matrix structure for efficiency. Dense matrices used for now (TODO: switch to sparse CSR once bus count warrants it).
+
+**Sign convention note**: P > 0 in BusSpec.PInject = generation (injected into network). For a load consuming P_kW, use PQSpec(−P_kW/baseMVA, −Q_kVAR/baseMVA).
+
+**Impact**:
+- `Solver` interface unchanged (returns error)
+- `TimeEvolution.Step` signature changed to return error
+- `ybus.go` exported types (`YBus`, `CalcPQ`, `ExtractVmVa`, `BuildYBus`) are accessible to future systems
+
+**Testing**:
+- `go build ./...` clean
+- `go test ./...` all pass (9 network tests + 3 nr tests)
+- 2-bus analytical: converged in 3 NR iterations to 8-decimal accuracy
+
+---
+
+## [2026-07-25 16:19:31 BST] - Sparse Y-bus and Jacobian with pre-computed structure
+
+**Prompt/Request**: "J must be sparse, we need to construct it in a sparse way and then only update the non-zeros, as the structure should not change within one solver loop" / "in fact everything needs to be sparse also ybus"
+
+**Changes Made**:
+- `game/components/network/sparse.go` (new): `SparseMatrix` type
+  - CSR layout (rowPtr + colIdx) for O(degree) row iteration via `ForEachInRow`
+  - Hash map (pack(row,col) → data index) for O(1) `At` / `Set` / `Add`
+  - `Zero()` resets all values in O(nnz) — the per-iteration update pattern
+  - `ForEachNonZero` exposes the iterator for the `nr.NonZeroer` interface
+  - `NewSparseFromPattern(nRows, nCols, [][2]int)` deduplicates and sorts a COO pattern to build CSR
+- `game/components/network/ybus.go` (updated): `YBus.G/B` are now `*SparseMatrix`
+  - `YBusPattern` helper returns the structural non-zeros (n diagonal + 2 per branch)
+  - `BuildYBus` uses `SparseMatrix.Add` to accumulate conductances — no O(n²) allocation
+  - `CalcPQ` uses `G.ForEachInRow` to iterate only the non-zero columns (O(degree) per bus)
+- `game/components/network/solver.go` (updated): sparse Jacobian with pre-computed structure
+  - `jacNZ` struct encodes (jRow, jCol, bi, bj, isDiag, kind) for each non-zero entry
+  - `buildJacobianTemplate` enumerates adjacent Y-bus pairs, emits one `jacNZ` per sub-block (H/N/J/L) per pair; calls `NewSparseFromPattern` once
+  - `jacobianFunc` closure captures the pre-allocated `*SparseMatrix` and `[]jacNZ`; on each NR call: `sparseJ.Zero()` then iterates only over `updates`, calling `sparseJ.Set` per entry — zero heap allocation inside the loop
+- `pkg/nr/nr.go` (updated): added `NonZeroer` interface; `SparseLUSolver` uses `ForEachNonZero` for O(nnz) dense copy if the matrix supports it, falls back to O(n²) otherwise
+
+**Reasoning**:
+Power flow Jacobians are structurally sparse (each bus only couples to its topological neighbors). Pre-computing the sparsity structure once per Solve call and only updating values inside the NR loop avoids all allocation and O(n²) work per iteration. This is the standard approach in production power flow solvers.
+
+**Impact**:
+- `YBus.G/B` type changed from `*mat.Dense` to `*SparseMatrix`; callers that used `At(i,j)` on the dense matrix now go through `SparseMatrix.At`
+- No public API changes to `LoadflowSolver`, `Solver`, or `nr.NewtonRaphson`
+
+**Testing**:
+- `go build ./...` clean
+- `go test ./...` all 12 tests pass with identical numerical results
+
+---
