@@ -72,12 +72,13 @@ func SpawnHouse(w *ecs.World, cell GridCoord) ecs.Entity {
 }
 
 // SpawnLineSegment spawns one tile of a line's path at cell, on the ENTITIES
-// layer. It attaches a LineSegmentProps component with a default resistance of
-// 0.1 Ω per segment. A line is represented as one entity per cell along its
-// path (see ManhattanPath); there is no single entity for "the line" as a whole.
+// layer. It attaches a LineSegmentProps component with a default resistance
+// (see DefaultLineResistanceOhm) per segment. A line is represented as one
+// entity per cell along its path (see ManhattanPath); there is no single
+// entity for "the line" as a whole.
 func SpawnLineSegment(w *ecs.World, cell GridCoord) ecs.Entity {
 	e := spawnTile(w, cell, ToolLine, gameconfig.Global.LineTexture, 0, false)
-	ecs.NewMap1[LineSegmentProps](w).Add(e, &LineSegmentProps{ResistanceOhm: 0.1})
+	ecs.NewMap1[LineSegmentProps](w).Add(e, &LineSegmentProps{ResistanceOhm: DefaultLineResistanceOhm})
 	return e
 }
 

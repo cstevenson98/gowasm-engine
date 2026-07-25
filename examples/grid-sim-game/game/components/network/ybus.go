@@ -10,7 +10,9 @@
 //
 // BusSpec.PInject follows the same sign: positive = generation.
 // If you have a load's consumed power P_kW (consumer convention, positive),
-// set the bus spec as PQSpec(−P_kW/baseMVA, −Q_kVAR/baseMVA).
+// set the bus spec as PQSpec(−P_kW*1000, −Q_kVAR*1000) — everything here is
+// plain SI units (volts, ohms, watts, VAR), so no base-MVA normalisation is
+// needed; see NominalVoltageV in state.go.
 package network
 
 import (

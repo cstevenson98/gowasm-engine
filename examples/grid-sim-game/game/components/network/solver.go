@@ -26,7 +26,8 @@ type Solver interface {
 //
 // Sign convention: P_spec > 0 means net generation (generator convention).
 // Load buses must have P_spec < 0. For a consumer-convention load of P_kW,
-// set the bus spec as PQSpec(−P_kW/baseMVA, −Q_kVAR/baseMVA).
+// set the bus spec as PQSpec(−P_kW*1000, −Q_kVAR*1000) (plain watts/VAR —
+// see the package doc in ybus.go for why no per-unit base is needed).
 type LoadflowSolver struct {
 	MaxIter int     // default 50
 	Tol     float64 // convergence criterion on ‖f‖₂ (default 1e-6)
@@ -95,7 +96,7 @@ func (s *LoadflowSolver) Solve(net *ElectricalNetwork) error {
 	nrSolver := &nr.NewtonRaphson{
 		MaxIter:     maxIter,
 		Tol:         tol,
-		LinearSolve: nr.SparseLUSolver(),
+		LinearSolve: nr.SuperLUSolver(),
 	}
 	res, err := nrSolver.Solve(
 		buildX0(state, bo),
@@ -315,6 +316,18 @@ func jacobianFunc(state *StaticState, yb *YBus, sparseJ *SparseMatrix, updates [
 
 // buildX0 assembles the initial NR state vector from BusSpec values.
 func buildX0(state *StaticState, bo *busOrdering) *mat.VecDense {
+	// Flat-start fallback for PQ voltage magnitudes: use the network's own
+	// slack-bus voltage as the "nominal" scale, rather than a hardcoded
+	// constant. This keeps the solver unit-agnostic — it works the same
+	// whether buses are specified in per-unit (~1.0) or real volts (~230).
+	flatV := 1.0
+	for _, bs := range state.Buses {
+		if bs.Spec.Formulation == Slack && bs.Spec.VoltMag != 0 {
+			flatV = bs.Spec.VoltMag
+			break
+		}
+	}
+
 	x0 := mat.NewVecDense(bo.stateSize, nil)
 	for _, id := range bo.allIDs {
 		bs := state.Buses[id]
@@ -324,7 +337,7 @@ func buildX0(state *StaticState, bo *busOrdering) *mat.VecDense {
 		if vi := bo.voltIdx[id]; vi >= 0 {
 			v := bs.Spec.VoltMag
 			if v == 0 {
-				v = 1.0 // flat-start default for PQ buses
+				v = flatV
 			}
 			x0.SetVec(bo.nAngle+vi, v)
 		}

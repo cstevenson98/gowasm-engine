@@ -3058,3 +3058,90 @@ Power flow Jacobians are structurally sparse (each bus only couples to its topol
 - `go test ./...` all 12 tests pass with identical numerical results
 
 ---
+
+## [2026-07-25 16:25:58 BST] - SuperLU CGo integration plan
+
+**Prompt/Request**: "plan a Cgo SuperLU link up" — eliminate the dense LU bottleneck in SparseLUSolver by using a true sparse direct solver.
+
+**Changes Made**:
+- `plans/superlu-cgo.md` (new): comprehensive plan for CGo bindings to SuperLU
+  - Architecture: `pkg/nr/superlu_cgo.go` (+build !nowasm), `superlu_wrapper.c`, `superlu_cgo_stub.go` (+build nowasm)
+  - CSC conversion helper `toCSC` to feed SuperLU's expected input format
+  - C wrapper function `solve_superlu_csc` calling `dgssv` (SuperLU's driver routine)
+  - Build tags to fall back to dense on WASM (CGo unavailable)
+  - Deployment notes: apt-get install libsuperlu-dev, static linking options
+  - Expected performance: ~20× speedup at n=100, ~200× at n=1000
+  - Alternative: KLU (SuiteSparse) if SuperLU proves difficult
+
+**Reasoning**:
+The current `SparseLUSolver` copies the sparse Jacobian to dense and runs O(n³) LU factorization. For n > 100 this becomes the NR bottleneck. SuperLU preserves sparsity using COLAMD ordering and achieves ~O(n^1.5) complexity for typical power network matrices. It's the industry standard for circuit/power flow solvers.
+
+**Impact**:
+- Not yet implemented — this is a design document
+- When implemented: new `nr.SuperLUSolver()` function, `solver.go` switches from `SparseLUSolver()` to `SuperLUSolver()`
+- WASM builds unaffected (stub returns error)
+
+**Next steps**:
+Implementation of the CGo wrapper per the plan (requires libsuperlu-dev installed).
+
+---
+
+## [2026-07-25 16:29:13 BST] - Configure SuperLU in Nix development shell
+
+**Prompt/Request**: "modify the nix shell here actually" — add SuperLU to the nix-shell environment for CGo integration.
+
+**Changes Made**:
+- `shell.nix`: Added `superlu` to buildInputs (nixpkgs provides superlu-7.0.1)
+- `shell.nix`: Added `superlu` to LD_LIBRARY_PATH for runtime linking
+- `shell.nix`: Updated CGO_CFLAGS to include `-I${pkgs.superlu}/include`
+- `shell.nix`: Updated CGO_LDFLAGS to include `-L${pkgs.superlu}/lib -lsuperlu`
+- `shell.nix`: Updated shellHook welcome message to show SuperLU path and grid-sim-game examples
+- `plans/superlu-cgo.md`: Updated installation instructions to document NixOS/Nix setup
+
+**Reasoning**:
+On NixOS/Nix, system-wide package installation is discouraged; dependencies are managed per-project via shell.nix. This approach:
+- Isolates SuperLU to this project's dev environment
+- Makes the build reproducible for other Nix users
+- Automatically sets all CGO flags when entering nix-shell
+- No manual export or pkg-config needed
+
+**Impact**:
+- Developers using `nix-shell` now have SuperLU automatically available
+- CGO will find SuperLU headers and libraries without manual configuration
+- Non-Nix users unaffected (can still use apt/brew/source as documented)
+
+**Testing**:
+- `nix-shell --run "echo $CGO_LDFLAGS"` confirms `-lsuperlu` is set
+- Shell loads cleanly and displays SuperLU library path
+
+**Next steps**:
+Ready to implement the CGo wrapper (superlu_cgo.go, superlu_wrapper.c) per the plan.
+
+---
+
+## [2026-07-25 16:56:09 BST] - LV loadflow on placement + voltage logging
+
+**Prompt/Request**: Integrate the loadflow solver into placement logging: attempt solve on place/delete, show error on failure, print voltages at every bus. Use LV (~230V) with reasonable line resistances.
+
+**Changes Made**:
+- Confirmed/wired SI (volts/ohms/watts) LV model: `NominalVoltageV = 230`, `DefaultLineResistanceOhm = 0.05`
+- Generators default to SlackSpec(230∠0°); houses write PQSpec(−P·1000, −Q·1000) from HouseLoad on attach
+- `logNetwork` after place/delete: topology log → `LoadflowSolver.Solve` → error on failure → `LogVoltages`
+- `LogVoltages` prints |V|∠δ and P (kW) per bus
+- Added `TestLVFeeder` (230V slack, 0.05Ω feeder, 15kW+5kVAR load)
+
+**Reasoning**:
+Physical SI units avoid inventing a per-unit base; at LV the Jacobian is well-conditioned for game-scale networks. Placement-time solve gives immediate feedback without a separate analysis UI.
+
+**Impact**:
+- Placement logs now include loadflow voltages (or a clear solve error)
+- Solver remains unit-agnostic (existing 1.0-scale tests still pass)
+
+**Testing**:
+- `go test ./game/components/network/` — including TestLVFeeder (V0=230, drop≈6.7V)
+
+**Notes**:
+- Isolated house with no generator correctly fails ("no slack bus")
+- Pure-R lines still converge with non-zero Q via small angles
+
+---

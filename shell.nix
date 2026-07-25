@@ -24,10 +24,14 @@ pkgs.mkShell {
     libGL
     libglvnd
     
+    # Sparse linear algebra (SuperLU for power flow solver)
+    superlu
+    
     # Development tools
     git
     gnumake
     zsh
+    direnv
   ];
   
   # Set library paths for runtime linking
@@ -41,31 +45,40 @@ pkgs.mkShell {
     xorg.libXinerama
     xorg.libXi
     xorg.libXxf86vm
+    superlu
   ] + ":/run/opengl-driver/lib";
   
   shellHook = ''
-    # Set CGO flags for Ebiten/GLFW
-    export CGO_CFLAGS="-I${pkgs.glfw}/include"
-    export CGO_LDFLAGS="-L${pkgs.glfw}/lib"
+    # Set CGO flags for Ebiten/GLFW/SuperLU
+    export CGO_CFLAGS="-I${pkgs.glfw}/include -I${pkgs.superlu}/include"
+    export CGO_LDFLAGS="-L${pkgs.glfw}/lib -L${pkgs.superlu}/lib -lsuperlu"
     export PKG_CONFIG_PATH="${pkgs.glfw}/lib/pkgconfig:$PKG_CONFIG_PATH"
     
-    echo "=================================================="
-    echo "  Go WASM Engine Development Environment"
-    echo "=================================================="
-    echo ""
-    echo "Available commands:"
-    echo "  make build-desktop  - Build Ebiten desktop binary"
-    echo "  make run-desktop    - Build and run desktop game"
-    echo "  make test           - Run unit tests"
-    echo "  make clean          - Clean build artifacts"
-    echo ""
-    echo "Environment:"
-    echo "  Go: $(go version | cut -d' ' -f3-4)"
-    echo "  CGO_CFLAGS: $CGO_CFLAGS"
-    echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
-    echo ""
-    echo "Tip: Type 'zsh' to use your shell (CGO flags will persist)"
-    echo "=================================================="
-    echo ""
+    # Only show welcome message in interactive shells
+    if [ -t 1 ]; then
+      echo "=================================================="
+      echo "  Go WASM Engine Development Environment"
+      echo "=================================================="
+      echo ""
+      echo "Available commands:"
+      echo "  make build-desktop  - Build Ebiten desktop binary"
+      echo "  make run-desktop    - Build and run desktop game"
+      echo "  make test           - Run unit tests"
+      echo "  make clean          - Clean build artifacts"
+      echo ""
+      echo "Examples:"
+      echo "  cd examples/grid-sim-game && go build ./..."
+      echo "  cd examples/grid-sim-game && go test ./..."
+      echo ""
+      echo "Environment:"
+      echo "  Go: $(go version | cut -d' ' -f3-4)"
+      echo "  SuperLU: ${pkgs.superlu}/lib/libsuperlu.so (sparse solver)"
+      echo "  CGO_CFLAGS: $CGO_CFLAGS"
+      echo "  CGO_LDFLAGS: $CGO_LDFLAGS"
+      echo ""
+      echo "Tip: Type 'zsh' to use your shell (CGO flags will persist)"
+      echo "=================================================="
+      echo ""
+    fi
   '';
 }

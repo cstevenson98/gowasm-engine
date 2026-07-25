@@ -80,6 +80,12 @@ type LineSegmentProps struct {
 	ResistanceOhm float64
 }
 
+// DefaultLineResistanceOhm is the resistance given to a newly-placed line
+// segment. 0.05 Ω per grid cell is in the right ballpark for a few tens of
+// metres of LV copper distribution cable (~1-2 Ω/km), so a multi-cell line
+// produces a visible but modest voltage drop at LV (~230V) load currents.
+const DefaultLineResistanceOhm = 0.05
+
 // GridOccupancy is the per-World map of occupied cells, enforcing that
 // generators, houses and line tiles never overlap each other.
 type GridOccupancy struct {

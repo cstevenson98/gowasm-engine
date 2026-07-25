@@ -170,6 +170,9 @@ func deleteCell(w *ecs.World, occupancy *grid.GridOccupancy, cell grid.GridCoord
 //
 // For line-segment entities the branch resistance is read from the entity's
 // LineSegmentProps component; all other connections use resistance = 0.
+// House entities have their measured HouseLoad demand written into the
+// bus's BusSpec (consumer convention P/Q converted to the solver's
+// generator-convention watts/VAR), overriding the zero-injection default.
 func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridCoord, occupancy *grid.GridOccupancy) {
 	net := ecs.GetResource[network.ElectricalNetwork](w)
 	if net == nil {
@@ -177,6 +180,12 @@ func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridC
 	}
 	bus := net.AddBus(e, toolToBusType(kind))
 	ecs.NewMap1[network.NetworkLink](w).Add(e, &network.NetworkLink{BusID: bus.ID})
+
+	if kind == grid.ToolHouse {
+		if hl := ecs.NewMap1[grid.HouseLoad](w).Get(e); hl != nil {
+			net.SetBusSpec(bus.ID, network.PQSpec(-hl.PKw*1000, -hl.QKw*1000))
+		}
+	}
 
 	var resistance float64
 	if kind == grid.ToolLine {
@@ -198,11 +207,21 @@ func attachToNetwork(w *ecs.World, e ecs.Entity, kind grid.Tool, cell grid.GridC
 	}
 }
 
-// logNetwork logs the current network state at INFO level if the resource exists.
+// logNetwork logs the current network topology at INFO level, then attempts
+// a load flow solve and logs either the resulting bus voltages or the solve
+// error, if the ElectricalNetwork resource exists. Called after every
+// placement/deletion that changes the network.
 func logNetwork(w *ecs.World) {
-	if net := ecs.GetResource[network.ElectricalNetwork](w); net != nil {
-		net.Log()
+	net := ecs.GetResource[network.ElectricalNetwork](w)
+	if net == nil {
+		return
 	}
+	net.Log()
+
+	if err := network.NewLoadflowSolver().Solve(net); err != nil {
+		logger.Logger.Errorf("grid-sim: loadflow failed: %v", err)
+	}
+	net.LogVoltages()
 }
 
 func toolToBusType(t grid.Tool) network.BusType {

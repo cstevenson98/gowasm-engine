@@ -174,3 +174,59 @@ func TestNoSlackBusReturnsError(t *testing.T) {
 		t.Fatal("expected error for network with no slack bus")
 	}
 }
+
+// TestLVFeeder mirrors the in-game LV setup: a 230V slack generator, a short
+// resistive feeder (0.05 Ω/segment), and a house load of 15 kW + 5 kVAR.
+// Verifies convergence, voltage drop along the feeder, and that P_calc matches
+// the specified load.
+func TestLVFeeder(t *testing.T) {
+	const R = 0.05
+	const PloadW = -15000.0
+	const QloadVAR = -5000.0
+
+	net, w := emptyNet()
+	e0, e1, e2 := newEntity(w), newEntity(w), newEntity(w)
+
+	b0 := net.AddBus(e0, network.BusGenerator) // default SlackSpec(230, 0)
+	b1 := net.AddBus(e1, network.BusJunction)
+	b2 := net.AddBus(e2, network.BusLoad)
+	net.SetBusSpec(b2.ID, network.PQSpec(PloadW, QloadVAR))
+
+	net.AddBranch(b0.ID, b1.ID, R)
+	net.AddBranch(b1.ID, b2.ID, R)
+
+	if err := network.NewLoadflowSolver().Solve(net); err != nil {
+		t.Fatalf("solve error: %v", err)
+	}
+	if !net.State.Converged {
+		t.Fatalf("did not converge, iterations=%d", net.State.Iterations)
+	}
+
+	bs0, _ := net.BusStateFor(b0.ID)
+	bs1, _ := net.BusStateFor(b1.ID)
+	bs2, _ := net.BusStateFor(b2.ID)
+
+	if math.Abs(bs0.Result.VoltMag-network.NominalVoltageV) > 1e-6 {
+		t.Errorf("slack |V| = %.4f, want %.1f", bs0.Result.VoltMag, network.NominalVoltageV)
+	}
+	if bs1.Result.VoltMag >= bs0.Result.VoltMag {
+		t.Errorf("expected V_1 < V_0, got V_1=%.2f V_0=%.2f", bs1.Result.VoltMag, bs0.Result.VoltMag)
+	}
+	if bs2.Result.VoltMag >= bs1.Result.VoltMag {
+		t.Errorf("expected V_2 < V_1, got V_2=%.2f V_1=%.2f", bs2.Result.VoltMag, bs1.Result.VoltMag)
+	}
+	if math.Abs(bs2.Result.PInject-PloadW) > 1e-3 {
+		t.Errorf("P_calc_2 = %.4f, want %.4f", bs2.Result.PInject, PloadW)
+	}
+	if math.Abs(bs2.Result.QInject-QloadVAR) > 1e-3 {
+		t.Errorf("Q_calc_2 = %.4f, want %.4f", bs2.Result.QInject, QloadVAR)
+	}
+
+	// Sanity: ~15 kW over ~0.1 Ω at 230 V should drop a few volts, not tens.
+	drop := bs0.Result.VoltMag - bs2.Result.VoltMag
+	if drop < 1 || drop > 20 {
+		t.Errorf("unexpected feeder drop %.2f V (want roughly 1–20 V)", drop)
+	}
+	t.Logf("LV feeder: V0=%.2fV V1=%.2fV V2=%.2fV drop=%.2fV iters=%d",
+		bs0.Result.VoltMag, bs1.Result.VoltMag, bs2.Result.VoltMag, drop, net.State.Iterations)
+}

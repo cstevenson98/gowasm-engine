@@ -7,6 +7,7 @@ package network
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 
@@ -42,10 +43,10 @@ type Bus struct {
 // Branch is an undirected connection between two buses representing a grid
 // adjacency (line segment, or direct generator/house contact).
 type Branch struct {
-	ID           BranchID
-	From         BusID
-	To           BusID
-	Resistance   float64 // series resistance [Ω]; 0 for direct connections
+	ID         BranchID
+	From       BusID
+	To         BusID
+	Resistance float64 // series resistance [Ω]; 0 for direct connections
 }
 
 // NetworkLink is the ECS component that is the grid-side half of the join.
@@ -284,6 +285,31 @@ func (n *ElectricalNetwork) Log() {
 	for _, raw := range branchIDs {
 		br := n.branches[BranchID(raw)]
 		fmt.Fprintf(&sb, " %d-%d", br.From, br.To)
+	}
+	logger.Logger.Info(sb.String())
+}
+
+// LogVoltages logs the solved voltage magnitude and angle at every bus,
+// sorted by ID, at INFO level — along with whether the last solve converged
+// and how many iterations it took. Values reflect whatever is currently in
+// n.State.Buses[*].Result, so on a failed/non-converged solve this still
+// prints the best available (possibly flat-start or stale) estimate.
+// Voltages are in volts (LV, see NominalVoltageV); P is logged in kW.
+func (n *ElectricalNetwork) LogVoltages() {
+	busIDs := make([]int, 0, len(n.buses))
+	for id := range n.buses {
+		busIDs = append(busIDs, int(id))
+	}
+	sort.Ints(busIDs)
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "loadflow: converged=%v iterations=%d |", n.State.Converged, n.State.Iterations)
+	for _, raw := range busIDs {
+		id := BusID(raw)
+		b := n.buses[id]
+		res := n.State.Buses[id].Result
+		fmt.Fprintf(&sb, " bus%d(%s)=%.1fV∠%.2f° P=%.2fkW",
+			b.ID, b.Type, res.VoltMag, res.VoltAng*180/math.Pi, res.PInject/1000)
 	}
 	logger.Logger.Info(sb.String())
 }
