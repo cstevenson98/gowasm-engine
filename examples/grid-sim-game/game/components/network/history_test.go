@@ -47,15 +47,15 @@ func TestRecordHistory(t *testing.T) {
 	net, w := emptyNet()
 	e0, e1 := newEntity(w), newEntity(w)
 
-	b0 := net.AddBus(e0, network.BusGenerator)
-	b1 := net.AddBus(e1, network.BusLoad)
+	b0 := mustAddBus(t, net, e0, network.BusGenerator)
+	b1 := mustAddBus(t, net, e1, network.BusLoad)
 	h0 := network.NewBusHistory()
 	h1 := network.NewBusHistory()
 	ecs.NewMap1[network.BusHistory](w).Add(e0, &h0)
 	ecs.NewMap1[network.BusHistory](w).Add(e1, &h1)
 
 	net.SetBusSpec(b1.ID, network.PQSpec(-15000, 0))
-	net.AddBranch(b0.ID, b1.ID, 0.05)
+	net.AddBranch(b0.ID, b1.ID, 0.00164) // one 10 m LV feeder cell
 
 	if err := network.NewLoadflowSolver().Solve(net); err != nil {
 		t.Fatalf("solve: %v", err)

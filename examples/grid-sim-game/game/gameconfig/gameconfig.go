@@ -24,6 +24,11 @@ type Settings struct {
 	// that region are ignored so placement stays on the playfield.
 	SidePanelFraction float64
 
+	// DebugLoadflowLog, when true, dumps topology and bus voltages to the
+	// logger on every Dirty load-flow solve. Off by default; use the ImGui
+	// network panel for live inspection.
+	DebugLoadflowLog bool
+
 	BlankTexture     string // Path to the single-cell blank/grid tile texture.
 	GeneratorTexture string // Path to the generator tile texture.
 	HouseTexture     string // Path to the house tile texture.
@@ -45,6 +50,7 @@ var Global = Settings{
 	ButtonMarginY: 2.0,
 
 	SidePanelFraction: 0.5,
+	DebugLoadflowLog:  false,
 
 	BlankTexture:     "assets/art/blank.png",
 	GeneratorTexture: "assets/art/generator.png",

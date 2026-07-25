@@ -18,12 +18,21 @@ func emptyNet() (*network.ElectricalNetwork, *ecs.World) {
 	return network.NewElectricalNetwork(), ecs.NewWorld()
 }
 
+func mustAddBus(t *testing.T, n *network.ElectricalNetwork, e ecs.Entity, typ network.BusType) *network.Bus {
+	t.Helper()
+	b, err := n.AddBus(e, typ)
+	if err != nil {
+		t.Fatalf("AddBus: %v", err)
+	}
+	return b
+}
+
 // TestFlatStart: a network with only a slack bus should converge immediately
 // with no mismatch.
 func TestFlatStart(t *testing.T) {
 	net, w := emptyNet()
 	e0 := newEntity(w)
-	bus0 := net.AddBus(e0, network.BusGenerator)
+	bus0 := mustAddBus(t, net, e0, network.BusGenerator)
 	net.SetBusSpec(bus0.ID, network.SlackSpec(1.0, 0.0))
 
 	s := network.NewLoadflowSolver()
@@ -65,10 +74,10 @@ func TestTwoBusPureResistive(t *testing.T) {
 	e0 := newEntity(w)
 	e1 := newEntity(w)
 
-	bus0 := net.AddBus(e0, network.BusGenerator)
+	bus0 := mustAddBus(t, net, e0, network.BusGenerator)
 	net.SetBusSpec(bus0.ID, network.SlackSpec(1.0, 0.0))
 
-	bus1 := net.AddBus(e1, network.BusLoad)
+	bus1 := mustAddBus(t, net, e1, network.BusLoad)
 	net.SetBusSpec(bus1.ID, network.PQSpec(Pspec, 0.0))
 
 	net.AddBranch(bus0.ID, bus1.ID, R)
@@ -112,13 +121,13 @@ func TestThreeBusResistive(t *testing.T) {
 	net, w := emptyNet()
 	e0, e1, e2 := newEntity(w), newEntity(w), newEntity(w)
 
-	b0 := net.AddBus(e0, network.BusGenerator)
+	b0 := mustAddBus(t, net, e0, network.BusGenerator)
 	net.SetBusSpec(b0.ID, network.SlackSpec(1.0, 0.0))
 
-	b1 := net.AddBus(e1, network.BusLoad)
+	b1 := mustAddBus(t, net, e1, network.BusLoad)
 	net.SetBusSpec(b1.ID, network.PQSpec(Pload, 0.0))
 
-	b2 := net.AddBus(e2, network.BusLoad)
+	b2 := mustAddBus(t, net, e2, network.BusLoad)
 	net.SetBusSpec(b2.ID, network.PQSpec(Pload, 0.0))
 
 	net.AddBranch(b0.ID, b1.ID, R)
@@ -166,7 +175,7 @@ func TestThreeBusResistive(t *testing.T) {
 func TestNoSlackBusReturnsError(t *testing.T) {
 	net, w := emptyNet()
 	e := newEntity(w)
-	b := net.AddBus(e, network.BusLoad)
+	b := mustAddBus(t, net, e, network.BusLoad)
 	net.SetBusSpec(b.ID, network.PQSpec(-0.1, 0))
 
 	s := network.NewLoadflowSolver()
@@ -175,25 +184,25 @@ func TestNoSlackBusReturnsError(t *testing.T) {
 	}
 }
 
-// TestLVFeeder mirrors the in-game LV setup: a 230V slack generator, a short
-// resistive feeder (0.05 Ω/segment), and a house load of 15 kW + 5 kVAR.
-// Verifies convergence, voltage drop along the feeder, and that P_calc matches
-// the specified load.
+// lineCellR is one 10 m cell of ≈185 mm² Al LV feeder (0.164 Ω/km).
+const lineCellR = 0.00164
+
+// TestLVFeeder mirrors the in-game LV setup: a 230V slack, two line cells
+// (~20 m), and a house load of 15 kW + 5 kVAR.
 func TestLVFeeder(t *testing.T) {
-	const R = 0.05
 	const PloadW = -15000.0
 	const QloadVAR = -5000.0
 
 	net, w := emptyNet()
 	e0, e1, e2 := newEntity(w), newEntity(w), newEntity(w)
 
-	b0 := net.AddBus(e0, network.BusGenerator) // default SlackSpec(230, 0)
-	b1 := net.AddBus(e1, network.BusJunction)
-	b2 := net.AddBus(e2, network.BusLoad)
+	b0 := mustAddBus(t, net, e0, network.BusGenerator) // default SlackSpec(230, 0)
+	b1 := mustAddBus(t, net, e1, network.BusJunction)
+	b2 := mustAddBus(t, net, e2, network.BusLoad)
 	net.SetBusSpec(b2.ID, network.PQSpec(PloadW, QloadVAR))
 
-	net.AddBranch(b0.ID, b1.ID, R)
-	net.AddBranch(b1.ID, b2.ID, R)
+	net.AddBranch(b0.ID, b1.ID, lineCellR)
+	net.AddBranch(b1.ID, b2.ID, lineCellR)
 
 	if err := network.NewLoadflowSolver().Solve(net); err != nil {
 		t.Fatalf("solve error: %v", err)
@@ -222,11 +231,54 @@ func TestLVFeeder(t *testing.T) {
 		t.Errorf("Q_calc_2 = %.4f, want %.4f", bs2.Result.QInject, QloadVAR)
 	}
 
-	// Sanity: ~15 kW over ~0.1 Ω at 230 V should drop a few volts, not tens.
+	// ~15 kW over ~20 m of 185 mm² Al: drop should be well under a volt.
 	drop := bs0.Result.VoltMag - bs2.Result.VoltMag
-	if drop < 1 || drop > 20 {
-		t.Errorf("unexpected feeder drop %.2f V (want roughly 1–20 V)", drop)
+	if drop <= 0 || drop > 1.0 {
+		t.Errorf("unexpected feeder drop %.3f V (want (0, 1] V)", drop)
 	}
-	t.Logf("LV feeder: V0=%.2fV V1=%.2fV V2=%.2fV drop=%.2fV iters=%d",
+	t.Logf("LV feeder: V0=%.2fV V1=%.2fV V2=%.2fV drop=%.3fV iters=%d",
 		bs0.Result.VoltMag, bs1.Result.VoltMag, bs2.Result.VoltMag, drop, net.State.Iterations)
+}
+
+// TestLVHundredBusRadial is a ~100-bus radial feeder (slack + 98 junctions +
+// one end load) at 10 m/cell with distribution-cable R. Confirms the tuned
+// parameters stay within a healthy LV band for a kilometre-scale feeder.
+func TestLVHundredBusRadial(t *testing.T) {
+	const nJunction = 98
+	const PloadW = -15000.0
+
+	net, w := emptyNet()
+	slackE := newEntity(w)
+	slack := mustAddBus(t, net, slackE, network.BusGenerator)
+	prev := slack.ID
+	for i := 0; i < nJunction; i++ {
+		e := newEntity(w)
+		b := mustAddBus(t, net, e, network.BusJunction)
+		net.AddBranch(prev, b.ID, lineCellR)
+		prev = b.ID
+	}
+	loadE := newEntity(w)
+	load := mustAddBus(t, net, loadE, network.BusLoad)
+	net.SetBusSpec(load.ID, network.PQSpec(PloadW, 0))
+	net.AddBranch(prev, load.ID, lineCellR)
+
+	if err := network.NewLoadflowSolver().Solve(net); err != nil {
+		t.Fatalf("solve error: %v", err)
+	}
+	if !net.State.Converged {
+		t.Fatalf("did not converge, iterations=%d", net.State.Iterations)
+	}
+
+	bs0, _ := net.BusStateFor(slack.ID)
+	bsL, _ := net.BusStateFor(load.ID)
+	drop := bs0.Result.VoltMag - bsL.Result.VoltMag
+	// ~1 km of 185 mm² Al at 15 kW: expect roughly 5–15 V drop, still >216 V.
+	if bsL.Result.VoltMag < 216 {
+		t.Errorf("end |V|=%.2f, want ≥216 V (LV −6%% band)", bsL.Result.VoltMag)
+	}
+	if drop < 3 || drop > 25 {
+		t.Errorf("feeder drop %.2f V, want roughly 3–25 V for 1 km @ 15 kW", drop)
+	}
+	t.Logf("100-bus radial: buses=%d V0=%.2f Vend=%.2f drop=%.2fV iters=%d",
+		len(net.Buses()), bs0.Result.VoltMag, bsL.Result.VoltMag, drop, net.State.Iterations)
 }

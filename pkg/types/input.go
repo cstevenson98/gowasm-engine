@@ -21,6 +21,7 @@ type InputState struct {
 	Key2Pressed  bool // Key 2 for scene switching
 	Key3Pressed  bool // Key 3 for debug console toggle
 	MPressed     bool // M key for player menu
+	CPressed     bool // C key (e.g. clear selected tool)
 
 	// Modifier keys
 	ShiftPressed bool
@@ -40,6 +41,7 @@ type InputState struct {
 	Key2PressedLastFrame  bool
 	Key3PressedLastFrame  bool
 	MPressedLastFrame     bool
+	CPressedLastFrame     bool
 	ShiftPressedLastFrame bool
 	CtrlPressedLastFrame  bool
 }

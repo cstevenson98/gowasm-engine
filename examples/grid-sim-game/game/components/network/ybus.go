@@ -26,10 +26,10 @@ import (
 // infinite (and numerically extreme) admittance. Direct connections (R=0) —
 // e.g. a house bus tied to a line-segment bus — use this value.
 //
-// 1e-3 Ω is still electrically a near-short at LV (~0.08 V drop at 80 A) but
-// keeps G = 1/R ~ 1e3 S so the Newton Jacobian stays well-conditioned in SI
-// units. A 1e-6 Ω floor produced G ~ 1e6 S and stalled NR near ~1e-6 residual.
-const minResistance = 1e-3 // Ω
+// Must stay well below one line-cell R (~0.0016 Ω for 10 m of 185 mm² Al) so
+// contact links remain near-shorts, but not so small that G = 1/R blows up
+// the SI Jacobian (1e-6 Ω → G ~ 1e6 S stalled NR previously).
+const minResistance = 1e-4 // Ω
 
 // busOrdering defines a deterministic mapping from BusIDs to:
 //

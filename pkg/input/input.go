@@ -61,6 +61,7 @@ func (e *Input) PollInput() types.InputState {
 	e.state.Key2PressedLastFrame = e.previousState.Key2Pressed
 	e.state.Key3PressedLastFrame = e.previousState.Key3Pressed
 	e.state.MPressedLastFrame = e.previousState.MPressed
+	e.state.CPressedLastFrame = e.previousState.CPressed
 	e.state.ShiftPressedLastFrame = e.previousState.ShiftPressed
 	e.state.CtrlPressedLastFrame = e.previousState.CtrlPressed
 	e.state.Mouse.Left.PressedLastFrame = e.previousState.Mouse.Left.Pressed
@@ -97,6 +98,7 @@ func (e *Input) pollKeyboard() {
 	e.state.Key2Pressed = ebiten.IsKeyPressed(ebiten.Key2)
 	e.state.Key3Pressed = ebiten.IsKeyPressed(ebiten.Key3)
 	e.state.MPressed = ebiten.IsKeyPressed(ebiten.KeyM)
+	e.state.CPressed = ebiten.IsKeyPressed(ebiten.KeyC)
 
 	// Modifier keys
 	e.state.ShiftPressed = ebiten.IsKeyPressed(ebiten.KeyShift)

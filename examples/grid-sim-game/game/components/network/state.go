@@ -32,6 +32,20 @@ const (
 	PQ
 )
 
+// String returns a short UI/debug label for the formulation.
+func (f BusFormulation) String() string {
+	switch f {
+	case Slack:
+		return "Slack"
+	case PV:
+		return "PV"
+	case PQ:
+		return "PQ"
+	default:
+		return "?"
+	}
+}
+
 // BusSpec is the boundary condition set by an entity (or a system reading ECS
 // components) before each solve. Use the constructor functions — SlackSpec,
 // PVSpec, PQSpec, JunctionSpec — rather than constructing this directly, so

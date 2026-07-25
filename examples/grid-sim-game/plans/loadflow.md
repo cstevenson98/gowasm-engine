@@ -122,19 +122,12 @@ Real implementations will replace this with:
 
 ---
 
-## Future: TimeEvolution
+## Time evolution
 
-```go
-type TimeEvolution struct {
-    History []*StaticState   // snapshots at each time step
-    dt      float64          // step size in seconds
-}
-
-func (t *TimeEvolution) Step(net *ElectricalNetwork, solver Solver) error
-```
-
-A time-evolved run would: update bus specs from ECS components (e.g. a load
-schedule), call `solver.Solve(net)`, snapshot `net.State`, repeat.
+Not implemented. House demand currently re-samples via `LoadTickSystem`;
+history rings (`BusHistory` / `BranchHistory`) cover recent solve samples.
+A dedicated TimeEvolution stepper can be added later if schedules need
+explicit snapshots beyond Dirty-driven solves.
 
 ---
 
@@ -144,5 +137,8 @@ schedule), call `solver.Solve(net)`, snapshot `net.State`, repeat.
 game/components/network/
   network.go   ← topology graph + State field + entity-join API
   state.go     ← BusSpec, BusResult, BusState, BranchResult, BranchState, StaticState
-  solver.go    ← Solver interface, LoadflowSolver stub, (future TimeEvolution)
+  solver.go    ← Solver interface, LoadflowSolver
+  history.go   ← Series / BusHistory / BranchHistory
+  ybus.go      ← Y-bus build + CalcPQ
+  sparse.go    ← SparseMatrix
 ```

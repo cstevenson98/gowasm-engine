@@ -9,9 +9,16 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/types"
 )
 
-// RandLoadKW returns a uniform random value in [10, 20] kW (or kVAR) for
-// house demand. Used at spawn and by the load-tick system.
-func RandLoadKW() float64 { return 10.0 + rand.Float64()*10.0 }
+const (
+	HouseLoadMinKW = 1.5
+	HouseLoadMaxKW = 3.0
+)
+
+// RandLoadKW returns a uniform random value in [HouseLoadMinKW, HouseLoadMaxKW]
+// for house demand (kW or kVAR). Used at spawn and by the load-tick system.
+func RandLoadKW() float64 {
+	return HouseLoadMinKW + (HouseLoadMaxKW-HouseLoadMinKW)*rand.Float64()
+}
 
 // cellPosition returns a cell's top-left world position in pixels.
 func cellPosition(cell GridCoord) types.Vector2 {

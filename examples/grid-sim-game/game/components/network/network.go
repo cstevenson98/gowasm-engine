@@ -1,11 +1,7 @@
-// Package network holds the electrical circuit model for the grid-sim-game.
-// It is a plain-Go graph resource (ElectricalNetwork) that lives alongside
-// the ECS world but owns its own buses and branches. Grid entities are joined
-// to the network via the NetworkLink component and the network's internal
-// entityBus map.
 package network
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -14,6 +10,9 @@ import (
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 )
+
+// ErrDuplicateBus is returned by AddBus when the entity already has a bus.
+var ErrDuplicateBus = errors.New("network: entity already has a bus")
 
 // BusType distinguishes how a bus participates in power flow.
 type BusType int
@@ -102,10 +101,10 @@ func (n *ElectricalNetwork) ClearDirty() { n.Dirty = false }
 // --- Join interface ---------------------------------------------------------
 
 // AddBus registers a new bus for the given ECS entity and returns it.
-// Panics if the entity already has a bus.
-func (n *ElectricalNetwork) AddBus(e ecs.Entity, t BusType) *Bus {
+// Returns ErrDuplicateBus if the entity already has a bus.
+func (n *ElectricalNetwork) AddBus(e ecs.Entity, t BusType) (*Bus, error) {
 	if _, exists := n.entityBus[e]; exists {
-		panic("network: entity already has a bus")
+		return nil, ErrDuplicateBus
 	}
 	id := n.nextBus
 	n.nextBus++
@@ -115,7 +114,7 @@ func (n *ElectricalNetwork) AddBus(e ecs.Entity, t BusType) *Bus {
 	n.incidence[id] = nil
 	n.State.Buses[id] = &BusState{Spec: defaultBusSpec(t)}
 	n.MarkDirty()
-	return b
+	return b, nil
 }
 
 // BusForEntity returns the bus linked to the given ECS entity, or false if the

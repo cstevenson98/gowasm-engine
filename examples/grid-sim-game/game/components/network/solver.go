@@ -397,29 +397,3 @@ func writeAllResults(net *ElectricalNetwork, yb *YBus, x *mat.VecDense) {
 		}
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Time evolution (stub)
-// ---------------------------------------------------------------------------
-
-// TimeEvolution holds a series of StaticState snapshots and advances the
-// network through time by repeatedly solving and recording results.
-type TimeEvolution struct {
-	History []*StaticState
-	dt      float64 // time step in seconds
-}
-
-// NewTimeEvolution creates an empty time evolution with the given step size.
-func NewTimeEvolution(dt float64) *TimeEvolution {
-	return &TimeEvolution{dt: dt}
-}
-
-// Step solves the network, then appends a copy of the result to History.
-func (t *TimeEvolution) Step(net *ElectricalNetwork, s Solver) error {
-	if err := s.Solve(net); err != nil {
-		return err
-	}
-	snap := *net.State
-	t.History = append(t.History, &snap)
-	return nil
-}

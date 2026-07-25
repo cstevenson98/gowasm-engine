@@ -1,6 +1,7 @@
 package network_test
 
 import (
+	"errors"
 	"testing"
 
 	"example.com/grid-sim-game/game/components/network"
@@ -12,10 +13,7 @@ func TestAddAndLookupBus(t *testing.T) {
 	w := ecs.NewWorld()
 	e := ecs.NewMap1[struct{}](w).NewEntity(&struct{}{})
 
-	bus := n.AddBus(e, network.BusGenerator)
-	if bus == nil {
-		t.Fatal("AddBus returned nil")
-	}
+	bus := mustAddBus(t, n, e, network.BusGenerator)
 	if bus.Type != network.BusGenerator {
 		t.Fatalf("bus type = %v, want BusGenerator", bus.Type)
 	}
@@ -26,18 +24,16 @@ func TestAddAndLookupBus(t *testing.T) {
 	}
 }
 
-func TestAddBusDuplicatePanics(t *testing.T) {
+func TestAddBusDuplicateError(t *testing.T) {
 	n := network.NewElectricalNetwork()
 	w := ecs.NewWorld()
 	e := ecs.NewMap1[struct{}](w).NewEntity(&struct{}{})
-	n.AddBus(e, network.BusGenerator)
+	mustAddBus(t, n, e, network.BusGenerator)
 
-	defer func() {
-		if r := recover(); r == nil {
-			t.Fatal("expected panic for duplicate AddBus")
-		}
-	}()
-	n.AddBus(e, network.BusLoad)
+	_, err := n.AddBus(e, network.BusLoad)
+	if !errors.Is(err, network.ErrDuplicateBus) {
+		t.Fatalf("err = %v, want ErrDuplicateBus", err)
+	}
 }
 
 func TestBranchAndNeighbors(t *testing.T) {
@@ -48,9 +44,9 @@ func TestBranchAndNeighbors(t *testing.T) {
 	e2 := m.NewEntity(&struct{}{})
 	e3 := m.NewEntity(&struct{}{})
 
-	b1 := n.AddBus(e1, network.BusGenerator)
-	b2 := n.AddBus(e2, network.BusJunction)
-	b3 := n.AddBus(e3, network.BusLoad)
+	b1 := mustAddBus(t, n, e1, network.BusGenerator)
+	b2 := mustAddBus(t, n, e2, network.BusJunction)
+	b3 := mustAddBus(t, n, e3, network.BusLoad)
 
 	n.AddBranch(b1.ID, b2.ID, 0)
 	n.AddBranch(b2.ID, b3.ID, 0)
@@ -73,8 +69,8 @@ func TestRemoveBus(t *testing.T) {
 	e1 := m.NewEntity(&struct{}{})
 	e2 := m.NewEntity(&struct{}{})
 
-	b1 := n.AddBus(e1, network.BusGenerator)
-	b2 := n.AddBus(e2, network.BusLoad)
+	b1 := mustAddBus(t, n, e1, network.BusGenerator)
+	b2 := mustAddBus(t, n, e2, network.BusLoad)
 	n.AddBranch(b1.ID, b2.ID, 0)
 
 	n.RemoveBus(b1.ID)
@@ -100,8 +96,8 @@ func TestRemoveBranch(t *testing.T) {
 	e1 := m.NewEntity(&struct{}{})
 	e2 := m.NewEntity(&struct{}{})
 
-	b1 := n.AddBus(e1, network.BusGenerator)
-	b2 := n.AddBus(e2, network.BusLoad)
+	b1 := mustAddBus(t, n, e1, network.BusGenerator)
+	b2 := mustAddBus(t, n, e2, network.BusLoad)
 	br := n.AddBranch(b1.ID, b2.ID, 0)
 
 	n.RemoveBranch(br.ID)
@@ -122,7 +118,7 @@ func TestDirtyFlag(t *testing.T) {
 
 	w := ecs.NewWorld()
 	e := ecs.NewMap1[struct{}](w).NewEntity(&struct{}{})
-	b := n.AddBus(e, network.BusGenerator)
+	b := mustAddBus(t, n, e, network.BusGenerator)
 	if !n.Dirty {
 		t.Fatal("AddBus should mark dirty")
 	}

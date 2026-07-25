@@ -3592,3 +3592,165 @@ Nearest-neighbor + fractional tile sizes + independent position/size rounding �
 -
 
 ---
+
+## [2026-07-25 21:05:04 BST] - Grid UI: hover, select, C clear tool, placement ghost
+
+**Prompt/Request**: Implement Grid UI overlays plan (hover border, cell select + ImGui metadata, C clears tool, placement ghost with red X for delete).
+
+**Changes Made**:
+- `CPressed` input key
+- `PlacementState` hover/selection fields; `grid.ScreenToCell` / `CellScreenRect`
+- PlacementSystem: hover every frame, C clears tool, ToolNone click selects cell
+- Overlays: yellow hover + cyan selection borders; ghost fill+letter (path for line, red X for delete)
+- ImGui Selection section with cell/occupant/network metadata
+
+**Reasoning**:
+Inspect mode when no tool; chrome stays screen-space overlays so ghosts never touch ECS/occupancy.
+
+**Impact**:
+- Clearer placement feedback; inspector for any selected cell
+
+**Testing**:
+- `go build` / `go test` grid-sim + pkg/input — pass
+
+**Notes**:
+-
+
+---
+
+## [2026-07-25 22:04:26 BST] - Tuned LV line R to 10 m / 185 mm² Al
+
+**Prompt/Request**: Tune so each line box ≈ 10 m, with adequate LV distribution cable resistance to support ~100 buses per network (previous 0.05 Ω/cell caused huge illustrative drops).
+
+**Changes Made**:
+- `grid.go`: `CellLengthM=10`, `CableOhmPerKm=0.164` (≈185 mm² Al), `DefaultLineResistanceOhm=0.00164`
+- `ybus.go`: lowered `minResistance` 1e-3 → 1e-4 so contact R stays ≪ one cell
+- Updated LV feeder / contact / history tests; added `TestLVHundredBusRadial`
+- Selection UI shows cell length with resistance
+
+**Reasoning**:
+0.05 Ω/cell implied unrealistically high R for 10 m. 185 mm² Al (~0.164 Ω/km) yields ~0.00164 Ω/cell; a 1 km radial at 15 kW drops ~11 V (still >216 V).
+
+**Impact**:
+- New line placements use much lower R; voltage profiles are realistic for LV feeders
+- Existing placed lines keep old R until re-placed
+
+**Testing**:
+- `go test ./game/components/network/` — pass (100-bus: Vend≈218.9 V, drop≈11 V)
+
+**Notes**:
+House loads of 10–20 kW remain aggressive if many houses share one feeder; topology scale of ~100 buses is what the cable sizing targets.
+
+---
+
+## [2026-07-25 22:19:43 BST] - Assessed grid-sim-game code quality
+
+**Prompt/Request**: Assessment of code quality/organisation of examples/grid-sim-game with easy refactor wins for digestibility and growth.
+
+**Changes Made**:
+- Created canvas `grid-sim-game-assessment.canvas.tsx` (architecture review artifact)
+- No game code changes
+
+**Reasoning**:
+User asked for assessment only; package layout is already post-entities refactor and mostly healthy.
+
+**Impact**:
+- None on runtime code
+
+**Testing**:
+- N/A (read-only review)
+
+**Notes**:
+Top wins: split grid_state UI hub, extract placement wiring, grid geometry tests; do not reshuffle import graph or churn pkg/nr.
+
+---
+
+## [2026-07-25 22:22:46 BST] - Planned easy-wins refactor for grid-sim-game
+
+**Prompt/Request**: Plan to do all easy-win refactors from the quality assessment.
+
+**Changes Made**:
+- Added `examples/grid-sim-game/plans/easy-wins-refactor.md` (phased A–E plan)
+
+**Reasoning**:
+Sequence low-risk cleanups and UI split before wiring extract and domain rename; preserve acyclic imports and Dirty→loadflow contract.
+
+**Impact**:
+- Plan only; no code changes yet
+
+**Testing**:
+- N/A
+
+**Notes**:
+Open decision: keep RandLoadKW at [1.5,3] (recommended) vs restore [10,20]. Ready to implement on user go-ahead.
+
+---
+
+## [2026-07-25 22:26:44 BST] - Implemented easy-wins refactor (phases A–E1)
+
+**Prompt/Request**: Execute the easy-wins refactor plan for grid-sim-game.
+
+**Changes Made**:
+- Phase A: `RandLoadKW` [1.5,3] + constants; removed `TimeEvolution`; `AddBus` → `(*Bus, error)` / `ErrDuplicateBus`
+- Phase B: split `states/` into `grid_state.go`, `grid_overlays.go`, `grid_imgui.go`; `Tool.GhostLetter`/`KindLabel`; `BusFormulation.String`
+- Phase C: new `systems/wiring` (Attach/Detach); `DebugLoadflowLog` gates solve dumps
+- Phase D: `grid/coords_test.go`, `wiring/wiring_test.go` pipeline smoke test
+- Phase E1: `network/doc.go` glossary; updated `plans/loadflow.md` (E2 subpkg deferred)
+
+**Reasoning**:
+Land digestibility wins without reshaping the import graph or churning pkg/nr.
+
+**Impact**:
+- Placement no longer owns electrical join logic
+- Loadflow logging quiet by default
+- Tests cover geometry + attach→solve→loadtick path
+
+**Testing**:
+- `go test ./game/components/... ./game/systems/... ./pkg/... ./states/` — pass
+- `go build ./game/` — pass
+
+**Notes**:
+Manual desktop smoke still recommended. Optional E2 (network/powerflow subpkg) left for later.
+
+---
+
+## [2026-07-25 22:31:13 BST] - Added next-growth plan for grid-sim-game
+
+**Prompt/Request**: Add the follow-up ideas (blank grid, islands, placement split, polyline lines, ImGui status, R+X, save/load, leftovers) to a plan.
+
+**Changes Made**:
+- Created `examples/grid-sim-game/plans/next-growth.md`
+
+**Reasoning**:
+Capture post-easy-wins backlog with priorities and skip list.
+
+**Impact**:
+- Plan only
+
+**Testing**:
+- N/A
+
+**Notes**:
+Suggested first streak: leftovers → ImGui status → procedural grid.
+
+---
+
+## [2026-07-25 22:36:36 BST] - Expanded next-growth plan with code-level detail
+
+**Prompt/Request**: Explain more in each section with code-wise examples of what is replaced with what and why.
+
+**Changes Made**:
+- Rewrote `examples/grid-sim-game/plans/next-growth.md` with Today→Tomorrow tables, code sketches, file lists per item
+
+**Reasoning**:
+Plan should be actionable for implementation without re-discovering call sites.
+
+**Impact**:
+- Plan only
+
+**Testing**:
+- N/A
+
+**Notes**:
+
+---

@@ -1,11 +1,11 @@
 // Package loadflow implements LoadflowSystem: when the ElectricalNetwork
 // resource is marked Dirty (topology or bus-spec change), it runs one AC
-// power-flow solve and logs the resulting bus voltages. On frames where the
-// circuit is unchanged it is a no-op.
+// power-flow solve. On frames where the circuit is unchanged it is a no-op.
 package loadflow
 
 import (
 	"example.com/grid-sim-game/game/components/network"
+	"example.com/grid-sim-game/game/gameconfig"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/logger"
 )
@@ -32,7 +32,9 @@ func (s *LoadflowSystem) Update(w *ecs.World, _ float64) {
 		return
 	}
 
-	net.Log()
+	if gameconfig.Global.DebugLoadflowLog {
+		net.Log()
+	}
 	err := s.solver.Solve(net)
 	if err != nil {
 		logger.Logger.Errorf("grid-sim: loadflow failed: %v", err)
@@ -42,6 +44,8 @@ func (s *LoadflowSystem) Update(w *ecs.World, _ float64) {
 	if err == nil || net.State.Converged || net.State.Iterations > 0 {
 		network.RecordHistory(w, net)
 	}
-	net.LogVoltages()
+	if gameconfig.Global.DebugLoadflowLog {
+		net.LogVoltages()
+	}
 	net.ClearDirty()
 }
