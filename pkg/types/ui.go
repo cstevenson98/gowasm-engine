@@ -27,12 +27,18 @@ type UIManager interface {
 	TextColored(x, y float64, c Color, s string)
 	// TextCentered draws a string horizontally centered on screen at height y.
 	TextCentered(y float64, c Color, s string)
+	// TextCenteredScaled is like TextCentered but scales glyphs by scale (≥1).
+	TextCenteredScaled(y, scale float64, c Color, s string)
 	// Rect draws a filled rectangle of size (w, h) with its top-left at (x, y).
 	Rect(x, y, w, h float64, c Color)
 	// Measure returns the rendered width (virtual pixels) of a single-line string.
 	Measure(s string) float64
+	// MeasureScaled is Measure multiplied by scale.
+	MeasureScaled(s string, scale float64) float64
 	// LineHeight returns the vertical distance between successive text lines.
 	LineHeight() float64
+	// LineHeightScaled is LineHeight multiplied by scale.
+	LineHeightScaled(scale float64) float64
 	// ScreenSize returns the virtual screen dimensions the UI centers against.
 	ScreenSize() (width, height float64)
 }
@@ -43,10 +49,13 @@ var NopUI UIManager = nopUIManager{}
 
 type nopUIManager struct{}
 
-func (nopUIManager) Text(x, y float64, s string)                 {}
-func (nopUIManager) TextColored(x, y float64, c Color, s string) {}
-func (nopUIManager) TextCentered(y float64, c Color, s string)   {}
-func (nopUIManager) Rect(x, y, w, h float64, c Color)            {}
-func (nopUIManager) Measure(s string) float64                    { return 0 }
-func (nopUIManager) LineHeight() float64                         { return 0 }
-func (nopUIManager) ScreenSize() (float64, float64)              { return 0, 0 }
+func (nopUIManager) Text(x, y float64, s string)                       {}
+func (nopUIManager) TextColored(x, y float64, c Color, s string)       {}
+func (nopUIManager) TextCentered(y float64, c Color, s string)         {}
+func (nopUIManager) TextCenteredScaled(y, scale float64, c Color, s string) {}
+func (nopUIManager) Rect(x, y, w, h float64, c Color)                  {}
+func (nopUIManager) Measure(s string) float64                          { return 0 }
+func (nopUIManager) MeasureScaled(s string, scale float64) float64     { return 0 }
+func (nopUIManager) LineHeight() float64                               { return 0 }
+func (nopUIManager) LineHeightScaled(scale float64) float64            { return 0 }
+func (nopUIManager) ScreenSize() (float64, float64)                    { return 0, 0 }

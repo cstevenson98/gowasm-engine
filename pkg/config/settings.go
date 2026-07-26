@@ -9,7 +9,7 @@
 //
 // Game-specific configuration (player stats, enemy content, save-file
 // defaults, ...) does not belong here - it lives in the game itself, e.g.
-// examples/basic-game/game/gameconfig.
+// the sibling rpg-game module's game/gameconfig.
 package config
 
 // Settings is the engine's configuration.

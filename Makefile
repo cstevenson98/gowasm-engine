@@ -1,78 +1,73 @@
-# Root Makefile - Ebiten Game Engine Development
+# Root Makefile — engine tests + examples (build / run / wasm serve)
 
 .PHONY: help test test-all test-verbose test-coverage tidy fmt lint \
-        build-desktop build-all run-desktop run-desktop-from-assets \
-        dev clean clean-all docs docs-cli
+        examples list-examples build-examples run-demo serve \
+        clean clean-all docs docs-cli
 
 .DEFAULT_GOAL := help
 
-# Colors for output
 CYAN := \033[0;36m
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
-RED := \033[0;31m
-NC := \033[0m # No Color
+NC := \033[0m
+
+# ImGui (cimgui-go) is CGo on desktop. WASM uses //go:build js stubs.
+CGO_ENABLED ?= 1
+
+# Example to run with `make run` / `make run-demo` (default: demo)
+EXAMPLE ?= demo
 
 ##@ General
 
 help: ## Display this help message
-	@echo "$(CYAN)Go WASM Engine - Available Commands$(NC)"
+	@echo "$(CYAN)gowasm-engine — Available Commands$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(GREEN)<target>$(NC)\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(CYAN)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-##@ Building
-
-# ImGui (cimgui-go) is CGo. Desktop builds that pull pkg/imgui need a C/C++
-# toolchain. WASM builds use //go:build js stubs and do not link cimgui.
-# If you also import cimgui-go glfw/sdl backends, add:
-#   -tags exclude_cimgui_glfw,exclude_cimgui_sdl
-CGO_ENABLED ?= 1
-
-build-desktop: ## Build Ebiten desktop binary
-	@echo "$(CYAN)Building Ebiten desktop binary...$(NC)"
-	@cd cmd/ebiten-game && go mod tidy && CGO_ENABLED=$(CGO_ENABLED) go build -o ../../build/game-desktop
-	@echo "$(GREEN)✓ Build complete: build/game-desktop$(NC)"
-
-build-all: build-desktop ## Build all binaries
-
-##@ Running
-
-run-desktop: build-desktop ## Build and run desktop game (from project root)
-	@echo "$(CYAN)Running desktop game...$(NC)"
-	@cd examples/basic-game && ../../build/game-desktop
-
-run-desktop-from-assets: build-desktop ## Run desktop game from assets directory
-	@echo "$(CYAN)Running desktop game from assets directory...$(NC)"
-	@cd examples/basic-game/assets && ../../../build/game-desktop
-
-dev: ## Quick rebuild and run (for rapid iteration)
-	@echo "$(CYAN)Quick dev build...$(NC)"
-	@cd cmd/ebiten-game && CGO_ENABLED=$(CGO_ENABLED) go build -o ../../build/game-desktop
-	@cd examples/basic-game && ../../build/game-desktop
-
 ##@ Testing
 
-test: ## Run engine library tests
+test: ## Run engine library tests (./pkg/...)
 	@echo "$(CYAN)Running engine tests...$(NC)"
 	@CGO_ENABLED=$(CGO_ENABLED) go test ./pkg/...
 
-test-all: ## Run all tests (including examples)
-	@echo "$(CYAN)Running all tests...$(NC)"
+test-all: ## Run all tests in this module
+	@echo "$(CYAN)Running all module tests...$(NC)"
 	@CGO_ENABLED=$(CGO_ENABLED) go test ./...
 
-test-verbose: ## Run tests with verbose output
+test-verbose: ## Run engine tests with verbose output
 	@echo "$(CYAN)Running tests (verbose)...$(NC)"
 	@CGO_ENABLED=$(CGO_ENABLED) go test -v ./pkg/...
 
-test-coverage: ## Run tests with coverage report
+test-coverage: ## Run engine tests with coverage report
 	@echo "$(CYAN)Running tests with coverage...$(NC)"
 	@CGO_ENABLED=$(CGO_ENABLED) go test -coverprofile=coverage.out ./pkg/...
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)✓ Coverage report: coverage.html$(NC)"
 
+##@ Examples
+
+list-examples: ## List example modules under examples/
+	@$(MAKE) -C examples list
+
+build-examples: ## Build all examples to WASM (examples/build + examples/dist)
+	@echo "$(CYAN)Building examples (wasm)...$(NC)"
+	@$(MAKE) -C examples build
+
+examples: build-examples ## Alias for build-examples
+
+run: run-demo ## Run EXAMPLE (default: demo) on desktop
+
+run-demo: ## Run examples/$(EXAMPLE) on desktop (`go run ./game`)
+	@echo "$(CYAN)Running examples/$(EXAMPLE)...$(NC)"
+	@cd examples/$(EXAMPLE) && CGO_ENABLED=$(CGO_ENABLED) go run ./game
+
+serve: ## Build examples to WASM and serve examples/dist
+	@echo "$(CYAN)Building + serving examples...$(NC)"
+	@$(MAKE) -C examples serve
+
 ##@ Code Quality
 
-fmt: ## Format all Go code
+fmt: ## Format all Go code in this module
 	@echo "$(CYAN)Formatting Go code...$(NC)"
 	@go fmt ./...
 	@echo "$(GREEN)✓ Code formatted$(NC)"
@@ -85,17 +80,22 @@ lint: ## Run linter (requires golangci-lint)
 		echo "$(YELLOW)⚠ golangci-lint not installed, skipping$(NC)"; \
 	fi
 
-tidy: ## Tidy and verify dependencies
+tidy: ## Tidy root + each examples/*/go.mod
 	@echo "$(CYAN)Tidying dependencies...$(NC)"
 	@go mod tidy
-	@cd cmd/ebiten-game && go mod tidy
+	@for d in examples/*/; do \
+		if [ -f "$$d/go.mod" ]; then \
+			echo "  tidy $$d"; \
+			(cd "$$d" && go mod tidy); \
+		fi; \
+	done
 	@echo "$(GREEN)✓ Dependencies tidied$(NC)"
 
 ##@ Documentation
 
 DOCS_PORT ?= 6060
 
-docs: ## Serve browsable API docs at http://localhost:6060 (override DOCS_PORT)
+docs: ## Serve browsable API docs (override DOCS_PORT)
 	@echo "$(CYAN)Starting documentation server (port $(DOCS_PORT))...$(NC)"
 	@./scripts/serve-docs.sh $(DOCS_PORT)
 
@@ -108,13 +108,14 @@ docs-cli: ## Print package overviews to the terminal (via go doc)
 
 ##@ Cleaning
 
-clean: ## Clean build artifacts
+clean: ## Clean root build/ and examples build+dist
 	@echo "$(CYAN)Cleaning build artifacts...$(NC)"
 	@rm -rf build/
-	@echo "$(GREEN)✓ Build directory cleaned$(NC)"
+	@$(MAKE) -C examples clean
+	@echo "$(GREEN)✓ Clean complete$(NC)"
 
-clean-all: clean ## Clean all artifacts including coverage reports
-	@echo "$(CYAN)Cleaning all artifacts...$(NC)"
+clean-all: clean ## Also remove coverage reports
+	@echo "$(CYAN)Cleaning coverage artifacts...$(NC)"
 	@rm -f coverage.out coverage.html
 	@find . -name "*.test" -type f -delete
 	@echo "$(GREEN)✓ All artifacts cleaned$(NC)"

@@ -1,12 +1,10 @@
-module example.com/grid-sim-game
+module example.com/demo
 
 go 1.24.3
 
 require (
-	github.com/cstevenson98/gowasm-engine v0.0.0-00010101000000-000000000000
+	github.com/cstevenson98/gowasm-engine v0.0.0
 	github.com/hajimehoshi/ebiten/v2 v2.9.9
-	golang.org/x/image v0.31.0
-	gonum.org/v1/gonum v0.17.0
 )
 
 require (

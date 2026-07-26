@@ -94,10 +94,22 @@ func (u *UI) TextColored(x, y float64, c types.Color, s string) {
 
 // TextCentered draws a string horizontally centered on the screen at height y.
 func (u *UI) TextCentered(y float64, c types.Color, s string) {
+	u.TextCenteredScaled(y, 1, c, s)
+}
+
+// TextCenteredScaled draws a horizontally centered string at height y with
+// glyph scale (≥1). Scale ≤0 is treated as 1.
+func (u *UI) TextCenteredScaled(y, scale float64, c types.Color, s string) {
 	if u == nil {
 		return
 	}
-	u.TextColored((u.screenW-u.Measure(s))/2, y, c, s)
+	if scale <= 0 {
+		scale = 1
+	}
+	x := (u.screenW - u.MeasureScaled(s, scale)) / 2
+	if err := u.renderer.RenderTextScaled(s, types.Vector2{X: x, Y: y}, u.font, scale, c); err != nil {
+		logger.Logger.Tracef("UI: failed to draw scaled text %q: %s", s, err.Error())
+	}
 }
 
 // Rect draws a filled rectangle of size (w, h) with its top-left at (x, y).
@@ -113,21 +125,37 @@ func (u *UI) Rect(x, y, w, h float64, c types.Color) {
 // Measure returns the rendered width (in virtual pixels) of a single-line
 // string in the default font, matching how the text renderer advances glyphs.
 func (u *UI) Measure(s string) float64 {
+	return u.MeasureScaled(s, 1)
+}
+
+// MeasureScaled returns Measure(s) multiplied by scale.
+func (u *UI) MeasureScaled(s string, scale float64) float64 {
 	if u == nil {
 		return 0
 	}
+	if scale <= 0 {
+		scale = 1
+	}
 	cellWidth, _ := u.font.GetCellSize()
 	advance := float64(cellWidth) - u.cfg.CharacterSpacingReduction
-	return float64(len(s)) * advance
+	return float64(len(s)) * advance * scale
 }
 
 // LineHeight returns the vertical distance between successive UI text lines.
 func (u *UI) LineHeight() float64 {
+	return u.LineHeightScaled(1)
+}
+
+// LineHeightScaled returns LineHeight multiplied by scale.
+func (u *UI) LineHeightScaled(scale float64) float64 {
 	if u == nil {
 		return 0
 	}
+	if scale <= 0 {
+		scale = 1
+	}
 	_, cellHeight := u.font.GetCellSize()
-	return float64(cellHeight) * u.cfg.UILineSpacing
+	return float64(cellHeight) * u.cfg.UILineSpacing * scale
 }
 
 // ScreenSize returns the virtual screen dimensions the UI centers against.

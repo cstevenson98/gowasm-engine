@@ -19,15 +19,13 @@ builds for both targets because Ebiten abstracts the platform.
 
 - **Root module** `github.com/cstevenson98/gowasm-engine` - the engine library,
   everything under `pkg/`.
-- **`examples/basic-game`** (`example.com/basic-game`) - the example game
-  (states, game-specific entities, gamestate). Its `game/` subpackage is
-  `package main` and is the **browser (wasm) entry point**.
-- **`cmd/ebiten-game`** (`example.com/ebiten-game`) - the **desktop entry
-  point**.
+- **`examples/demo`** - minimal in-repo demo of the library.
+- **Sibling games** (separate repos under `~/dev/`, local `replace` → this
+  engine): `rpg-game` (`github.com/cstevenson98/rpg-game`), `energy-tycoon`.
+  Each game owns its own `game/` entry point (`go run ./game`).
 
-The two entry modules use `replace` directives to point at the local engine
-(and each other where needed). When dependencies change, run `go mod tidy` in
-each affected module, not just the root.
+When dependencies change, run `go mod tidy` in each affected module, not just
+the root.
 
 ### Engine packages (`pkg/`)
 
@@ -162,21 +160,22 @@ func TestMovement(t *testing.T) {
 ## Build / Run / Test
 
 ```bash
-# Engine tests (fast)
+# Engine tests
 make test              # go test ./pkg/...
-make test-all          # all modules
+make test-all
 
-# Desktop
-make build-desktop     # cmd/ebiten-game -> build/game-desktop
-make run-desktop
+# Examples
+make run-demo          # desktop: examples/demo
+make build-examples    # WASM → examples/build + examples/dist
+make serve             # WASM build + HTTP server
 
-# Browser (wasm) — from examples/
-cd examples && make serve   # builds basic-game/game -> main.wasm and serves
+# Sibling games
+cd ../rpg-game && go run ./game
 
 # Quality
 make fmt
 make lint              # golangci-lint if installed
-make tidy              # tidies root + entry modules
+make tidy              # tidies root + examples/*/go.mod
 ```
 
 ## Important Rules
@@ -223,8 +222,7 @@ require (
 ### Add a new state
 1. Embed `*state.BaseState`; override `Enter` to build entities + register
    systems; optionally implement `OverlayRenderer`.
-2. Register it in both entry points (`cmd/ebiten-game` and
-   `examples/basic-game/game`) via `RegisterState`.
+2. Register it in the game's entry (`game/main.go`) via `RegisterState`.
 
 ### Add input
 1. Extend `types.InputState` and `pkg/input`; read the `Input` resource in a

@@ -28,8 +28,8 @@ binary:
 # Ubuntu/Debian
 sudo apt-get install build-essential libgl1-mesa-dev xorg-dev
 
-# NixOS — a ready-made shell is provided
-nix-shell examples/ebiten-demo/shell.nix
+# NixOS — a ready-made shell is provided at the repo root
+nix-shell
 ```
 
 The `shell.nix` also sets `LD_LIBRARY_PATH` for OpenGL, which fixes
@@ -47,23 +47,24 @@ git lfs install
 git lfs pull
 ```
 
-### Build and run (desktop)
+### Test / run examples
 
 ```bash
-make build-desktop   # build the Ebiten desktop binary -> build/game-desktop
-make run-desktop     # build and run the example game
+make test            # engine unit tests (./pkg/...)
+make run-demo        # desktop: examples/demo (counter)
+make build-examples  # WASM → examples/build + examples/dist
+make serve           # WASM build + local HTTP server
 ```
+
+Sibling games (`rpg-game`, `energy-tycoon`) are separate repos — run them with
+`go run ./game` from their own tree.
 
 ### Browser (WebAssembly)
 
-The engine and example compile cleanly to `GOOS=js GOARCH=wasm`
-(`cd examples && make serve`), but the browser target is **not yet fully wired
-for assets**: textures are loaded via `ebitenutil.NewImageFromFile`, which on the
-web becomes an HTTP fetch relative to the page, and the example currently has no
-`index.html` bootstrap and serves assets without the `assets/` path prefix the
-code expects. For a robust dual desktop/web build, embed assets with `go:embed`
-and load them through an `fs.FS`. Until that lands, treat the wasm build as
-compile-only and run the game on the desktop.
+Examples compile to `GOOS=js GOARCH=wasm` via `make serve`. The browser target
+may still need an `index.html` bootstrap and asset path wiring per example;
+treat wasm as compile/serve for demos and prefer desktop (`make run-demo`) for
+day-to-day work.
 
 ## Architecture
 
@@ -87,11 +88,12 @@ input.Poll -> engine refreshes Input resource -> active State.Update
 ### Modules (multi-module workspace)
 
 - **Root** `github.com/cstevenson98/gowasm-engine` — the engine library (`pkg/`).
-- **`examples/basic-game`** (`example.com/basic-game`) — the example game;
-  its `game/` package (`package main`) is the **browser (wasm) entry point**.
-- **`cmd/ebiten-game`** (`example.com/ebiten-game`) — the **desktop entry point**.
+- **`examples/demo`** (`example.com/demo`) — minimal counter demo (engine + state + UI).
+- **Sibling games** (separate repos, local `replace` → this engine):
+  [`rpg-game`](https://github.com/cstevenson98/rpg-game), `energy-tycoon`.
+  Each owns its own `game/` entry point.
 
-The entry modules use `replace` directives to point at the local engine. When
+Consumer modules use `replace` directives to point at the local engine. When
 dependencies change, run `go mod tidy` in each affected module.
 
 ### Engine packages (`pkg/`)
@@ -180,8 +182,8 @@ text, and debug console:
 
 Game-specific configuration (player stats/appearance, enemy/battle content,
 ...) does not live here - each game defines its own config package. See
-`examples/basic-game/game/gameconfig` for this repo's example, which - unlike
-the engine's config - is a plain package-level global, since it configures one
+`rpg-game/game/gameconfig` (sibling repo) for an example, which - unlike the
+engine's config - is a plain package-level global, since it configures one
 specific game rather than a reusable engine.
 
 ## Build, Test, and Docs
@@ -191,15 +193,15 @@ specific game rather than a reusable engine.
 make test        # go test ./pkg/...
 make test-all    # all modules
 
-# Build / run
-make build-desktop
-make run-desktop
-cd examples && make serve   # wasm build + local server
+# Examples
+make run-demo
+make build-examples
+make serve       # wasm build + local server
 
 # Quality
 make fmt
 make lint        # golangci-lint if installed
-make tidy        # root + entry modules
+make tidy        # root + examples/*/go.mod
 
 # Docs (package overviews from doc.go)
 make docs        # browsable docs at http://localhost:6060 (override DOCS_PORT)
@@ -225,16 +227,12 @@ pkg/
   config/ debug/ logger/ types/   # Support
 
 examples/
-  Makefile      # Builds examples to wasm; serves examples/dist
-  basic-game/
-    assets/     # Example assets (Git LFS)
-    game/       # package main — browser (wasm) entry point
-    states/     # Game states (Menu, Gameplay, PlayerMenu, Battle)
-    game/entities/    # Game components, spawners, systems
-    game/gamestate/   # Persistent cross-state game data
+  Makefile      # WASM build + serve (also via root `make serve`)
+  demo/         # Minimal counter demo (1280×720, Up arrow)
+    assets/fonts/
+    game/       # package main
+    states/
     go.mod
-cmd/
-  ebiten-game/  # package main — desktop entry point
 ```
 
 ## Using from a Private Repository
@@ -261,7 +259,7 @@ weren't pulled (PNGs are ~130-byte pointer files). Fix:
 
 ```bash
 git lfs install && git lfs pull
-ls -lah examples/basic-game/assets/*.png   # should be KB, not bytes
+ls -lah examples/demo/assets/fonts/*.png   # should be KB, not bytes
 ```
 
 **Font textures missing/corrupt.** Regenerate the sprite-sheet fonts:
@@ -270,7 +268,7 @@ ls -lah examples/basic-game/assets/*.png   # should be KB, not bytes
 sudo apt-get install python3-pil
 cd scripts
 python3 font_spritesheet_generator.py --font Mono --size 10 \
-    --output ../examples/basic-game/assets/fonts/
+    --output ../examples/demo/assets/fonts/
 ```
 
 This produces `.sheet.png` + `.sheet.json` (proper fonts are ~5KB).

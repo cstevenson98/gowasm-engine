@@ -4021,3 +4021,225 @@ Centralise simulation time so future timers (random power, schedules) share one 
 **Notes**:
 
 ---
+
+## [2026-07-26 17:06:07 BST] - Pass oh-my-zsh through nix-shell to Cursor
+
+**Prompt/Request**: nix shell doesn't pass through ohmyzsh to the internal shell e.g. when running "cursor" with nixshell
+
+**Changes Made**:
+- Updated `shell.nix` shellHook to export `SHELL` as zsh (nix-shell otherwise forces bash)
+- Interactive `nix-shell` now `exec`s zsh (guarded by `IN_NIX_SHELL_ZSH`; skipped for `nix-shell --run` / direnv)
+- Welcome banner now reports restored `SHELL` instead of "type zsh" tip
+
+**Reasoning**:
+`nix-shell` overwrites `SHELL` to bash-interactive. Launching Cursor from that environment made integrated terminals use bash, so ~/.zshrc / oh-my-zsh never loaded. Restoring `SHELL` to the shell's zsh fixes inheritance for Cursor and other children.
+
+**Impact**:
+- `nix-shell` then `cursor` → Cursor terminals get zsh + oh-my-zsh
+- Interactive nix-shell drops into zsh automatically
+- `nix-shell --run` / direnv remain non-executing
+
+**Testing**:
+- `nix-shell --run` keeps SHELL=zsh and does not exec
+- `zsh -ic` inside nix-shell loads ZSH_THEME=robbyrussell and git plugin (`gst`)
+
+**Notes**:
+- oh-my-zsh itself still comes from Home Manager (`~/.zshenv` / `~/.zshrc`), not from this project's shell.nix
+- Restart Cursor (launched from a fresh nix-shell) for the change to take effect in existing sessions
+
+---
+
+## [2026-07-26 17:08:51 BST] - Fix stale nix-shell TMPDIR breaking go run in Cursor
+
+**Prompt/Request**: Inside Cursor, `go run ./game` fails with `go: creating work dir: stat /tmp/nix-shell-...: no such file or directory`
+
+**Changes Made**:
+- Updated `shell.nix` shellHook to redirect `TMPDIR`/`TMP`/`TEMP`/`TEMPDIR` to `$XDG_RUNTIME_DIR` (fallback `/tmp`) instead of nix-shell's ephemeral build dir
+- Escaped bash `${...}` as Nix `''${...}` so evaluation succeeds
+
+**Reasoning**:
+nix-shell sets TMPDIR to `/tmp/nix-shell-<pid>-*` and removes it when the parent shell exits. Launching Cursor from nix-shell leaves children with a dead TMPDIR; Go uses TMPDIR for work dirs and fails.
+
+**Impact**:
+- `go run` / builds from Cursor terminals survive after the launching nix-shell exits
+- Same fix helps direnv `use nix`
+
+**Testing**:
+- `nix-shell --run 'echo $TMPDIR'` prints stable runtime/tmp path (not `/tmp/nix-shell-*`)
+
+**Notes**:
+- Existing Cursor sessions still have the stale TMPDIR until restart or manual export in the terminal
+
+---
+
+## [2026-07-26 17:31:47 BST] - Move grid-sim-game to ~/dev/energy-tycoon
+
+**Prompt/Request**: Move grid-sim-game to ~/dev/energy-tycoon; go.mod will import this repo via replace. Explain how to distribute the Go lib on GitHub (tag/host).
+
+**Changes Made**:
+- Moved `examples/grid-sim-game/` → `~/dev/energy-tycoon/` (out of this repo)
+- New module path `github.com/cstevenson98/energy-tycoon` with `replace github.com/cstevenson98/gowasm-engine => ../gowasm-engine`
+- Rewrote all imports from `example.com/grid-sim-game` to the new module path
+- Fixed stale `tick.Interval` → `tick.IntervalMs` in wiring tests
+- Added `~/dev/energy-tycoon/README.md`
+- Updated `shell.nix` welcome examples to point at basic-game + sibling energy-tycoon
+
+**Reasoning**:
+Game is growing into its own product; engine stays a library consumed via local replace during development.
+
+**Impact**:
+- `examples/Makefile` no longer discovers grid-sim-game
+- Engine SuperLU nix deps still useful for the sibling game
+- Consumers of a published engine would drop the `replace` and pin a semver tag
+
+**Testing**:
+- `CGO_ENABLED=1 go test` wiring/loadtick — pass
+- `CGO_ENABLED=1 go build ./game` — pass
+
+**Notes**:
+- energy-tycoon is not git-initialized yet; push when ready
+- Engine distribution: push public/private GitHub repo, tag `v0.1.0`, then `go get github.com/cstevenson98/gowasm-engine@v0.1.0`
+
+---
+
+## [2026-07-26 17:33:15 BST] - Add nix-shell to energy-tycoon
+
+**Prompt/Request**: Add nix shell required to energy-tycoon
+
+**Changes Made**:
+- Created `~/dev/energy-tycoon/shell.nix` (Go, Ebiten/GLFW/X11/GL, SuperLU, CGO flags, zsh/TMPDIR fixes from engine shell)
+- Added `.envrc` (`use nix`)
+- Updated energy-tycoon README with nix-shell / direnv usage
+
+**Reasoning**:
+Game needs the same CGO + SuperLU + Ebiten native deps as when it lived under examples/; give it its own shell so it doesn't depend on entering the engine nix-shell.
+
+**Impact**:
+- `nix-shell` / direnv in energy-tycoon is enough to `go run ./game`
+- Sets `CGO_ENABLED=1` by default
+
+**Testing**:
+- `nix-shell --run 'go test ./game/systems/loadtick/ ./pkg/nr/'` — pass
+
+**Notes**:
+- Mirrors gowasm-engine `shell.nix` with energy-tycoon-specific banner/commands
+
+---
+
+## [2026-07-26 17:43:14 BST] - Move basic-game to ~/dev/rpg-game
+
+**Prompt/Request**: Move basic-game into ../rpg-game following same principles as energy-tycoon
+
+**Changes Made**:
+- Moved `examples/basic-game/` → `~/dev/rpg-game/`
+- Module path `github.com/cstevenson98/rpg-game` with `replace` → `../gowasm-engine`
+- Added shell.nix, .envrc, .gitattributes (LFS), README, .gitignore; `git init` + LFS hooks
+- `cmd/ebiten-game`: imports/replace updated to sibling rpg-game
+- Root Makefile `run-desktop`/`dev` paths → `../rpg-game`
+- `examples/ebiten-demo` llama path → `../../rpg-game/assets/...`
+- Updated engine `shell.nix` banner, `.cursor/rules/gameEngine.mdc`, battle/config comments
+
+**Reasoning**:
+Same split as energy-tycoon: game as its own repo consuming the engine via local replace.
+
+**Impact**:
+- `examples/` now only has ebiten-demo + Makefile
+- Desktop entry still builds from engine via replace to rpg-game
+
+**Testing**:
+- `go test ./game/...` + `go build ./game` in rpg-game — pass
+- `go build` cmd/ebiten-game — pass
+
+**Notes**:
+- Expected layout: `~/dev/{gowasm-engine,rpg-game,energy-tycoon}`
+
+---
+
+## [2026-07-26 17:44:26 BST] - Push rpg-game to GitHub
+
+**Prompt/Request**: Add git@github.com:cstevenson98/rpg-game.git as remote and push
+
+**Changes Made**:
+- Initial commit on `~/dev/rpg-game` main
+- `origin` → `git@github.com:cstevenson98/rpg-game.git`
+- Pushed main (8 LFS objects, 7.1 MB)
+
+**Testing**:
+- Push succeeded; branch tracks origin/main
+
+**Notes**:
+- Repo: https://github.com/cstevenson98/rpg-game
+
+---
+
+## [2026-07-26 17:50:11 BST] - Replace ebiten-demo with engine counter demo
+
+**Prompt/Request**: Delete ebiten-demo and replace with an illustrative demo for this lib: counter, up arrow increments, big text in middle of a 720 screen
+
+**Changes Made**:
+- Removed `examples/ebiten-demo/` (raw Ebiten llama demo)
+- Added `examples/demo/`: engine-backed counter on 1280×720, Up edge +1, centered scaled text
+- Extended `types.UIManager` / `pkg/ui` with `TextCenteredScaled`, `MeasureScaled`, `LineHeightScaled`
+- Copied Mono_10 font into demo assets; README nix-shell tip → root `shell.nix`
+
+**Reasoning**:
+Demo should exercise the library (engine + state + UI + input), not bare Ebiten.
+
+**Impact**:
+- `cd examples/demo && go run ./game`
+- `make demo` under examples/ for wasm
+
+**Testing**:
+- `go test ./pkg/types/` — pass
+- `go build ./game` in examples/demo — pass
+
+**Notes**:
+- Counter glyph scale = 8 on 720p
+
+---
+
+## [2026-07-26 17:51:39 BST] - Demo: ESC quit hint text
+
+**Prompt/Request**: add an ESC to quit text
+
+**Changes Made**:
+- `examples/demo/states/counter_state.go`: gray hint `ESC: quit` under Up arrow line
+
+**Testing**: none (overlay string only)
+
+---
+
+## [2026-07-26 17:53:33 BST] - Demo: dark blue background
+
+**Prompt/Request**: add a dark blue background
+
+**Changes Made**:
+- `examples/demo/states/counter_state.go`: full-screen `ui.Rect` with dark navy before text
+
+**Testing**: none (overlay draw only)
+
+---
+
+## [2026-07-26 17:55:37 BST] - Remove cmd/; Makefile for tests + examples only
+
+**Prompt/Request**: can the cmd dir be removed and the makefile reserved for test builds and building/running examples
+
+**Changes Made**:
+- Deleted `cmd/ebiten-game/` (desktop entry that wrapped rpg-game)
+- Rewrote root `Makefile`: test*, run-demo/run, build-examples, serve, tidy examples
+- Updated shell.nix banner, README, gameEngine.mdc, .gitignore; rpg-game README/main comment
+
+**Reasoning**:
+Engine is a library; games own their entry points. Makefile should cover library tests and in-repo examples only.
+
+**Impact**:
+- Use `make run-demo` / `cd ../rpg-game && go run ./game` instead of `make run-desktop`
+- Breaking for anyone calling `make build-desktop`
+
+**Testing**:
+- `make help`, `make test`, `make list-examples`, `make tidy` — ok
+
+**Notes**:
+- `EXAMPLE=demo make run` selects which example to run
+
+---

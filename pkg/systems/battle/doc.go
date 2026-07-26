@@ -6,7 +6,7 @@
 //
 // # Participants
 //
-// Any object implementing BattleEntity can join a battle - in the basic-game
+// Any object implementing BattleEntity can join a battle - in rpg-game
 // example the game's own Player and Enemy entities do. An entity exposes a
 // charging ActionTimer, battle stats (HP, speed), and a way to select the
 // action it wants to perform.
@@ -42,7 +42,7 @@
 // NewBattleManager - queue size, timer charge rate, effect duration, and a
 // Logger. It reads no global engine configuration, so it can be reused across
 // games or tested in isolation. A game wires it up like (values here come from
-// the game's own config, not the engine's - see examples/basic-game/game/gameconfig):
+// the game's own config, not the engine's - see rpg-game/game/gameconfig):
 //
 //	bm := battle.NewBattleManager(battle.Config{
 //		ActionQueueSize:      gameconfig.Global.Battle.ActionQueueSize,
