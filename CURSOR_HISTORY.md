@@ -4243,3 +4243,25 @@ Engine is a library; games own their entry points. Makefile should cover library
 - `EXAMPLE=demo make run` selects which example to run
 
 ---
+
+## [2026-07-26 18:13:32 BST] - Updated origin remote URL to milo
+
+**Prompt/Request**: rename upstream remote to git@github.com:cstevenson98/milo.git
+
+**Changes Made**:
+- Set `origin` remote URL from `git@github.com:cstevenson98/gowasm-engine.git` to `git@github.com:cstevenson98/milo.git` (no `upstream` remote existed)
+
+**Reasoning**:
+Workspace/repo is milo; origin still pointed at the old gowasm-engine name.
+
+**Impact**:
+- Fetch/push now target the milo GitHub repo
+
+**Testing**:
+- `git remote -v` confirmed new URL
+
+**Notes**:
+There was no remote named `upstream`; `origin` was updated instead.
+
+---
+
