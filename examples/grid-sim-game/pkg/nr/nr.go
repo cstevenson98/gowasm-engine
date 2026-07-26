@@ -7,11 +7,8 @@
 //	jac(x) — the Jacobian matrix ∂f/∂x at the current iterate
 //
 // The linear solve at each step is handled by a pluggable LinearSolver.
-// The default, SparseLUSolver, accepts any mat.Matrix (including a sparse
-// CSR from james-bowman/sparse) and solves via LU factorisation. For systems
-// up to ~800×800 (a 400-bus full AC power flow) this is adequate; swap in a
-// fill-reducing sparse direct solver (e.g. AMD + UMFPACK via CGo) by passing
-// a different LinearSolver to NewtonRaphson.LinearSolve.
+// The default is SuperLUSolver (sparse direct LU via CGo). Builds without
+// CGo get a stub that errors at solve time — see superlu_cgo_stub.go.
 package nr
 
 import (
@@ -25,7 +22,7 @@ import (
 type ResidualFunc func(x *mat.VecDense) *mat.VecDense
 
 // JacobianFunc computes the Jacobian matrix J(x) = ∂f/∂x at x.
-// Returning mat.Matrix allows callers to return a sparse.CSR, mat.Dense,
+// Returning mat.Matrix allows callers to return a sparse CSR, mat.Dense,
 // or any other gonum-compatible matrix without changing this package.
 type JacobianFunc func(x *mat.VecDense) mat.Matrix
 
@@ -45,7 +42,7 @@ type Result struct {
 type NewtonRaphson struct {
 	MaxIter     int
 	Tol         float64      // convergence threshold on ‖f(x)‖₂
-	LinearSolve LinearSolver // defaults to SparseLUSolver() if nil
+	LinearSolve LinearSolver // defaults to SuperLUSolver() if nil
 }
 
 // Solve finds x* such that f(x*) ≈ 0, starting from x0.
@@ -59,7 +56,7 @@ func (nr *NewtonRaphson) Solve(
 ) (*Result, error) {
 	solve := nr.LinearSolve
 	if solve == nil {
-		solve = SparseLUSolver()
+		solve = SuperLUSolver()
 	}
 
 	n := x0.Len()
@@ -99,49 +96,11 @@ func (nr *NewtonRaphson) Solve(
 }
 
 // NonZeroer is an optional interface for sparse matrices. If a matrix passed
-// to SparseLUSolver implements this interface, non-zeros are copied in O(nnz)
-// instead of O(n²). Any SparseMatrix from the network package satisfies it.
+// to SuperLUSolver implements this interface, CSC conversion is O(nnz)
+// instead of an O(n²) dense scan. SparseMatrix in the network package
+// satisfies it.
 type NonZeroer interface {
 	ForEachNonZero(func(i, j int, v float64))
-}
-
-// SparseLUSolver returns a LinearSolver that factorises A using LU and back-
-// substitutes to find x in A·x = b.
-//
-// It accepts any mat.Matrix. If A also implements NonZeroer, the copy to the
-// internal dense matrix is O(nnz) instead of O(n²). For systems up to ~800×800
-// (a 400-bus full AC power flow) the dense LU is adequate; replace with a
-// fill-reducing sparse direct solver for larger networks.
-func SparseLUSolver() LinearSolver {
-	return func(A mat.Matrix, b *mat.VecDense) (*mat.VecDense, error) {
-		n, _ := A.Dims()
-		dense := mat.NewDense(n, n, nil)
-
-		// O(nnz) path for matrices that expose their non-zero iterator.
-		if nz, ok := A.(NonZeroer); ok {
-			nz.ForEachNonZero(func(i, j int, v float64) {
-				dense.Set(i, j, v)
-			})
-		} else {
-			// O(n²) fallback for arbitrary mat.Matrix.
-			for i := 0; i < n; i++ {
-				for j := 0; j < n; j++ {
-					if v := A.At(i, j); v != 0 {
-						dense.Set(i, j, v)
-					}
-				}
-			}
-		}
-
-		var lu mat.LU
-		lu.Factorize(dense)
-
-		x := mat.NewVecDense(n, nil)
-		if err := lu.SolveVecTo(x, false, b); err != nil {
-			return nil, fmt.Errorf("sparse LU solve: %w", err)
-		}
-		return x, nil
-	}
 }
 
 // l2Norm returns the Euclidean norm of v: sqrt(v·v).

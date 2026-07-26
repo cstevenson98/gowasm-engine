@@ -3929,3 +3929,95 @@ Ports are line-snap UI; hide them for other tools / inspect mode.
 **Notes**:
 
 ---
+
+## [2026-07-26 13:38:23 BST] - LU solver scaling benches + Big-O fits
+
+**Prompt/Request**: Benchmarks for LU solver scaling with nnz; Big-O fits; Go framework?
+
+**Changes Made**:
+- Added `pkg/nr/lu_scale_bench_test.go` (cgo): tridiag/band systems, `TestLUComplexityFit` log-log slopes, `BenchmarkSuperLU_*` / `BenchmarkDenseLU_*` with ns/nnz metrics
+
+**Reasoning**:
+Go standard library `testing.B` is the framework; fit tests print T~n^α and T~nnz^α for SuperLU vs dense.
+
+**Impact**:
+- Easy local complexity checks for SuperLU path
+
+**Testing**:
+- `go test ./pkg/nr/ -run ComplexityFit$ -v` — pass
+
+**Notes**:
+Dense fit ~n²·³ on this range (heading toward n³); SuperLU tridiag ~n⁰·⁸.
+
+---
+
+## [2026-07-26 13:43:04 BST] - Removed unused dense SparseLUSolver
+
+**Prompt/Request**: get rid of this unused solver
+
+**Changes Made**:
+- Deleted `SparseLUSolver` (dense gonum LU path) from `pkg/nr/nr.go`
+- Default `NewtonRaphson.LinearSolve` is now `SuperLUSolver()`
+- Updated stub/error messages, comments, complexity benches (dropped dense LU benchmarks)
+- Touched `sparse.go` / SuperLU comments that referenced SparseLU
+
+**Reasoning**:
+Production load-flow already uses SuperLU; the dense fallback was unused dead code that expanded sparse Jacobians to O(n²) storage.
+
+**Impact**:
+- No dense LU fallback; no-CGo/WASM builds still get a stub that errors at solve time
+- NR unit tests now exercise SuperLU by default (cgo)
+
+**Testing**:
+- `go test ./pkg/nr/ ./game/components/network/` — pass
+
+**Notes**:
+- `plans/superlu-cgo.md` still mentions SparseLU historically; left as plan archive
+
+---
+
+## [2026-07-26 13:55:52 BST] - Sim clock + ImGui time controls
+
+**Prompt/Request**: Real-time sim clock with pause/speed, timers on global sim time (ms), ImGui Play/Pause + 5-level speed (default 1h/s, fastest 1w/s).
+
+**Changes Made**:
+- Added `game/components/sim/clock.go` — `SimClock` resource, speed table, `FormatSimTime`
+- Added `game/systems/simclock` — advances `NowMs`/`DeltaMs` from real `dt`
+- Refactored `loadtick` to fire every 3 sim-hours via `SimClock` (not wall clock)
+- Seeded clock + registered system in `GridState.Enter` (before loadtick)
+- ImGui `Simulation` section: time, Play/Pause, 5 speed buttons
+- Unit tests for clock, simclock system, loadtick
+
+**Reasoning**:
+Centralise simulation time so future timers (random power, schedules) share one pause/speed source with proper ms timestamps.
+
+**Impact**:
+- House load re-roll cadence tracks sim speed; pause freezes load ticks
+- Camera/input still use wall `dt`
+
+**Testing**:
+- `go test ./game/components/sim/ ./game/systems/simclock/ ./game/systems/loadtick/` — pass
+- `go build ./game/` — pass
+
+**Notes**:
+- Speeds: 5m, 15m, 1h (default), 1d, 1w per real second
+
+---
+
+## [2026-07-26 14:01:49 BST] - Sim clock calendar epoch + packed speed UI
+
+**Prompt/Request**: Start from 1 Jan 2027 with actual dates; remove NowMs display; pack speed buttons left (not full width).
+
+**Changes Made**:
+- `SimClock.NowMs` is absolute Unix ms from epoch `1 Jan 2027 00:00 UTC`
+- `FormatSimTime` → `2 Jan 2006 15:04:05` style
+- LoadTick `nextFireMs` offset from `EpochMs`
+- Removed NowMs from ImGui; Play/Pause + speeds use `SameLine`
+- Added `imgui.SameLine` (desktop + wasm stub)
+
+**Testing**:
+- sim / simclock / loadtick / pkg/imgui tests — pass
+
+**Notes**:
+
+---

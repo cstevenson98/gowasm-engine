@@ -70,7 +70,7 @@ func (m *SparseMatrix) ForEachInRow(i int, f func(j int, v float64)) {
 }
 
 // ForEachNonZero calls f(i, j, v) for every structural entry in row-major
-// order. This is the hook used by SparseLUSolver to copy to dense in O(nnz).
+// order. Used by SuperLUSolver's toCSC path (O(nnz)).
 func (m *SparseMatrix) ForEachNonZero(f func(i, j int, v float64)) {
 	for i := 0; i < m.r; i++ {
 		for k := m.rowPtr[i]; k < m.rowPtr[i+1]; k++ {

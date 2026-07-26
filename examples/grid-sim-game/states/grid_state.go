@@ -3,12 +3,14 @@ package states
 import (
 	"example.com/grid-sim-game/game/components/grid"
 	"example.com/grid-sim-game/game/components/network"
+	"example.com/grid-sim-game/game/components/sim"
 	"example.com/grid-sim-game/game/gameconfig"
 	"example.com/grid-sim-game/game/systems/camera"
 	"example.com/grid-sim-game/game/systems/loadflow"
 	"example.com/grid-sim-game/game/systems/loadtick"
 	"example.com/grid-sim-game/game/systems/placement"
 	"example.com/grid-sim-game/game/systems/pointer"
+	"example.com/grid-sim-game/game/systems/simclock"
 	"github.com/cstevenson98/gowasm-engine/pkg/components"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/imgui"
@@ -42,6 +44,7 @@ func (s *GridState) Enter(deps state.Deps) error {
 	ecs.SetResource(s.World(), &grid.PlacementState{Tool: grid.ToolNone})
 	ecs.SetResource(s.World(), grid.NewGridOccupancy())
 	ecs.SetResource(s.World(), network.NewElectricalNetwork())
+	ecs.SetResource(s.World(), sim.NewSimClock())
 
 	cfg := gameconfig.Global
 	if cam := ecs.GetResource[components.Camera](s.World()); cam != nil {
@@ -57,11 +60,13 @@ func (s *GridState) Enter(deps state.Deps) error {
 		cfg.BlankTexture,
 	)
 
-	// Pointer (hover/select) before placement; load-tick mutates P/Q;
-	// LoadflowSystem re-solves only when Dirty; camera scrolls last.
+	// Pointer (hover/select) before placement; simclock advances sim time;
+	// load-tick mutates P/Q on sim intervals; LoadflowSystem re-solves only
+	// when Dirty; camera scrolls last.
 	s.Schedule().
 		Add(pointer.NewPointerSystem(s.World())).
 		Add(placement.NewPlacementSystem(s.World())).
+		Add(simclock.NewSimClockSystem()).
 		Add(loadtick.NewLoadTickSystem(s.World())).
 		Add(loadflow.NewLoadflowSystem(s.World())).
 		Add(camera.NewCameraScrollSystem(cfg.CameraSpeed))

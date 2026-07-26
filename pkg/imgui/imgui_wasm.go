@@ -36,6 +36,8 @@ func (c *Context) sliderFloatPlatform(label string, v *float64, min, max float64
 
 func (c *Context) buttonPlatform(label string) bool { return false }
 
+func (c *Context) sameLinePlatform() {}
+
 func (c *Context) treeNodePlatform(label string, fn func(w *WindowBuilder)) {}
 
 func (c *Context) columnsPlatform(count int) {}

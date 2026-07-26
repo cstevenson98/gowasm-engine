@@ -24,10 +24,10 @@ import (
 )
 
 // SuperLUSolver returns a LinearSolver that uses SuperLU (sparse direct LU
-// with COLAMD column reordering) to solve A·x = b. Unlike SparseLUSolver,
-// A is never expanded into a dense matrix, so cost scales with the number of
-// non-zeros rather than n². Requires libsuperlu at build and run time; see
-// shell.nix (Nix) or plans/superlu-cgo.md (other platforms) for setup.
+// with COLAMD column reordering) to solve A·x = b. A is never expanded into
+// a dense matrix, so cost scales with the number of non-zeros rather than n².
+// Requires libsuperlu at build and run time; see shell.nix (Nix) or
+// plans/superlu-cgo.md (other platforms) for setup.
 func SuperLUSolver() LinearSolver {
 	return func(A mat.Matrix, b *mat.VecDense) (*mat.VecDense, error) {
 		n, _ := A.Dims()

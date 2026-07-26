@@ -88,6 +88,10 @@ func (c *Context) buttonPlatform(label string) bool {
 	return cim.Button(label)
 }
 
+func (c *Context) sameLinePlatform() {
+	cim.SameLine()
+}
+
 func (c *Context) treeNodePlatform(label string, fn func(w *WindowBuilder)) {
 	if !cim.TreeNodeStr(label) {
 		return

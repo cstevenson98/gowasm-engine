@@ -55,6 +55,14 @@ func (w *WindowBuilder) Button(label string, onClick func()) bool {
 	return pressed
 }
 
+// SameLine places the next widget on the same line as the previous one.
+func (w *WindowBuilder) SameLine() {
+	if w == nil || w.ctx == nil || !w.ctx.ready {
+		return
+	}
+	w.ctx.sameLinePlatform()
+}
+
 // TreeNode draws a collapsible tree node and runs fn while it is open.
 func (w *WindowBuilder) TreeNode(label string, fn func(w *WindowBuilder)) {
 	if w == nil || w.ctx == nil || !w.ctx.ready || fn == nil {

@@ -7,6 +7,7 @@ import (
 
 	"example.com/grid-sim-game/game/components/grid"
 	"example.com/grid-sim-game/game/components/network"
+	"example.com/grid-sim-game/game/components/sim"
 	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
 	"github.com/cstevenson98/gowasm-engine/pkg/imgui"
 )
@@ -15,6 +16,9 @@ func (s *GridState) renderNetworkPanel(w *imgui.WindowBuilder, net *network.Elec
 	buses := net.Buses()
 	branches := net.Branches()
 	st := net.State
+
+	s.renderSimulationPanel(w)
+	w.Separator()
 
 	s.renderSelectionPanel(w, net)
 	w.Separator()
@@ -227,6 +231,40 @@ func (s *GridState) renderOneBusHistory(
 }
 
 // renderSelectionPanel shows metadata for the currently selected grid cell.
+func (s *GridState) renderSimulationPanel(w *imgui.WindowBuilder) {
+	clock := ecs.GetResource[sim.SimClock](s.World())
+	if clock == nil {
+		w.Text("Simulation")
+		w.Text("  (no clock)")
+		return
+	}
+
+	w.Text("Simulation")
+	w.Text("  Time: %s", sim.FormatSimTime(clock.NowMs))
+	if clock.Playing {
+		w.Text("  Status: Playing")
+	} else {
+		w.Text("  Status: Paused")
+	}
+
+	w.Button("Play", func() { clock.Playing = true })
+	w.SameLine()
+	w.Button("Pause", func() { clock.Playing = false })
+
+	w.Text("  Speed")
+	for i := 0; i < sim.NumSpeeds; i++ {
+		idx := i
+		label := sim.SpeedLabels[idx]
+		if clock.SpeedIndex == idx {
+			label = "[" + label + "]"
+		}
+		if i > 0 {
+			w.SameLine()
+		}
+		w.Button(label, func() { clock.SetSpeedIndex(idx) })
+	}
+}
+
 func (s *GridState) renderSelectionPanel(w *imgui.WindowBuilder, net *network.ElectricalNetwork) {
 	w.Text("Selection")
 	placement := ecs.GetResource[grid.PlacementState](s.World())

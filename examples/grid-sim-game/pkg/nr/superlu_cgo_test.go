@@ -33,8 +33,7 @@ func TestSuperLUSolverLinear(t *testing.T) {
 
 // TestSuperLUSolverNonlinearViaNR re-runs the classic 2D Newton-Raphson test
 // (unit circle intersect diagonal) with SuperLUSolver wired in as the linear
-// solve, and checks it converges to the same answer as the default dense
-// SparseLUSolver.
+// solve.
 func TestSuperLUSolverNonlinearViaNR(t *testing.T) {
 	f := func(x *mat.VecDense) *mat.VecDense {
 		x0, x1 := x.AtVec(0), x.AtVec(1)

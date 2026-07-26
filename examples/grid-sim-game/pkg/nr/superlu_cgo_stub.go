@@ -2,8 +2,8 @@
 
 // Fallback for builds without CGo support — notably GOOS=js GOARCH=wasm
 // (the grid-sim-game browser build), where CGO_ENABLED is forced to 0 and
-// superlu_cgo.go is excluded. Callers that need a working solver on such
-// builds should use SparseLUSolver instead.
+// superlu_cgo.go is excluded. Load-flow solves will error until a pure-Go
+// sparse backend is added.
 package nr
 
 import (
@@ -17,6 +17,6 @@ import (
 // fails loudly (at solve time) rather than silently producing wrong results.
 func SuperLUSolver() LinearSolver {
 	return func(_ mat.Matrix, _ *mat.VecDense) (*mat.VecDense, error) {
-		return nil, fmt.Errorf("superlu: not available in this build (CGo disabled); use SparseLUSolver instead")
+		return nil, fmt.Errorf("superlu: not available in this build (CGo disabled)")
 	}
 }
