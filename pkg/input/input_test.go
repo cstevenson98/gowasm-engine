@@ -3,7 +3,7 @@ package input
 import (
 	"testing"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 func TestNewMockInput(t *testing.T) {

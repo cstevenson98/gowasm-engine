@@ -3,7 +3,7 @@ package battle
 import (
 	"sync"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // damageFloatSpeed is how fast damage/healing numbers drift upward, in virtual

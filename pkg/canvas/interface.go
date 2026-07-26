@@ -1,7 +1,7 @@
 package canvas
 
 import (
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // CanvasManager defines the interface for managing canvas operations.

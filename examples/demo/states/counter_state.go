@@ -3,8 +3,8 @@ package states
 import (
 	"fmt"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/state"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/state"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // counterScale is the glyph scale for the centered counter on a 720p screen.

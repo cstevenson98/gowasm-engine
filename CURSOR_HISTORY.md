@@ -4265,3 +4265,59 @@ There was no remote named `upstream`; `origin` was updated instead.
 
 ---
 
+
+## [2026-07-26 18:21:57 BST] - Renamed Go module to github.com/cstevenson98/milo
+
+**Prompt/Request**: Rename the internal package to just milo based on new remote git@github.com:cstevenson98/milo.git
+
+**Changes Made**:
+- Updated root `go.mod` module path from `github.com/cstevenson98/gowasm-engine` to `github.com/cstevenson98/milo`
+- Rewrote all engine/demo import paths to the new module
+- Updated `examples/demo/go.mod` require/replace directives
+- Updated README, Makefile, demo strings, scripts docs, and `.cursor/rules/gameEngine.mdc`
+- Updated sibling games `rpg-game` and `energy-tycoon` imports + `replace => ../milo`
+- Ran `go mod tidy` in root, demo, and both sibling games
+
+**Reasoning**:
+Origin already pointed at `cstevenson98/milo`; the Go module path needed to match so consumers and `go get` resolve against the new remote.
+
+**Impact**:
+- Breaking import-path change for all consumers
+- Local sibling `replace` paths now expect `../milo` (not `../gowasm-engine`)
+- Historical entries in `CURSOR_HISTORY.md` left unchanged
+
+**Testing**:
+- `nix-shell --run 'make test'` — all engine packages pass
+- Demo `go test ./...` — ok
+- `rpg-game` / `energy-tycoon` `go build ./...` — ok
+
+**Notes**:
+- Without nix-shell, host missing X11 headers still fail Ebiten-linked packages; use `nix-shell` or install desktop deps per README.
+
+---
+
+
+## [2026-07-26 18:22:50 BST] - Finished energy-tycoon milo rename cleanup
+
+**Prompt/Request**: update ../energy-tycoon to use milo names
+
+**Changes Made**:
+- Confirmed `energy-tycoon` already imports `github.com/cstevenson98/milo` with `replace => ../milo`
+- Fixed botched README layout path `~/d../milo/` → `~/dev/milo/` (sed `. ` matched `ev` in `~/dev/gowasm-engine`)
+- Restored unrelated deleted `plans/*.md` files in energy-tycoon working tree
+- Also fixed the same README typo in `rpg-game`
+
+**Reasoning**:
+Prior bulk rename already updated imports/go.mod/shell.nix; the README path corruption and accidental plan deletions needed cleanup so the consumer repo is clean.
+
+**Impact**:
+- energy-tycoon fully on milo naming; tests pass
+
+**Testing**:
+- `nix-shell --run 'go test ./...'` in energy-tycoon — all pass
+
+**Notes**:
+- energy-tycoon changes remain uncommitted in that repo
+
+---
+

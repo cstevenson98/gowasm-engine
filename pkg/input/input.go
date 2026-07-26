@@ -3,8 +3,8 @@ package input
 import (
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/logger"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // Input implements InputCapturer using Ebiten's input APIs.

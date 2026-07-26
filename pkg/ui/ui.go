@@ -14,10 +14,10 @@
 package ui
 
 import (
-	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/text"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/canvas"
+	"github.com/cstevenson98/milo/pkg/logger"
+	"github.com/cstevenson98/milo/pkg/text"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // Ensure *UI satisfies the engine-facing UI interface.

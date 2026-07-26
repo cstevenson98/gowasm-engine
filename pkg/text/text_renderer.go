@@ -3,9 +3,9 @@ package text
 import (
 	"fmt"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/canvas"
+	"github.com/cstevenson98/milo/pkg/logger"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // Config holds the text-layout knobs the renderer needs. The engine (or

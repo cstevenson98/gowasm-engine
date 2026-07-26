@@ -20,7 +20,7 @@ EXAMPLE ?= demo
 ##@ General
 
 help: ## Display this help message
-	@echo "$(CYAN)gowasm-engine — Available Commands$(NC)"
+	@echo "$(CYAN)milo — Available Commands$(NC)"
 	@echo ""
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\n  make $(GREEN)<target>$(NC)\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2 } /^##@/ { printf "\n$(CYAN)%s$(NC)\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 

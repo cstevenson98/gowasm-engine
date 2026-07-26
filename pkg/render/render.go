@@ -9,9 +9,9 @@ import (
 	"math"
 	"sort"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/components"
+	"github.com/cstevenson98/milo/pkg/ecs"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // Drawer is the minimal drawing surface the renderer needs. canvas.Canvas

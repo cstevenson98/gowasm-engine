@@ -182,5 +182,5 @@ python3 -m pip install --user Pillow
 
 ## License
 
-Part of the gowasm-engine project.
+Part of the milo project.
 

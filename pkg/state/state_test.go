@@ -3,8 +3,8 @@ package state
 import (
 	"testing"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
+	"github.com/cstevenson98/milo/pkg/components"
+	"github.com/cstevenson98/milo/pkg/ecs"
 )
 
 // testState is a minimal concrete State used to exercise BaseState.

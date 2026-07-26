@@ -3,7 +3,7 @@ package text
 import (
 	"fmt"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // MockFont is a mock implementation of the Font interface for testing

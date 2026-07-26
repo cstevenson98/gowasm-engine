@@ -1,6 +1,6 @@
 package battle
 
-import "github.com/cstevenson98/gowasm-engine/pkg/types"
+import "github.com/cstevenson98/milo/pkg/types"
 
 // BattleEntity represents an entity that can participate in battle.
 //

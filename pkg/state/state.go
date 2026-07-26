@@ -8,8 +8,8 @@
 package state
 
 import (
-	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/ecs"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // DebugConfig is the subset of the engine's debug settings a State needs. The

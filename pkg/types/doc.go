@@ -20,9 +20,9 @@
 //   - UIManager - the immediate-mode overlay drawing facade.
 //
 // The ECS building blocks live elsewhere: pure-data components and resources in
-// [github.com/cstevenson98/gowasm-engine/pkg/components], the World/entity/query
-// abstraction in [github.com/cstevenson98/gowasm-engine/pkg/ecs], and the State
-// model in [github.com/cstevenson98/gowasm-engine/pkg/state]. Domain-specific
+// [github.com/cstevenson98/milo/pkg/components], the World/entity/query
+// abstraction in [github.com/cstevenson98/milo/pkg/ecs], and the State
+// model in [github.com/cstevenson98/milo/pkg/state]. Domain-specific
 // vocabulary (e.g. combat: BattleEntity, Action, ActionTimer) lives with its
 // system, in pkg/systems/battle.
 package types

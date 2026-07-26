@@ -4,7 +4,7 @@
 // component's own data (e.g. Sprite.UV), never state mutation or game logic.
 package components
 
-import "github.com/cstevenson98/gowasm-engine/pkg/types"
+import "github.com/cstevenson98/milo/pkg/types"
 
 // Position is an entity's top-left position in virtual screen pixels.
 // Replaces Mover position.

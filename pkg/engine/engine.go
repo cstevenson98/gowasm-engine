@@ -6,18 +6,18 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/canvas"
-	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/debug"
-	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
-	"github.com/cstevenson98/gowasm-engine/pkg/imgui"
-	"github.com/cstevenson98/gowasm-engine/pkg/input"
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/render"
-	"github.com/cstevenson98/gowasm-engine/pkg/state"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
-	"github.com/cstevenson98/gowasm-engine/pkg/ui"
+	"github.com/cstevenson98/milo/pkg/canvas"
+	"github.com/cstevenson98/milo/pkg/components"
+	"github.com/cstevenson98/milo/pkg/config"
+	"github.com/cstevenson98/milo/pkg/debug"
+	"github.com/cstevenson98/milo/pkg/ecs"
+	"github.com/cstevenson98/milo/pkg/imgui"
+	"github.com/cstevenson98/milo/pkg/input"
+	"github.com/cstevenson98/milo/pkg/logger"
+	"github.com/cstevenson98/milo/pkg/render"
+	"github.com/cstevenson98/milo/pkg/state"
+	"github.com/cstevenson98/milo/pkg/types"
+	"github.com/cstevenson98/milo/pkg/ui"
 )
 
 // Engine manages the canvas, input, and game loop. It implements the

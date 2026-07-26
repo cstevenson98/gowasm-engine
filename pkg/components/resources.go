@@ -1,6 +1,6 @@
 package components
 
-import "github.com/cstevenson98/gowasm-engine/pkg/types"
+import "github.com/cstevenson98/milo/pkg/types"
 
 // ScreenBounds is a per-World singleton resource holding the virtual screen
 // size. Systems (e.g. screen wrapping) read it via ecs.GetResource. Seeded by

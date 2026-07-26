@@ -3,7 +3,7 @@ package canvas
 import (
 	"fmt"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // MockCanvasManager implements CanvasManager for testing.

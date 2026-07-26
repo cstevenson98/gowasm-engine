@@ -1,4 +1,4 @@
-// Command game is a minimal illustrative demo for gowasm-engine: a counter
+// Command game is a minimal illustrative demo for milo: a counter
 // shown as large centered text on a 1280×720 screen; Up arrow increments it.
 package main
 
@@ -8,14 +8,14 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 
 	"example.com/demo/states"
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/engine"
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/config"
+	"github.com/cstevenson98/milo/pkg/engine"
+	"github.com/cstevenson98/milo/pkg/logger"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 func main() {
-	logger.Logger.Info("gowasm-engine demo starting")
+	logger.Logger.Info("milo demo starting")
 
 	cfg := config.Default()
 	cfg.Screen.Width = 1280
@@ -35,7 +35,7 @@ func main() {
 	eng.Start()
 
 	ebiten.SetWindowSize(cfg.WindowWidth(), cfg.WindowHeight())
-	ebiten.SetWindowTitle("gowasm-engine — counter demo")
+	ebiten.SetWindowTitle("milo — counter demo")
 	if cfg.Rendering.PixelArtMode {
 		ebiten.SetScreenFilterEnabled(false)
 	}

@@ -5,11 +5,11 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/engine"
-	"github.com/cstevenson98/gowasm-engine/pkg/prefab"
-	"github.com/cstevenson98/gowasm-engine/pkg/state"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/config"
+	"github.com/cstevenson98/milo/pkg/engine"
+	"github.com/cstevenson98/milo/pkg/prefab"
+	"github.com/cstevenson98/milo/pkg/state"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // MenuState is a custom state. Embedding state.BaseState provides the whole

@@ -5,9 +5,9 @@
 package prefab
 
 import (
-	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/components"
+	"github.com/cstevenson98/milo/pkg/ecs"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // NewBackground spawns a static, full-image background entity on the BACKGROUND

@@ -1,11 +1,11 @@
 package state
 
 import (
-	"github.com/cstevenson98/gowasm-engine/pkg/components"
-	"github.com/cstevenson98/gowasm-engine/pkg/debug"
-	"github.com/cstevenson98/gowasm-engine/pkg/ecs"
-	"github.com/cstevenson98/gowasm-engine/pkg/logger"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/components"
+	"github.com/cstevenson98/milo/pkg/debug"
+	"github.com/cstevenson98/milo/pkg/ecs"
+	"github.com/cstevenson98/milo/pkg/logger"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // BaseState provides the boilerplate for a State: it owns the World and an

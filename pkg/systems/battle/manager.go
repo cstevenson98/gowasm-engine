@@ -3,7 +3,7 @@ package battle
 import (
 	"sync"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // BattleManager manages the battle system including action queue processing.

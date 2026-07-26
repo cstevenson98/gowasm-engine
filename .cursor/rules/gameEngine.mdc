@@ -17,7 +17,7 @@ builds for both targets because Ebiten abstracts the platform.
 
 ### Module layout (multi-module workspace)
 
-- **Root module** `github.com/cstevenson98/gowasm-engine` - the engine library,
+- **Root module** `github.com/cstevenson98/milo` - the engine library,
   everything under `pkg/`.
 - **`examples/demo`** - minimal in-repo demo of the library.
 - **Sibling games** (separate repos under `~/dev/`, local `replace` → this
@@ -58,7 +58,7 @@ spawners), `Filter1..Filter4` (queries with `Each`), resources
 (`SetResource[T]` / `GetResource[T]`), and `System` / `Schedule`.
 
 ```go
-import "github.com/cstevenson98/gowasm-engine/pkg/ecs"
+import "github.com/cstevenson98/milo/pkg/ecs"
 
 type MoveSystem struct{ f *ecs.Filter2[components.Position, components.Velocity] }
 

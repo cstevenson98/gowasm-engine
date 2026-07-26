@@ -1,6 +1,6 @@
 # Counter demo
 
-Minimal illustrative example for `gowasm-engine`.
+Minimal illustrative example for `milo`.
 
 - **Screen:** 1280×720 (`PixelScale` 1)
 - **Up arrow:** increments a counter

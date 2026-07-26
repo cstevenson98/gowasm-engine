@@ -19,7 +19,7 @@ func (c *Context) initPlatform() error {
 	be := ebitenbackend.NewEbitenBackend()
 	// Transparent clear so ImGui overlays the game instead of wiping it.
 	be.SetBgColor(cim.NewVec4(0, 0, 0, 0))
-	be.CreateWindow("gowasm-engine-imgui", c.screenW, c.screenH)
+	be.CreateWindow("milo-imgui", c.screenW, c.screenH)
 	// CreateWindow also sets the OS window size/title; Layout syncs display size.
 	be.Layout(c.screenW, c.screenH)
 	// ImPlot needs its own context, created after the ImGui context exists.

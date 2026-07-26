@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/cstevenson98/gowasm-engine/pkg/config"
-	"github.com/cstevenson98/gowasm-engine/pkg/types"
+	"github.com/cstevenson98/milo/pkg/config"
+	"github.com/cstevenson98/milo/pkg/types"
 )
 
 // ConsoleMessage represents a single debug console message

@@ -1,4 +1,4 @@
-module github.com/cstevenson98/gowasm-engine
+module github.com/cstevenson98/milo
 
 go 1.24.3
 

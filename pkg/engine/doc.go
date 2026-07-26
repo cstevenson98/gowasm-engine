@@ -4,8 +4,8 @@
 // canvas, input, ui) into a running game.
 //
 // This package doc is the recommended starting point for understanding the
-// engine; the [github.com/cstevenson98/gowasm-engine/pkg/ecs] and
-// [github.com/cstevenson98/gowasm-engine/pkg/state] packages are the next reads.
+// engine; the [github.com/cstevenson98/milo/pkg/ecs] and
+// [github.com/cstevenson98/milo/pkg/state] packages are the next reads.
 //
 // # Mental model
 //
@@ -15,7 +15,7 @@
 //		GameState ──▶ State ──▶ ecs.World ──▶ entities (Components) + Systems
 //
 //	  - An [Engine] holds a registry of states keyed by
-//	    [github.com/cstevenson98/gowasm-engine/pkg/types.GameState].
+//	    [github.com/cstevenson98/milo/pkg/types.GameState].
 //	  - A State owns one ecs.World and an ordered system Schedule.
 //	  - Entities are composed of pure-data Components; Systems hold the
 //	    behaviour and run each frame.
@@ -63,7 +63,7 @@
 // screen size, the state-change callback, the game-defined game-state
 // provider, and the relevant slices of the engine's own config.Settings (debug
 // console enablement, default animation frame time). Embedding
-// [github.com/cstevenson98/gowasm-engine/pkg/state.BaseState] stores these and
+// [github.com/cstevenson98/milo/pkg/state.BaseState] stores these and
 // exposes them through accessors, and seeds the ScreenBounds, Input, and
 // Camera resources on the World.
 //

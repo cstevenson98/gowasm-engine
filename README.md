@@ -8,9 +8,7 @@ in the browser (WebAssembly), because Ebiten abstracts the platform — there is
 no WebGPU, no `syscall/js`, and no `//go:build js` split.
 
 Example games live under `examples/` and consume the engine as a Go module.
-
-> The module path (`github.com/cstevenson98/gowasm-engine`) predates the move to
-> Ebiten and is retained for compatibility.
+The Go module path is `github.com/cstevenson98/milo`.
 
 ## Quick Start
 
@@ -87,7 +85,7 @@ input.Poll -> engine refreshes Input resource -> active State.Update
 
 ### Modules (multi-module workspace)
 
-- **Root** `github.com/cstevenson98/gowasm-engine` — the engine library (`pkg/`).
+- **Root** `github.com/cstevenson98/milo` — the engine library (`pkg/`).
 - **`examples/demo`** (`example.com/demo`) — minimal counter demo (engine + state + UI).
 - **Sibling games** (separate repos, local `replace` → this engine):
   [`rpg-game`](https://github.com/cstevenson98/rpg-game), `energy-tycoon`.
@@ -164,8 +162,8 @@ func (s *GameplayState) Enter(deps state.Deps) error {
 Local development from your game's `go.mod`:
 
 ```go
-require github.com/cstevenson98/gowasm-engine v0.0.0
-replace github.com/cstevenson98/gowasm-engine => ../path/to/engine/repo
+require github.com/cstevenson98/milo v0.0.0
+replace github.com/cstevenson98/milo => ../path/to/engine/repo
 ```
 
 ## Configuration
@@ -274,7 +272,7 @@ python3 font_spritesheet_generator.py --font Mono --size 10 \
 This produces `.sheet.png` + `.sheet.json` (proper fonts are ~5KB).
 
 **Module auth errors (`go get`/`go mod tidy`).** Verify `go env GOPRIVATE` and
-test git access (`git ls-remote git@github.com:cstevenson98/gowasm-engine.git`).
+test git access (`git ls-remote git@github.com:cstevenson98/milo.git`).
 
 ## Roadmap
 
