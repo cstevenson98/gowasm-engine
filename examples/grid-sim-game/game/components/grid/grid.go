@@ -16,6 +16,7 @@ const (
 	ToolHouse
 	ToolLine
 	ToolDelete
+	ToolJunction // placed junction node (circle); not a toolbar tool
 )
 
 // Label returns the toolbar button label for the tool.
@@ -59,6 +60,8 @@ func (t Tool) KindLabel() string {
 		return "house"
 	case ToolLine:
 		return "line"
+	case ToolJunction:
+		return "junction"
 	default:
 		return "blank"
 	}
@@ -105,8 +108,8 @@ type GeneratorProps struct {
 	MaxOutputKW float64
 }
 
-// LineSegmentProps holds the electrical parameters of a line (one cell or a
-// polyline stroke). R/X are in ohms for the whole entity (see CellLengthM).
+// LineSegmentProps holds the electrical parameters of a line stroke.
+// R/X are in ohms for the whole entity (see CellLengthM).
 type LineSegmentProps struct {
 	ResistanceOhm float64
 	ReactanceOhm  float64
@@ -114,8 +117,29 @@ type LineSegmentProps struct {
 
 // LinePath lists every cell occupied by a polyline line entity. Occupancy
 // maps each cell to the same entity; delete removes the whole stroke.
+// Lines have no electrical bus — they are branches between endpoint buses.
 type LinePath struct {
 	Cells []GridCoord
+}
+
+// LineEndpoints records the network buses at the ends of a line after
+// wiring.AttachLine, so Detach can remove the series branch reliably.
+// IDs are network.BusID / BranchID stored as uint64 to avoid grid→network.
+type LineEndpoints struct {
+	FromBus  uint64
+	ToBus    uint64
+	BranchID uint64
+	Wired    bool // true once AttachLine created a series branch
+}
+
+// CardinalNeighbours returns the four orthogonally adjacent cells.
+func CardinalNeighbours(cell GridCoord) []GridCoord {
+	return []GridCoord{
+		{Col: cell.Col + 1, Row: cell.Row},
+		{Col: cell.Col - 1, Row: cell.Row},
+		{Col: cell.Col, Row: cell.Row + 1},
+		{Col: cell.Col, Row: cell.Row - 1},
+	}
 }
 
 // CellLengthM is the physical length represented by one grid cell / line tile.

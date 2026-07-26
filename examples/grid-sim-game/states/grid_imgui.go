@@ -264,7 +264,15 @@ func (s *GridState) renderSelectionPanel(w *imgui.WindowBuilder, net *network.El
 		w.Text("  R=%.4f Ω  X=%.4f Ω", lsp.ResistanceOhm, lsp.ReactanceOhm)
 	}
 	if lp := ecs.NewMap1[grid.LinePath](s.World()).Get(e); lp != nil {
-		w.Text("  Path: %d cells (%.0f m)", len(lp.Cells), float64(len(lp.Cells))*grid.CellLengthM)
+		hops := len(lp.Cells) - 1
+		if hops < 1 {
+			hops = 1
+		}
+		w.Text("  Path: %d cells (%.0f m)", len(lp.Cells), float64(hops)*grid.CellLengthM)
+		if ep := ecs.NewMap1[grid.LineEndpoints](s.World()).Get(e); ep != nil && ep.Wired {
+			w.Text("  Branch %d  buses %d–%d", ep.BranchID, ep.FromBus, ep.ToBus)
+		}
+		return // lines have no NetworkLink / bus
 	}
 
 	link := ecs.NewMap1[network.NetworkLink](s.World()).Get(e)

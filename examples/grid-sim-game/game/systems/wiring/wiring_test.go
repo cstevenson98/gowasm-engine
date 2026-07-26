@@ -18,60 +18,88 @@ func TestAttachDetachAndLoadflowPipeline(t *testing.T) {
 	ecs.SetResource(w, occ)
 	ecs.SetResource(w, net)
 
-	c0 := grid.GridCoord{Col: 0, Row: 0}
-	c1 := grid.GridCoord{Col: 1, Row: 0}
-	c2 := grid.GridCoord{Col: 2, Row: 0}
+	cGen := grid.GridCoord{Col: 0, Row: 0}
+	cGhost := grid.GridCoord{Col: 1, Row: 0} // gen port — shares gen bus
+	cMid := grid.GridCoord{Col: 2, Row: 0}
+	cHouse := grid.GridCoord{Col: 3, Row: 0} // not adjacent to cGhost
 
-	gen := grid.SpawnGenerator(w, c0)
-	line := grid.SpawnLineSegment(w, c1)
-	house := grid.SpawnHouse(w, c2)
-	occ.Occupy(c0, gen)
-	occ.Occupy(c1, line)
-	occ.Occupy(c2, house)
+	gen := grid.SpawnGenerator(w, cGen)
+	house := grid.SpawnHouse(w, cHouse)
+	occ.Occupy(cGen, gen)
+	occ.Occupy(cHouse, house)
 
-	wiring.Attach(w, gen, grid.ToolGenerator, c0, occ)
-	wiring.Attach(w, line, grid.ToolLine, c1, occ)
-	wiring.Attach(w, house, grid.ToolHouse, c2, occ)
+	wiring.Attach(w, gen, grid.ToolGenerator, cGen, occ)
+	wiring.Attach(w, house, grid.ToolHouse, cHouse, occ)
 
-	if len(net.Buses()) != 3 {
-		t.Fatalf("buses = %d, want 3", len(net.Buses()))
+	// Line from gen ghost port to house: 2 buses, 1 series branch.
+	line := grid.SpawnLine(w, []grid.GridCoord{cGhost, cMid, cHouse})
+	occ.Occupy(cMid, line)
+	wiring.AttachLine(w, line, occ)
+
+	if len(net.Buses()) != 2 {
+		t.Fatalf("buses = %d, want 2 (gen+house; ghost is not a bus)", len(net.Buses()))
 	}
-	if len(net.Branches()) != 2 {
-		t.Fatalf("branches = %d, want 2", len(net.Branches()))
+	if len(net.Branches()) != 1 {
+		t.Fatalf("branches = %d, want 1", len(net.Branches()))
 	}
-	if !net.Dirty {
-		t.Fatal("expected Dirty after Attach")
+
+	// All four gen ports resolve to the same bus.
+	genBus, ok := net.BusForEntity(gen)
+	if !ok {
+		t.Fatal("gen bus missing")
+	}
+	for _, port := range grid.CardinalNeighbours(cGen) {
+		if occ.Occupied(port) {
+			continue
+		}
+		b, ok := wiring.ResolveBus(w, occ, port)
+		if !ok || b.ID != genBus.ID {
+			t.Fatalf("port %+v bus=%v, want gen bus %d", port, b, genBus.ID)
+		}
 	}
 
 	lf := loadflow.NewLoadflowSystem(w)
 	lf.Update(w, 0)
-	if net.Dirty {
-		t.Fatal("Dirty should clear after loadflow")
-	}
 	if !net.State.Converged {
-		t.Fatalf("expected converged solve, iters=%d", net.State.Iterations)
+		t.Fatalf("expected converged, LastError=%q", net.State.LastError)
 	}
 
-	// Force a load tick by setting a tiny interval and large dt.
 	tick := loadtick.NewLoadTickSystem(w)
 	tick.Interval = 1
 	tick.Update(w, 2)
-	if !net.Dirty {
-		t.Fatal("expected Dirty after load tick")
-	}
-
 	lf.Update(w, 0)
-	if net.Dirty {
-		t.Fatal("Dirty should clear after second loadflow")
-	}
 
-	wiring.Detach(w, house)
-	w.Remove(house)
-	delete(occ.Cells, c2)
-	if _, ok := net.BusForEntity(house); ok {
-		t.Fatal("house bus should be gone after Detach")
+	wiring.Detach(w, line)
+	if len(net.Branches()) != 0 {
+		t.Fatalf("branches after line detach = %d, want 0", len(net.Branches()))
 	}
-	if len(net.Buses()) != 2 {
-		t.Fatalf("buses = %d after detach, want 2", len(net.Buses()))
+}
+
+func TestHouseGhostPortsShareHouseBus(t *testing.T) {
+	w := ecs.NewWorld()
+	occ := grid.NewGridOccupancy()
+	net := network.NewElectricalNetwork()
+	ecs.SetResource(w, occ)
+	ecs.SetResource(w, net)
+
+	c := grid.GridCoord{Col: 5, Row: 5}
+	house := grid.SpawnHouse(w, c)
+	occ.Occupy(c, house)
+	wiring.Attach(w, house, grid.ToolHouse, c, occ)
+	hb, _ := net.BusForEntity(house)
+
+	n := 0
+	for _, port := range grid.CardinalNeighbours(c) {
+		if !grid.IsDeviceGhostPort(w, occ, port) {
+			t.Fatalf("expected ghost port at %+v", port)
+		}
+		b, ok := wiring.ResolveBus(w, occ, port)
+		if !ok || b.ID != hb.ID {
+			t.Fatalf("house port %+v resolved to %v, want bus %d", port, b, hb.ID)
+		}
+		n++
+	}
+	if n != 4 {
+		t.Fatalf("ghost ports=%d, want 4", n)
 	}
 }

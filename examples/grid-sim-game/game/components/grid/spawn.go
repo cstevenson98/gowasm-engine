@@ -27,7 +27,7 @@ func cellPosition(cell GridCoord) types.Vector2 {
 }
 
 // spawnTile builds a single-cell entity carrying Position, Sprite, a layer
-// tag, Order and GridObject. Shared by SpawnGenerator/SpawnHouse/SpawnLine;
+// tag, Order and GridObject. Shared by SpawnGenerator/SpawnHouse;
 // only texture/kind/layer/z differ between them.
 func spawnTile(w *ecs.World, cell GridCoord, kind Tool, texturePath string, z int, background bool) ecs.Entity {
 	ts := gameconfig.Global.TileSize
@@ -73,16 +73,38 @@ func SpawnHouse(w *ecs.World, cell GridCoord) ecs.Entity {
 	return e
 }
 
-// SpawnLine spawns one polyline line entity covering path. The entity's
-// Position/Sprite sit on path[0]; remaining cells are drawn by grid overlays.
-// LineSegmentProps R/X scale with max(1, len(path)-1) cell lengths.
-// Caller must Occupy every cell in path with the returned entity.
+// SpawnJunction spawns a junction node at cell. It has Position + GridObject
+// but no visible sprite — overlays draw it as a circle.
+func SpawnJunction(w *ecs.World, cell GridCoord) ecs.Entity {
+	pos := cellPosition(cell)
+	m := ecs.NewMap3[components.Position, components.LayerEntities, components.Order](w)
+	e := m.NewEntity(
+		&components.Position{X: pos.X, Y: pos.Y},
+		&components.LayerEntities{},
+		&components.Order{Z: 1},
+	)
+	ecs.NewMap1[GridObject](w).Add(e, &GridObject{Kind: ToolJunction, Cell: cell})
+	return e
+}
+
+// SpawnLine spawns one polyline line entity covering path. No visible sprite —
+// overlays draw a thick stroke through cell centres. LineSegmentProps R/X
+// scale with max(1, len(path)-1) cell lengths. Caller must Occupy every cell
+// in path with the returned entity, and ensure endpoint buses exist before
+// wiring.AttachLine.
 func SpawnLine(w *ecs.World, path []GridCoord) ecs.Entity {
 	if len(path) == 0 {
 		return ecs.Entity{}
 	}
 	cells := append([]GridCoord(nil), path...)
-	e := spawnTile(w, cells[0], ToolLine, gameconfig.Global.LineTexture, 0, false)
+	pos := cellPosition(cells[0])
+	m := ecs.NewMap3[components.Position, components.LayerEntities, components.Order](w)
+	e := m.NewEntity(
+		&components.Position{X: pos.X, Y: pos.Y},
+		&components.LayerEntities{},
+		&components.Order{Z: 0},
+	)
+	ecs.NewMap1[GridObject](w).Add(e, &GridObject{Kind: ToolLine, Cell: cells[0]})
 	hops := len(cells) - 1
 	if hops < 1 {
 		hops = 1
@@ -92,6 +114,7 @@ func SpawnLine(w *ecs.World, path []GridCoord) ecs.Entity {
 		ReactanceOhm:  DefaultLineReactanceOhm * float64(hops),
 	})
 	ecs.NewMap1[LinePath](w).Add(e, &LinePath{Cells: cells})
+	ecs.NewMap1[LineEndpoints](w).Add(e, &LineEndpoints{})
 	return e
 }
 
@@ -100,10 +123,31 @@ func SpawnLineSegment(w *ecs.World, cell GridCoord) ecs.Entity {
 	return SpawnLine(w, []GridCoord{cell})
 }
 
+// SplitPathAt splits path at cell (must appear in path). Returns left and
+// right sub-paths that both include cell as an endpoint. ok is false if cell
+// is not on path or is already an endpoint (nothing to split).
+func SplitPathAt(path []GridCoord, cell GridCoord) (left, right []GridCoord, ok bool) {
+	idx := -1
+	for i, c := range path {
+		if c == cell {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return nil, nil, false
+	}
+	if idx == 0 || idx == len(path)-1 {
+		return nil, nil, false
+	}
+	left = append([]GridCoord(nil), path[:idx+1]...)
+	right = append([]GridCoord(nil), path[idx:]...)
+	return left, right, true
+}
+
 // ManhattanPath returns the cells of an L-shaped path from `from` to `to`:
 // first horizontally along from.Row, then vertically along to.Col. Both
 // endpoints are included exactly once (the corner cell is not duplicated).
-// Used to fill in a line's tiles between the two clicks that define it.
 func ManhattanPath(from, to GridCoord) []GridCoord {
 	var path []GridCoord
 
@@ -137,3 +181,4 @@ func ManhattanPath(from, to GridCoord) []GridCoord {
 
 	return path
 }
+

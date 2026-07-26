@@ -3855,3 +3855,77 @@ User did not want island handling or scenario save/load.
 **Notes**:
 
 ---
+
+## [2026-07-25 23:17:29 BST] - Junction circles, thick lines, gen ports, mid-line split
+
+**Prompt/Request**: Implement plan: junction circles, thick polylines, generator ghost ports, mid-line split on line end-click.
+
+**Changes Made**:
+- `ToolJunction`, `LineEndpoints`, `SpawnJunction`, `SplitPathAt`; lines have no sprite/bus
+- Wiring: `AttachLine` = series branch between endpoint buses; contacts only gen↔neighbour
+- Placement: `ensureAttachPoint`, `splitLineAt`, multi-segment `completeLine`; interiors-only occupancy
+- Overlays: thick paths, junction circles, gen cardinal ghost ports, line ghost preview
+- ImGui: line selection shows path/R/X/branch without NetworkLink
+- Tests: path split, wiring pipeline, mid-line split
+
+**Reasoning**:
+Lines are edges; junctions are nodes. Gen ghost ports are snap targets that materialize as junctions with contact to the gen.
+
+**Impact**:
+- Visual/UX model matches plan; electrical bus count drops (no bus per line)
+
+**Testing**:
+- `go test` grid/wiring/placement/network — pass
+- `go build ./game/` — pass
+
+**Notes**:
+Length-2 lines occupy no cells (delete via endpoint bus delete or empty-cell line touch).
+
+---
+
+## [2026-07-25 23:19:49 BST] - House ghost ports share device bus
+
+**Prompt/Request**: Houses need ghost junctions; all 4 ports for an object refer to a single simulation bus.
+
+**Changes Made**:
+- `grid.DevicePortHost` / `IsDeviceGhostPort` for gen and house
+- `wiring.ResolveBus` / `HasBusAt`: empty ports resolve to parent device bus (no per-port junction)
+- `ensureAttachPoint` no longer materializes junctions on device ports
+- Overlays draw house + gen cardinal ghost ports
+- Removed automatic contact shorts from Attach
+- `LineEndpoints.Wired` flag (branch id 0 is valid)
+- Tests for shared gen/house port buses
+
+**Reasoning**:
+Ports are snap UI only; electrically they are aliases of the device bus.
+
+**Impact**:
+- Connecting any of 4 sides hits one bus; fewer spurious junction buses
+
+**Testing**:
+- `go test` wiring/placement/grid — pass
+- `go build ./game/` — pass
+
+**Notes**:
+
+---
+
+## [2026-07-25 23:21:15 BST] - Ghost ports only while placing lines
+
+**Prompt/Request**: Only show ghost anchor points when placing lines.
+
+**Changes Made**:
+- `renderDeviceGhostPorts` gated on `placement.Tool == ToolLine`
+
+**Reasoning**:
+Ports are line-snap UI; hide them for other tools / inspect mode.
+
+**Impact**:
+- Cleaner playfield when not drawing lines
+
+**Testing**:
+- N/A (overlay-only)
+
+**Notes**:
+
+---

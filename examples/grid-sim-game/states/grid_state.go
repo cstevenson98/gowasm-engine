@@ -22,7 +22,9 @@ import (
 // clickable toolbar.
 type GridState struct {
 	*state.BaseState
-	linePathFilter *ecs.Filter1[grid.LinePath] // cached for overlay draw
+	linePathFilter   *ecs.Filter1[grid.LinePath]  // thick polylines
+	junctionFilter   *ecs.Filter1[grid.GridObject] // junction circles
+	gridObjectFilter *ecs.Filter1[grid.GridObject] // gen ghost ports
 }
 
 // NewGridState creates the grid state.

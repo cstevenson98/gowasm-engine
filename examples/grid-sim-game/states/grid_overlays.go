@@ -41,8 +41,8 @@ func (s *GridState) renderToolbar() {
 	}
 }
 
-// renderGridChrome draws the procedural playfield grid, polyline line fills,
-// hover/selection borders, and the placement ghost.
+// renderGridChrome draws the procedural playfield grid, thick polylines,
+// junction/ghost circles, hover/selection borders, and the placement ghost.
 func (s *GridState) renderGridChrome() {
 	placement := ecs.GetResource[grid.PlacementState](s.World())
 	cam := ecs.GetResource[components.Camera](s.World())
@@ -53,10 +53,14 @@ func (s *GridState) renderGridChrome() {
 	ui := s.UI()
 
 	s.renderGridBackground(ui, cam)
-	s.renderLinePaths(ui, cam)
+	s.renderPolylines(ui, cam)
+	s.renderJunctions(ui, cam)
 
 	if placement == nil {
 		return
+	}
+	if placement.Tool == grid.ToolLine {
+		s.renderDeviceGhostPorts(ui, cam, occupancy)
 	}
 	if placement.HasSelection {
 		s.drawCellBorder(ui, cam, placement.SelectedCell, types.Color{0.2, 0.85, 1, 1}, 2)
@@ -69,9 +73,6 @@ func (s *GridState) renderGridChrome() {
 	}
 }
 
-// renderGridBackground fills the playfield and draws grid lines with
-// O(visible cols + rows) rects — not O(cells). Per-cell fills were thousands
-// of immediate-mode draws per frame and crushed FPS.
 func (s *GridState) renderGridBackground(ui types.UIManager, cam *components.Camera) {
 	cfg := gameconfig.Global
 	playW := cfg.PlayfieldWidth(s.ScreenWidth())
@@ -82,9 +83,6 @@ func (s *GridState) renderGridBackground(ui types.UIManager, cam *components.Cam
 		zoom = 1
 	}
 
-	// No opaque fill here: overlays draw after world sprites and would hide
-	// placed entities. Playfield tone comes from a LayerBackground entity.
-
 	worldX0 := cam.X
 	worldY0 := cam.Y + cfg.ToolbarHeight/zoom
 	worldX1 := cam.X + playW/zoom
@@ -92,7 +90,6 @@ func (s *GridState) renderGridBackground(ui types.UIManager, cam *components.Cam
 
 	c0 := int(worldX0 / ts)
 	r0 := int(worldY0 / ts)
-	// Inclusive line indices: draw the far edge of the last visible cell too.
 	c1 := int(worldX1/ts) + 1
 	r1 := int(worldY1/ts) + 1
 	if c0 < 0 {
@@ -112,7 +109,6 @@ func (s *GridState) renderGridBackground(ui types.UIManager, cam *components.Cam
 	}
 
 	line := types.Color{0.22, 0.22, 0.26, 1}
-	// Vertical lines spanning the visible row band.
 	y0 := (float64(r0)*ts - cam.Y) * zoom
 	y1 := (float64(r1)*ts - cam.Y) * zoom
 	if y0 < cfg.ToolbarHeight {
@@ -125,7 +121,6 @@ func (s *GridState) renderGridBackground(ui types.UIManager, cam *components.Cam
 			ui.Rect(x, y0, 1, h, line)
 		}
 	}
-	// Horizontal lines spanning the visible column band.
 	x0 := (float64(c0)*ts - cam.X) * zoom
 	x1 := (float64(c1)*ts - cam.X) * zoom
 	if x0 < 0 {
@@ -146,22 +141,112 @@ func (s *GridState) renderGridBackground(ui types.UIManager, cam *components.Cam
 	}
 }
 
-// renderLinePaths fills secondary cells of polyline lines (path[0] already
-// has an ECS sprite).
-func (s *GridState) renderLinePaths(ui types.UIManager, cam *components.Camera) {
+func (s *GridState) renderPolylines(ui types.UIManager, cam *components.Camera) {
 	if s.linePathFilter == nil {
 		s.linePathFilter = ecs.NewFilter1[grid.LinePath](s.World())
 	}
-	lineFill := types.Color{0.35, 0.55, 0.75, 0.85}
+	col := types.Color{0.35, 0.65, 0.95, 1}
 	s.linePathFilter.Each(func(_ ecs.Entity, lp *grid.LinePath) {
-		for i, cell := range lp.Cells {
-			if i == 0 {
-				continue // sprite on path[0]
+		drawThickPath(ui, cam, lp.Cells, col, 0.28)
+	})
+}
+
+func (s *GridState) renderJunctions(ui types.UIManager, cam *components.Camera) {
+	if s.junctionFilter == nil {
+		s.junctionFilter = ecs.NewFilter1[grid.GridObject](s.World())
+	}
+	fill := types.Color{0.85, 0.85, 0.35, 1}
+	ring := types.Color{0.2, 0.2, 0.15, 1}
+	s.junctionFilter.Each(func(_ ecs.Entity, go_ *grid.GridObject) {
+		if go_.Kind != grid.ToolJunction {
+			return
+		}
+		drawCellCircle(ui, cam, go_.Cell, fill, ring, 0.35)
+	})
+}
+
+func (s *GridState) renderDeviceGhostPorts(ui types.UIManager, cam *components.Camera, occupancy *grid.GridOccupancy) {
+	if occupancy == nil {
+		return
+	}
+	if s.gridObjectFilter == nil {
+		s.gridObjectFilter = ecs.NewFilter1[grid.GridObject](s.World())
+	}
+	genGhost := types.Color{0.5, 0.75, 0.55, 0.55}
+	genRing := types.Color{0.3, 0.5, 0.35, 0.7}
+	houseGhost := types.Color{0.55, 0.6, 0.85, 0.55}
+	houseRing := types.Color{0.35, 0.4, 0.6, 0.7}
+	cfg := gameconfig.Global
+	s.gridObjectFilter.Each(func(_ ecs.Entity, go_ *grid.GridObject) {
+		var fill, ring types.Color
+		switch go_.Kind {
+		case grid.ToolGenerator:
+			fill, ring = genGhost, genRing
+		case grid.ToolHouse:
+			fill, ring = houseGhost, houseRing
+		default:
+			return
+		}
+		for _, nb := range grid.CardinalNeighbours(go_.Cell) {
+			if occupancy.Occupied(nb) {
+				continue
 			}
-			x, y, w, h := grid.CellScreenRect(cam, cell)
-			ui.Rect(x, y, w, h, lineFill)
+			if nb.Col < 0 || nb.Row < 0 || nb.Col >= cfg.GridCols || nb.Row >= cfg.GridRows {
+				continue
+			}
+			drawCellCircle(ui, cam, nb, fill, ring, 0.28)
 		}
 	})
+}
+
+func drawThickPath(ui types.UIManager, cam *components.Camera, cells []grid.GridCoord, c types.Color, thicknessFrac float64) {
+	if len(cells) < 2 {
+		return
+	}
+	zoom := cam.Zoom
+	if zoom <= 0 {
+		zoom = 1
+	}
+	ts := gameconfig.Global.TileSize
+	thick := ts * zoom * thicknessFrac
+	for i := 0; i < len(cells)-1; i++ {
+		x0, y0 := cellCenterScreen(cam, cells[i])
+		x1, y1 := cellCenterScreen(cam, cells[i+1])
+		drawThickSegment(ui, x0, y0, x1, y1, thick, c)
+	}
+}
+
+func cellCenterScreen(cam *components.Camera, cell grid.GridCoord) (x, y float64) {
+	cx, cy, w, h := grid.CellScreenRect(cam, cell)
+	return cx + w/2, cy + h/2
+}
+
+func drawThickSegment(ui types.UIManager, x0, y0, x1, y1, thick float64, c types.Color) {
+	if x0 == x1 {
+		// vertical
+		y, h := y0, y1-y0
+		if h < 0 {
+			y, h = y1, -h
+		}
+		ui.Rect(x0-thick/2, y, thick, h, c)
+		return
+	}
+	// horizontal (Manhattan paths are axis-aligned)
+	x, w := x0, x1-x0
+	if w < 0 {
+		x, w = x1, -w
+	}
+	ui.Rect(x, y0-thick/2, w, thick, c)
+}
+
+func drawCellCircle(ui types.UIManager, cam *components.Camera, cell grid.GridCoord, fill, ring types.Color, radiusFrac float64) {
+	x, y, w, h := grid.CellScreenRect(cam, cell)
+	cx, cy := x+w/2, y+h/2
+	r := w * radiusFrac
+	// Approximate circle with nested squares (UI has no ellipse primitive).
+	ui.Rect(cx-r, cy-r, 2*r, 2*r, ring)
+	inner := r * 0.7
+	ui.Rect(cx-inner, cy-inner, 2*inner, 2*inner, fill)
 }
 
 func (s *GridState) drawCellBorder(
@@ -184,19 +269,84 @@ func (s *GridState) drawPlacementGhost(
 	occupancy *grid.GridOccupancy,
 	placement *grid.PlacementState,
 ) {
-	cells := []grid.GridCoord{placement.HoverCell}
-	if placement.Tool == grid.ToolLine && placement.LinePending {
-		cells = grid.ManhattanPath(placement.LineStart, placement.HoverCell)
+	if placement.Tool == grid.ToolLine {
+		cells := []grid.GridCoord{placement.HoverCell}
+		if placement.LinePending {
+			cells = grid.ManhattanPath(placement.LineStart, placement.HoverCell)
+		}
+		ok := lineGhostOK(s.World(), occupancy, cells, placement)
+		col := types.Color{0.2, 0.9, 0.35, 0.85}
+		if !ok {
+			col = types.Color{0.9, 0.25, 0.2, 0.85}
+		}
+		if len(cells) >= 2 {
+			drawThickPath(ui, cam, cells, col, 0.22)
+		} else {
+			drawCellCircle(ui, cam, cells[0], col, types.Color{0, 0, 0, 0.5}, 0.3)
+		}
+		return
 	}
 
-	letter := placement.Tool.GhostLetter()
-	for _, cell := range cells {
-		occupied := occupancy != nil && occupancy.Occupied(cell)
-		fill, fg := ghostColors(placement.Tool, occupied)
-		x, y, w, h := grid.CellScreenRect(cam, cell)
-		ui.Rect(x, y, w, h, fill)
-		ui.TextColored(x+w*0.3, y+h*0.25, fg, letter)
+	cell := placement.HoverCell
+	occupied := occupancy != nil && occupancy.Occupied(cell)
+	fill, fg := ghostColors(placement.Tool, occupied)
+	x, y, w, h := grid.CellScreenRect(cam, cell)
+	ui.Rect(x, y, w, h, fill)
+	ui.TextColored(x+w*0.3, y+h*0.25, fg, placement.Tool.GhostLetter())
+}
+
+func lineGhostOK(w *ecs.World, occupancy *grid.GridOccupancy, cells []grid.GridCoord, placement *grid.PlacementState) bool {
+	if len(cells) == 0 {
+		return false
 	}
+	end := cells[len(cells)-1]
+	if !lineEndOK(w, occupancy, end) {
+		return false
+	}
+	if placement.LinePending && !lineEndOK(w, occupancy, placement.LineStart) {
+		return false
+	}
+	for i, c := range cells {
+		e, ok := occupancy.Cells[c]
+		if !ok {
+			continue
+		}
+		go_ := ecs.NewMap1[grid.GridObject](w).Get(e)
+		if go_ == nil {
+			return false
+		}
+		switch go_.Kind {
+		case grid.ToolLine:
+			continue
+		case grid.ToolHouse, grid.ToolJunction:
+			if i != 0 && i != len(cells)-1 {
+				return false
+			}
+		case grid.ToolGenerator:
+			return false
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func lineEndOK(w *ecs.World, occupancy *grid.GridOccupancy, cell grid.GridCoord) bool {
+	if e, ok := occupancy.Cells[cell]; ok {
+		go_ := ecs.NewMap1[grid.GridObject](w).Get(e)
+		if go_ == nil {
+			return false
+		}
+		switch go_.Kind {
+		case grid.ToolGenerator:
+			return false
+		case grid.ToolHouse, grid.ToolJunction, grid.ToolLine:
+			return true
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func ghostColors(t grid.Tool, occupied bool) (fill, fg types.Color) {
