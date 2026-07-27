@@ -48,6 +48,10 @@ func (c *Context) plotPlatform(title string, height float64, fn func(p *PlotBuil
 
 func (c *Context) plotSetupAxesPlatform(xLabel, yLabel string) {}
 
+func (c *Context) plotSetupAxesYLimitsPlatform(xLabel, yLabel string, yMin, yMax float64) {}
+
+func (c *Context) plotSetupAxesXLimitsPlatform(xLabel, yLabel string, xMin, xMax float64) {}
+
 func (c *Context) plotLinePlatform(label string, ys []float64) {}
 
 func (c *Context) plotLineXYPlatform(label string, xs, ys []float64) {}

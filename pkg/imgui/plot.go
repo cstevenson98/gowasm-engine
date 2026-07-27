@@ -24,6 +24,24 @@ func (p *PlotBuilder) SetupAxes(xLabel, yLabel string) {
 	p.ctx.plotSetupAxesPlatform(xLabel, yLabel)
 }
 
+// SetupAxesYLimits labels the axes, AutoFits X to the series, and locks Y to
+// [yMin, yMax] every frame (no Y AutoFit).
+func (p *PlotBuilder) SetupAxesYLimits(xLabel, yLabel string, yMin, yMax float64) {
+	if p == nil || p.ctx == nil || !p.ctx.ready {
+		return
+	}
+	p.ctx.plotSetupAxesYLimitsPlatform(xLabel, yLabel, yMin, yMax)
+}
+
+// SetupAxesXLimits labels the axes, locks X to [xMin, xMax] every frame, and
+// AutoFits Y to the series (no X AutoFit).
+func (p *PlotBuilder) SetupAxesXLimits(xLabel, yLabel string, xMin, xMax float64) {
+	if p == nil || p.ctx == nil || !p.ctx.ready {
+		return
+	}
+	p.ctx.plotSetupAxesXLimitsPlatform(xLabel, yLabel, xMin, xMax)
+}
+
 // Line plots ys against index 0..n-1.
 func (p *PlotBuilder) Line(label string, ys []float64) {
 	if p == nil || p.ctx == nil || !p.ctx.ready || len(ys) == 0 {

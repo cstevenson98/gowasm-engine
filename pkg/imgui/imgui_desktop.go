@@ -112,8 +112,9 @@ func (c *Context) plotPlatform(title string, height float64, fn func(p *PlotBuil
 	if height <= 0 {
 		height = defaultPlotHeight
 	}
-	// Fit X/Y to this frame's series so streaming history recenters as data grows.
-	implot.SetNextAxesToFit()
+	// Axis fit is controlled per-plot via SetupAxes / SetupAxesYLimits
+	// (AxisFlagsAutoFit / SetupAxisLimits), not SetNextAxesToFit, so fixed Y
+	// limits are not overwritten.
 	if !implot.BeginPlotV(title, cim.NewVec2(-1, float32(height)), 0) {
 		return
 	}
@@ -124,6 +125,16 @@ func (c *Context) plotPlatform(title string, height float64, fn func(p *PlotBuil
 func (c *Context) plotSetupAxesPlatform(xLabel, yLabel string) {
 	// AutoFit keeps axes locked to the data every frame (not only the first).
 	implot.SetupAxesV(xLabel, yLabel, implot.AxisFlagsAutoFit, implot.AxisFlagsAutoFit)
+}
+
+func (c *Context) plotSetupAxesYLimitsPlatform(xLabel, yLabel string, yMin, yMax float64) {
+	implot.SetupAxesV(xLabel, yLabel, implot.AxisFlagsAutoFit, 0)
+	implot.SetupAxisLimitsV(implot.AxisY1, yMin, yMax, implot.CondAlways)
+}
+
+func (c *Context) plotSetupAxesXLimitsPlatform(xLabel, yLabel string, xMin, xMax float64) {
+	implot.SetupAxesV(xLabel, yLabel, 0, implot.AxisFlagsAutoFit)
+	implot.SetupAxisLimitsV(implot.AxisX1, xMin, xMax, implot.CondAlways)
 }
 
 func (c *Context) plotLinePlatform(label string, ys []float64) {

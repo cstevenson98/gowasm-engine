@@ -17,6 +17,7 @@ func TestNilContextSafe(t *testing.T) {
 		w.Columns(1)
 		w.Plot("p", 100, func(p *PlotBuilder) {
 			p.SetupAxes("x", "y")
+			p.SetupAxesYLimits("x", "y", 0, 1)
 			p.Line("l", []float64{1, 2})
 			p.Bars("b", []float64{1, 2})
 			p.LineXY("xy", []float64{0, 1}, []float64{1, 2})
